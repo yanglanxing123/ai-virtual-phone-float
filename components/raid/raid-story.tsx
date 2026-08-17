@@ -22,7 +22,7 @@ import {
     generatePortraitSceneImage,
     aiFillGuidance,
 } from "./raid-engine";
-import { resolveVoiceConfig, synthesizeSpeech, playAudioBlob } from "@/lib/tts-service";
+import { resolveVoiceConfig, synthesizeSpeech, playAudioBlob, setTtsVolume, getTtsVolume } from "@/lib/tts-service";
 import type { ContentAppId } from "@/lib/settings-types";
 
 const RAID_APP_ID = "raid" as ContentAppId;
@@ -47,6 +47,9 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
     const [portraitLoading, setPortraitLoading] = useState(false);
     const [voicePlayingNpcId, setVoicePlayingNpcId] = useState<string | null>(null);
     const [voicePlayingLineKey, setVoicePlayingLineKey] = useState<string | null>(null);
+    const [bgmVolume, setBgmVolume] = useState(0.3);
+    const [voiceVolume, setVoiceVolume] = useState(getTtsVolume());
+    const [showVolumePanel, setShowVolumePanel] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const abortRef = useRef<AbortController | null>(null);
     const voiceAbortRef = useRef<AbortController | null>(null);
@@ -106,9 +109,21 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
     // 播放 BGM
     useEffect(() => {
         if (!dungeon.bgmUrl || !audioRef.current) return;
-        audioRef.current.volume = 0.3;
+        audioRef.current.volume = bgmVolume;
         audioRef.current.play().catch(() => {});
-    }, [dungeon.bgmUrl]);
+    }, [dungeon.bgmUrl, bgmVolume]);
+
+    // 实时调整 BGM 音量
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.volume = bgmVolume;
+        }
+    }, [bgmVolume]);
+
+    // 实时调整角色语音音量
+    useEffect(() => {
+        setTtsVolume(voiceVolume);
+    }, [voiceVolume]);
 
     // 手动播放某条对话的语音（单条独立控制）
     async function handlePlayVoice(npcId: string, lineText?: string, lineKey?: string) {
@@ -363,6 +378,45 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
             </div>
 
             {dungeon.bgmUrl && <audio ref={audioRef} src={dungeon.bgmUrl} loop preload="auto" />}
+
+            {/* 音量控制按钮 */}
+            <button
+                className="raid-volume-toggle"
+                onClick={() => setShowVolumePanel(!showVolumePanel)}
+                title="音量调节"
+            >
+                🔊
+            </button>
+            {showVolumePanel && (
+                <div className="raid-volume-panel">
+                    <div className="raid-volume-row">
+                        <span className="raid-volume-label">🎵 BGM</span>
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={bgmVolume}
+                            onChange={(e) => setBgmVolume(parseFloat(e.target.value))}
+                            className="raid-volume-slider"
+                        />
+                        <span className="raid-volume-value">{Math.round(bgmVolume * 100)}%</span>
+                    </div>
+                    <div className="raid-volume-row">
+                        <span className="raid-volume-label">🗣️ 角色</span>
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={voiceVolume}
+                            onChange={(e) => setVoiceVolume(parseFloat(e.target.value))}
+                            className="raid-volume-slider"
+                        />
+                        <span className="raid-volume-value">{Math.round(voiceVolume * 100)}%</span>
+                    </div>
+                </div>
+            )}
 
             {/* BGM 播放器 */}
             {dungeon.bgmUrl && (
@@ -931,7 +985,7 @@ function PortraitMode(props: PortraitModeProps) {
             )}
 
             {/* 底部对话+选项区 */}
-            <div className="raid-portrait-bottom-area">
+            <div className={`raid-portrait-bottom-area ${!isLastSegment || isDead || isCleared ? "raid-portrait-bottom-area--no-choices" : ""}`}>
                 {/* 当前剧情段落 */}
                 <div
                     className="raid-portrait-dialogue-box"

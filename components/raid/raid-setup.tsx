@@ -537,9 +537,9 @@ export function RaidSetup({ onBack, onCreated, onNotice }: RaidSetupProps) {
                     <div className="raid-setup-actions">
                         <button
                             className="raid-btn raid-btn--primary raid-btn-lg"
-                            onClick={() => setStep("reference")}
+                            onClick={() => mode === "portrait" ? setStep("reference") : handleGenerate()}
                         >
-                            下一步
+                            {mode === "portrait" ? "下一步" : "开启攻略"}
                         </button>
                     </div>
                 </main>
