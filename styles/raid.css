@@ -1,0 +1,2941 @@
+/* ═══════════════════════════════════════════════════════════
+   RAID · 攻略副本 APP 样式
+   乙女游戏（乙游）风格 · 精致优雅 · 大量留白
+   支持 6 种画风主题：古风 / 现代 / 黑白简约 / 赛博 / 恐怖 / 温馨
+   ───────────────────────────────────────────────────────────
+   用法：<div class="raid-app raid-theme-ancient"> ... </div>
+   主题 class 定义 CSS 变量，所有子组件引用变量。
+   字体不指定中文字体，继承全局。
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 隐藏滚动条（移动端沉浸感） ── */
+.raid-app *::-webkit-scrollbar { display: none; }
+.raid-app * { scrollbar-width: none; -ms-overflow-style: none; }
+.raid-app, .raid-app *, .raid-app *::before, .raid-app *::after { box-sizing: border-box; }
+.raid-app button, .raid-app input, .raid-app textarea, .raid-app select {
+  font: inherit;
+  color: inherit;
+  outline: none;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §1  主容器 & 默认变量（现代风为默认基线，各主题覆盖）
+   ═══════════════════════════════════════════════════════════ */
+.raid-app {
+  /* —— 颜色 —— */
+  --raid-bg: #f6f7f9;
+  --raid-bg-image: none;
+  --raid-text: #2c3440;
+  --raid-text-dim: #8a94a6;
+  --raid-text-bright: #ffffff;
+  --raid-card: #ffffff;
+  --raid-card-border: rgba(20, 30, 50, 0.07);
+  --raid-panel: #ffffff;
+  --raid-panel-border: rgba(20, 30, 50, 0.08);
+  --raid-accent: #4a6fa5;
+  --raid-accent-soft: rgba(74, 111, 165, 0.12);
+  --raid-accent-strong: #36568a;
+  --raid-btn: rgba(20, 30, 50, 0.04);
+  --raid-btn-text: #2c3440;
+  --raid-btn-border: rgba(20, 30, 50, 0.10);
+  --raid-btn-primary: #4a6fa5;
+  --raid-btn-primary-text: #ffffff;
+  --raid-btn-danger: #c0392b;
+  --raid-btn-danger-text: #ffffff;
+  --raid-border: rgba(20, 30, 50, 0.08);
+  --raid-input: rgba(20, 30, 50, 0.03);
+  --raid-input-border: rgba(20, 30, 50, 0.12);
+  --raid-input-text: #2c3440;
+  --raid-favor-from: #8fb8e0;
+  --raid-favor-to: #4a6fa5;
+  --raid-danger: #c0392b;
+  --raid-warning: #d4a017;
+  --raid-success: #2e8b57;
+  --raid-overlay: rgba(0, 0, 0, 0.55);
+
+  /* —— 尺寸 / 圆角 / 阴影 —— */
+  --raid-radius: 14px;
+  --raid-radius-sm: 10px;
+  --raid-radius-lg: 22px;
+  --raid-radius-pill: 999px;
+  --raid-shadow: 0 6px 22px rgba(20, 30, 50, 0.07);
+  --raid-shadow-soft: 0 2px 10px rgba(20, 30, 50, 0.04);
+  --raid-shadow-strong: 0 10px 36px rgba(20, 30, 50, 0.12);
+  --raid-card-name-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+
+  /* —— 排版微调 —— */
+  --raid-font-style: normal;
+  --raid-letter-spacing: 0.02em;
+  --raid-narration-style: italic;
+
+  /* —— 结构 —— */
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-width: 100%;
+  background-color: var(--raid-bg);
+  background-image: var(--raid-bg-image);
+  background-size: cover;
+  background-position: center;
+  color: var(--raid-text);
+  font-style: var(--raid-font-style);
+  letter-spacing: var(--raid-letter-spacing);
+  line-height: 1.6;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -webkit-touch-callout: none;
+}
+.raid-app > * { position: relative; z-index: 1; min-width: 0; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   §2  顶部导航栏
+   ═══════════════════════════════════════════════════════════ */
+.raid-header {
+  flex-shrink: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: var(--page-header-safe-top, 48px) 16px 10px;
+  min-height: calc(var(--page-header-content-height, 42px) + var(--page-header-safe-top, 48px));
+  background: var(--raid-panel);
+  border-bottom: 1px solid var(--raid-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.raid-header > .raid-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--raid-radius-pill);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--raid-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, border-color 0.2s;
+}
+.raid-header > .raid-btn:active { transform: scale(0.9); }
+.raid-header > .raid-btn:hover { background: var(--raid-accent-soft); }
+.raid-header-title {
+  text-align: center;
+  font-size: calc(15px * var(--app-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--raid-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-indent: 0.14em;
+}
+.raid-header-title h1 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-indent: inherit;
+}
+.raid-header-sub {
+  display: block;
+  font-size: calc(10px * var(--app-text-scale, 1));
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--raid-text-dim);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §3  内容区 & 底部操作栏
+   ═══════════════════════════════════════════════════════════ */
+.raid-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 16px 28px;
+}
+.raid-bottom-bar {
+  flex-shrink: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  background: var(--raid-panel);
+  border-top: 1px solid var(--raid-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §4  首页 / 存档列表
+   ═══════════════════════════════════════════════════════════ */
+.raid-home {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.raid-home-title {
+  font-size: calc(22px * var(--app-text-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--raid-text);
+  margin: 6px 2px 2px;
+}
+.raid-home-subtitle {
+  font-size: calc(12px * var(--app-text-scale, 1));
+  color: var(--raid-text-dim);
+  letter-spacing: 0.08em;
+  margin: 0 2px 10px;
+}
+
+.raid-dungeon-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 14px;
+  background: var(--raid-card);
+  border: 1px solid var(--raid-card-border);
+  border-radius: var(--raid-radius);
+  box-shadow: var(--raid-shadow-soft);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  overflow: hidden;
+  position: relative;
+}
+.raid-dungeon-card:hover { transform: translateY(-2px); box-shadow: var(--raid-shadow); border-color: var(--raid-accent); }
+.raid-dungeon-card:active { transform: translateY(0) scale(0.99); }
+.raid-dungeon-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.raid-dungeon-card-name {
+  font-size: calc(16px * var(--app-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--raid-text);
+  flex: 1;
+  min-width: 0;
+}
+.raid-dungeon-card-status {
+  flex-shrink: 0;
+  font-size: calc(10px * var(--app-text-scale, 1));
+  padding: 3px 10px;
+  border-radius: var(--raid-radius-pill);
+  letter-spacing: 0.08em;
+  background: var(--raid-accent-soft);
+  color: var(--raid-accent);
+}
+.raid-dungeon-card-status[data-status="playing"] { background: var(--raid-accent-soft); color: var(--raid-accent); }
+.raid-dungeon-card-status[data-status="cleared"] { background: rgba(46, 139, 87, 0.14); color: var(--raid-success); }
+.raid-dungeon-card-status[data-status="failed"] { background: rgba(192, 57, 43, 0.14); color: var(--raid-danger); }
+.raid-dungeon-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: calc(11px * var(--app-text-scale, 1));
+  color: var(--raid-text-dim);
+  letter-spacing: 0.04em;
+}
+.raid-dungeon-card-meta span { white-space: nowrap; }
+.raid-dungeon-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--raid-border);
+  font-size: calc(11px * var(--app-text-scale, 1));
+  color: var(--raid-text-dim);
+}
+
+.raid-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--raid-text-dim);
+}
+.raid-empty-state::before {
+  content: "";
+  width: 56px;
+  height: 56px;
+  border: 1.5px solid var(--raid-border);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 35%, var(--raid-accent-soft) 0 8px, transparent 9px),
+    radial-gradient(circle at 50% 35%, transparent 0 7px, var(--raid-border) 7px 8px);
+}
+.raid-empty-state-title {
+  font-size: calc(15px * var(--app-text-scale, 1));
+  color: var(--raid-text);
+  letter-spacing: 0.06em;
+}
+.raid-empty-state-desc {
+  font-size: calc(12px * var(--app-text-scale, 1));
+  letter-spacing: 0.04em;
+  max-width: 260px;
+  line-height: 1.7;
+}
+
+/* ── 副本卡片操作按钮（设置 / 删除） ── */
+.raid-dungeon-card-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+.raid-dungeon-card-settings,
+.raid-dungeon-card-delete {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--raid-radius-pill);
+  background: var(--raid-btn);
+  border: 1px solid var(--raid-btn-border);
+  color: var(--raid-text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.raid-dungeon-card-settings:hover {
+  background: var(--raid-accent-soft);
+  color: var(--raid-accent);
+  border-color: var(--raid-accent);
+}
+.raid-dungeon-card-settings:active { transform: scale(0.9); }
+.raid-dungeon-card-delete:hover {
+  background: rgba(192, 57, 43, 0.14);
+  color: var(--raid-danger);
+  border-color: rgba(192, 57, 43, 0.4);
+}
+.raid-dungeon-card-delete:active { transform: scale(0.9); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   §5  角色选择（乙游立绘卡片 · 错落排列 · 竖排白色名字）
+   ═══════════════════════════════════════════════════════════ */
+.raid-char-select {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 8px 0 24px;
+}
+.raid-char-select-head {
+  text-align: center;
+  padding: 14px 24px 4px;
+}
+.raid-char-select-head h2 {
+  margin: 0;
+  font-size: calc(18px * var(--app-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--raid-text);
+}
+.raid-char-select-head p {
+  margin: 6px 0 0;
+  font-size: calc(12px * var(--app-text-scale, 1));
+  letter-spacing: 0.08em;
+  color: var(--raid-text-dim);
+}
+
+.raid-char-cards {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 12px;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 28px 18px 12px;
+  overflow-x: auto;
+  overflow-y: visible;
+  scroll-snap-type: x mandatory;
+}
+.raid-char-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: 40vw;
+  max-width: 176px;
+  min-width: 130px;
+  aspect-ratio: 3 / 7;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.55) 100%), var(--raid-card);
+  border: 2px solid transparent;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  scroll-snap-align: center;
+  cursor: pointer;
+  transition: transform 0.32s cubic-bezier(.2,.7,.2,1), box-shadow 0.32s ease, border-color 0.32s ease;
+}
+/* 错落排列：偶数卡片下沉 */
+.raid-char-card:nth-child(even) { transform: translateY(34px); }
+.raid-char-card:nth-child(odd)  { transform: translateY(0); }
+.raid-char-card:hover { box-shadow: 0 8px 28px rgba(0,0,0,0.3); }
+
+/* 图片撑满整个卡片 */
+.raid-char-card-img,
+.raid-char-card-figure {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  background-size: cover;
+  background-position: center top;
+  transition: transform 0.5s ease, opacity 0.4s ease;
+  z-index: 1;
+}
+/* 占位符也撑满 */
+.raid-char-card-placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #f8a5c2, #e8a0d0, #c4a8e8);
+  z-index: 1;
+}
+.raid-char-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.15) 58%, rgba(0,0,0,0.8) 100%);
+  pointer-events: none;
+  z-index: 2;
+}
+.raid-char-card-name {
+  position: absolute;
+  right: 10px;
+  bottom: 14px;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  color: #ffffff;
+  font-size: calc(15px * var(--app-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  max-height: 60%;
+  z-index: 3;
+}
+.raid-char-card-role {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 3;
+  font-size: calc(10px * var(--app-text-scale, 1));
+  letter-spacing: 0.12em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  backdrop-filter: blur(6px);
+}
+
+/* 选中状态：粉色高光边框 */
+.raid-char-card--active {
+  border-color: #e8a0c8;
+  box-shadow:
+    0 0 0 2px #e8a0c8,
+    0 0 20px rgba(232, 160, 200, 0.4),
+    0 8px 28px rgba(0,0,0,0.3);
+  transform: translateY(-6px) scale(1.02);
+}
+.raid-char-card--active:nth-child(even) { transform: translateY(28px) scale(1.02); }
+.raid-char-card--active .raid-char-card-img,
+.raid-char-card--active .raid-char-card-figure { transform: scale(1.04); }
+.raid-char-card--active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(232, 160, 200, 0.15) 0%, transparent 30%);
+  pointer-events: none;
+}
+
+/* 选中勾选标记 */
+.raid-char-card-check {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 4;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e8a0c8;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* 占位符卡片也用粉嫩渐变 */
+.raid-char-card:has(.raid-char-card-placeholder) {
+  background: linear-gradient(135deg, #f8a5c2, #e8a0d0, #c4a8e8);
+}
+
+/* 粉嫩背景装饰 */
+.raid-app .raid-char-cards {
+  position: relative;
+}
+.raid-app .raid-char-cards::before {
+  content: "";
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 182, 193, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.raid-char-select-foot {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 20px 8px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §6  副本设置
+   ═══════════════════════════════════════════════════════════ */
+.raid-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 12px;
+}
+.raid-setup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--raid-card);
+  border: 1px solid var(--raid-card-border);
+  border-radius: var(--raid-radius);
+  box-shadow: var(--raid-shadow-soft);
+}
+.raid-setup-label {
+  font-size: calc(12px * var(--app-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--raid-text-dim);
+  text-transform: uppercase;
+}
+.raid-setup-label .raid-setup-label-cn {
+  display: block;
+  font-size: calc(14px * var(--app-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--raid-text);
+  text-transform: none;
+  margin-bottom: 2px;
+}
+
+/* 画风 / 小说 / 难度 通用网格 */
+.raid-theme-grid,
+.raid-novel-grid,
+.raid-difficulty-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+.raid-novel-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.raid-difficulty-grid { grid-template-columns: repeat(2, 1fr); }
+
+.raid-theme-option,
+.raid-novel-option,
+.raid-difficulty-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  background: var(--raid-input);
+  border: 1px solid var(--raid-input-border);
+  border-radius: var(--raid-radius-sm);
+  color: var(--raid-input-text);
+  font-size: calc(12px * var(--app-text-scale, 1));
+  letter-spacing: 0.04em;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s, color 0.2s;
+}
+.raid-theme-option:hover,
+.raid-novel-option:hover,
+.raid-difficulty-option:hover {
+  border-color: var(--raid-accent);
+  background: var(--raid-accent-soft);
+}
+.raid-theme-option:active,
+.raid-novel-option:active,
+.raid-difficulty-option:active { transform: scale(0.97); }
+
+.raid-theme-option .raid-theme-swatch {
+  width: 100%;
+  height: 28px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  border: 1px solid var(--raid-border);
+}
+.raid-theme-option-name,
+.raid-novel-option-name,
+.raid-difficulty-option-name {
+  font-weight: 600;
+  font-size: calc(13px * var(--app-text-scale, 1));
+}
+.raid-novel-option-desc,
+.raid-difficulty-option-desc {
+  font-size: calc(10px * var(--app-text-scale, 1));
+  color: var(--raid-text-dim);
+  line-height: 1.4;
+}
+
+.raid-theme-option--active,
+.raid-novel-option--active,
+.raid-difficulty-option--active {
+  border-color: var(--raid-accent);
+  background: var(--raid-accent-soft);
+  color: var(--raid-accent);
+  box-shadow: 0 0 0 1px var(--raid-accent) inset, var(--raid-shadow-soft);
+}
+.raid-difficulty-option--active { box-shadow: 0 0 0 1px var(--raid-accent) inset; }
+.raid-difficulty-option[data-level="hell"] { border-color: rgba(192, 57, 43, 0.4); }
+.raid-difficulty-option[data-level="hell"].raid-difficulty-option--active {
+  border-color: var(--raid-danger);
+  background: rgba(192, 57, 43, 0.12);
+  color: var(--raid-danger);
+  box-shadow: 0 0 0 1px var(--raid-danger) inset;
+}
+
+.raid-worldview-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.raid-worldview-editor-text {
+  width: 100%;
+  min-height: 120px;
+  padding: 12px;
+  background: var(--raid-input);
+  border: 1px solid var(--raid-input-border);
+  border-radius: var(--raid-radius-sm);
+  color: var(--raid-input-text);
+  font-size: calc(13px * var(--app-text-scale, 1));
+  line-height: 1.8;
+  resize: vertical;
+  letter-spacing: 0.02em;
+}
+.raid-worldview-editor-text:focus { border-color: var(--raid-accent); }
+
+.raid-blank-input {
+  display: inline-flex;
+  align-items: center;
+  min-width: 64px;
+  padding: 1px 8px;
+  margin: 0 2px;
+  background: var(--raid-accent-soft);
+  border: 1px dashed var(--raid-accent);
+  border-radius: 6px;
+  color: var(--raid-accent);
+  font-size: inherit;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+  transition: background 0.2s, border-color 0.2s;
+}
+.raid-blank-input:focus,
+.raid-blank-input:hover { background: var(--raid-accent); color: var(--raid-btn-primary-text); border-style: solid; }
+.raid-blank-input::placeholder { color: var(--raid-text-dim); opacity: 0.7; font-weight: 400; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   §6.5  自定义 CSS 设置页
+   ═══════════════════════════════════════════════════════════ */
+.raid-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.raid-settings-hint {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--raid-input);
+  border: 1px solid var(--raid-input-border);
+  border-radius: var(--raid-radius-sm);
+  font-size: calc(12px * var(--app-text-scale, 1));
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  color: var(--raid-text-dim);
+}
+.raid-settings-hint code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--raid-accent-soft);
+  color: var(--raid-accent);
+  font-size: calc(11px * var(--app-text-scale, 1));
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
+}
+.raid-css-textarea {
+  width: 100%;
+  min-height: 280px;
+  padding: 14px;
+  background: var(--raid-input);
+  border: 1px solid var(--raid-input-border);
+  border-radius: var(--raid-radius-sm);
+  color: var(--raid-input-text);
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
+  font-size: calc(12px * var(--app-text-scale, 1));
+  line-height: 1.7;
+  resize: vertical;
+  letter-spacing: 0;
+  white-space: pre;
+  overflow-x: auto;
+  tab-size: 2;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.raid-css-textarea:focus {
+  border-color: var(--raid-accent);
+  background: var(--raid-card);
+}
+.raid-css-textarea::placeholder {
+  color: var(--raid-text-dim);
+  opacity: 0.6;
+}
+.raid-settings-actions {
+  display: flex;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+/* ── Header 占位（保持 3 列对齐） ── */
+.raid-header-spacer {
+  width: 36px;
+  height: 36px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §7  剧情页面
+   ═══════════════════════════════════════════════════════════ */
+.raid-story {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 2px 12px;
+}
+.raid-story-chapter {
+  font-size: calc(11px * var(--app-text-scale, 1));
+  letter-spacing: 0.24em;
+  color: var(--raid-text-dim);
+  text-align: center;
+  text-transform: uppercase;
+}
+.raid-story-scene-title {
+  font-size: calc(16px * var(--app-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-align: center;
+  color: var(--raid-text);
+}
+
+.raid-story-narration {
+  font-style: var(--raid-narration-style);
+  font-size: calc(13.5px * var(--app-text-scale, 1));
+  line-height: 2;
+  letter-spacing: 0.04em;
+  color: var(--raid-text-dim);
+  text-align: center;
+  padding: 14px 18px;
+  border-left: 1px solid var(--raid-border);
+  border-right: 1px solid var(--raid-border);
+  margin: 4px 8px;
+  position: relative;
+}
+.raid-story-narration::before,
+.raid-story-narration::after {
+  content: "「";
+  position: absolute;
+  top: 0;
+  font-size: calc(18px * var(--app-text-scale, 1));
+  color: var(--raid-accent);
+  opacity: 0.5;
+}
+.raid-story-narration::before { left: 4px; content: "「"; }
+.raid-story-narration::after  { right: 4px; content: "」"; }
+
+.raid-story-dialogue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 4px;
+}
+.raid-story-dialogue-item {
+  padding: 12px 14px;
+  background: var(--raid-card);
+  border: 1px solid var(--raid-card-border);
+  border-radius: var(--raid-radius);
+  box-shadow: var(--raid-shadow-soft);
+  animation: raid-fade-up 0.4s ease both;
+}
+.raid-story-speaker {
+  display: inline-block;
+  font-size: calc(11px * var(--app-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--raid-accent);
+  margin-bottom: 6px;
+  padding: 2px 10px;
+  border-radius: var(--raid-radius-pill);
+  background: var(--raid-accent-soft);
+}
+.raid-story-dialogue-item p {
+  margin: 0;
+  font-size: calc(13.5px * var(--app-text-scale, 1));
+  line-height: 1.9;
+  color: var(--raid-text);
+  letter-spacing: 0.02em;
+}
+.raid-story-dialogue-item[data-emotion] .raid-story-emotion {
+  font-size: calc(10px * var(--app-text-scale, 1));
+  color: var(--raid-text-dim);
+  font-style: italic;
+  margin-left: 6px;
+}
+
+.raid-story-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 2px 4px;
+}
+.raid-story-choice {
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  background: var(--raid-card);
+  border: 1px solid var(--raid-card-border);
+  border-radius: var(--raid-radius);
+  color: var(--raid-text);
+  font-size: calc(13px * var(--app-text-scale, 1));
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  position: relative;
+  box-shadow: var(--raid-shadow-soft);
+  transition: transform 0.18s ease, background 0.2s, border-color 0.2s, box-shadow 0.2s, color 0.2s;
+}
+.raid-story-choice::before {
+  content: "›";
+  display: inline-block;
+  margin-right: 10px;
+  color: var(--raid-accent);
+  font-weight: 700;
+  transition: transform 0.2s ease;
+}
+.raid-story-choice:hover {
+  border-color: var(--raid-accent);
+  background: var(--raid-accent-soft);
+  transform: translateX(2px);
+  box-shadow: var(--raid-shadow);
+}
+.raid-story-choice:hover::before { transform: translateX(3px); }
+.raid-story-choice:active { transform: translateX(2px) scale(0.99); }
+.raid-story-choice-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: calc(10px * var(--app-text-scale, 1));
+  color: var(--raid-text-dim);
+  letter-spacing: 0.04em;
+}
+
+.raid-story-choice--risky {
+  border-color: rgba(212, 160, 23, 0.55);
+  background: rgba(212, 160, 23, 0.07);
+}
+.raid-story-choice--risky::before { content: "!"; color: var(--raid-warning); }
+.raid-story-choice--risky:hover {
+  border-color: var(--raid-warning);
+  background: rgba(212, 160, 23, 0.14);
+}
+
+.raid-story-choice--deadly {
+  border-color: rgba(192, 57, 43, 0.6);
+  background: rgba(192, 57, 43, 0.06);
+}
+.raid-story-choice--deadly::before { content: "✕"; color: var(--raid-danger); }
+.raid-story-choice--deadly:hover {
+  border-color: var(--raid-danger);
+  background: rgba(192, 57, 43, 0.14);
+  color: var(--raid-danger);
+}
+
+.raid-favor-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--raid-radius-pill);
+  background: var(--raid-input);
+  overflow: hidden;
+}
+.raid-favor-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--raid-favor-from), var(--raid-favor-to));
+  background-size: 200% 100%;
+  transition: width 0.5s cubic-bezier(.2,.7,.2,1);
+  animation: raid-favor-shimmer 3s linear infinite;
+  box-shadow: 0 0 8px var(--raid-favor-to);
+}
+@keyframes raid-favor-shimmer {
+  0% { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §8  立绘模式
+   ═══════════════════════════════════════════════════════════ */
+.raid-portrait-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 30%, var(--raid-accent-soft) 0%, transparent 55%),
+    var(--raid-bg);
+}
+.raid-portrait-figure {
+  position: absolute;
+  inset: 0;
+  background-size: contain;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  transition: transform 0.6s ease, opacity 0.5s ease, filter 0.5s ease;
+  filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.35));
+}
+.raid-portrait-figure[data-side="left"]   { transform: translateX(-6%); }
+.raid-portrait-figure[data-side="right"]  { transform: translateX(6%); }
+.raid-portrait-figure[data-dim="true"]    { filter: brightness(0.6) drop-shadow(0 12px 28px rgba(0,0,0,0.35)); }
+
+.raid-portrait-dialogue-box {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  z-index: 10;
+  padding: 16px 18px 14px;
+  background: var(--raid-panel);
+  border: 1px solid var(--raid-panel-border);
+  border-radius: var(--raid-radius);
+  box-shadow: var(--raid-shadow);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: raid-fade-up 0.35s ease both;
+}
+.raid-portrait-dialogue-box .raid-story-speaker { margin-bottom: 8px; }
+.raid-portrait-dialogue-box p {
+  margin: 0;
+  font-size: calc(13.5px * var(--app-text-scale, 1));
+  line-height: 1.9;
+  color: var(--raid-text);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §9  存档列表
+   ═══════════════════════════════════════════════════════════ */
+.raid-save-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.raid-save-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--raid-card);
+  border: 1px solid var(--raid-card-border);
+  border-radius: var(--raid-radius);
+  box-shadow: var(--raid-shadow-soft);
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s, background 0.2s;
+}
+.raid-save-slot:hover { border-color: var(--raid-accent); background: var(--raid-accent-soft); }
+.raid-save-slot:active { transform: scale(0.99); }
+.raid-save-slot-empty {
+  border-style: dashed;
+  color: var(--raid-text-dim);
+  justify-content: center;
+  font-size: calc(13px * var(--app-text-scale, 1));
+  letter-spacing: 0.06em;
+}
+.raid-save-slot-index {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--raid-accent-soft);
+  color: var(--raid-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(13px * var(--app-text-scale, 1));
+  font-weight: 700;
+}
+.raid-save-slot-body { flex: 1; min-width: 0; }
+.raid-save-slot-name {
+  font-size: calc(13px * var(--app-text-scale, 1));
+  font-weight: 600;
+  color: var(--raid-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.raid-save-slot-meta {
+  font-size: calc(11px * var(--app-text-scale, 1));
+  color: var(--raid-text-dim);
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §10  模式选择
+   ═══════════════════════════════════════════════════════════ */
+.raid-mode-select {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.raid-mode-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 14px;
+  background: var(--raid-card);
+  border: 1px solid var(--raid-card-border);
+  border-radius: var(--raid-radius);
+  box-shadow: var(--raid-shadow-soft);
+  color: var(--raid-text);
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.18s, border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.raid-mode-option:hover { border-color: var(--raid-accent); transform: translateY(-2px); box-shadow: var(--raid-shadow); }
+.raid-mode-option:active { transform: translateY(0) scale(0.98); }
+.raid-mode-option-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--raid-accent-soft);
+  color: var(--raid-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.raid-mode-option-name {
+  font-size: calc(14px * var(--app-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.raid-mode-option-desc {
+  font-size: calc(11px * var(--app-text-scale, 1));
+  color: var(--raid-text-dim);
+  line-height: 1.5;
+}
+.raid-mode-option--active {
+  border-color: var(--raid-accent);
+  background: var(--raid-accent-soft);
+  box-shadow: 0 0 0 1px var(--raid-accent) inset, var(--raid-shadow);
+}
+.raid-mode-option--active .raid-mode-option-icon {
+  background: var(--raid-accent);
+  color: var(--raid-btn-primary-text);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §11  通用按钮 & 加载
+   ═══════════════════════════════════════════════════════════ */
+.raid-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  min-height: 40px;
+  background: var(--raid-btn);
+  color: var(--raid-btn-text);
+  border: 1px solid var(--raid-btn-border);
+  border-radius: var(--raid-radius-sm);
+  font-size: calc(13px * var(--app-text-scale, 1));
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, border-color 0.2s, box-shadow 0.2s, color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.raid-btn:hover { background: var(--raid-accent-soft); border-color: var(--raid-accent); }
+.raid-btn:active { transform: scale(0.96); }
+.raid-btn:disabled { opacity: 0.45; pointer-events: none; }
+
+.raid-btn--primary {
+  background: var(--raid-btn-primary);
+  color: var(--raid-btn-primary-text);
+  border-color: transparent;
+  box-shadow: 0 4px 14px var(--raid-accent-soft);
+}
+.raid-btn--primary:hover { background: var(--raid-accent-strong); border-color: transparent; box-shadow: 0 6px 18px var(--raid-accent-soft); }
+
+.raid-btn--danger {
+  background: var(--raid-btn-danger);
+  color: var(--raid-btn-danger-text);
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(192, 57, 43, 0.22);
+}
+.raid-btn--danger:hover { filter: brightness(1.08); border-color: transparent; }
+
+.raid-btn--block { width: 100%; }
+.raid-btn--ghost { background: transparent; }
+
+.raid-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--raid-text-dim);
+  font-size: calc(12px * var(--app-text-scale, 1));
+  letter-spacing: 0.16em;
+}
+.raid-loading::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--raid-accent-soft);
+  border-top-color: var(--raid-accent);
+  animation: raid-spin 0.8s linear infinite;
+}
+.raid-loading--centered {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--raid-overlay);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.raid-loading--dots::before {
+  content: "";
+  width: auto;
+  height: 8px;
+  border: none;
+  border-radius: 0;
+  background:
+    radial-gradient(circle, var(--raid-accent) 2px, transparent 3px) 0 50% / 12px 8px repeat-x;
+  animation: raid-dots 1s steps(4) infinite;
+}
+
+
+/* ── 生成错误提示（内联） ── */
+.raid-gen-error--inline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border-radius: var(--raid-radius);
+    background: rgba(180, 40, 40, 0.15);
+    border: 1px solid rgba(180, 40, 40, 0.4);
+    color: var(--raid-text);
+    font-size: 13px;
+    line-height: 1.5;
+}
+.raid-gen-error--inline p {
+    margin: 0;
+    flex: 1;
+    word-break: break-all;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   §12  死亡 / 通关 覆盖层
+   ═══════════════════════════════════════════════════════════ */
+.raid-death-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 40px 28px;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 50%, rgba(70, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.97) 80%);
+  color: #f4d4d4;
+  opacity: 0;
+  animation: raid-death-fade 0.7s ease forwards;
+}
+.raid-death-screen::before {
+  /* 红色闪烁脉冲 */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 120px rgba(140, 0, 0, 0.5);
+  animation: raid-red-flash 1.6s ease-in-out 0.6s infinite;
+}
+.raid-death-screen::after {
+  /* 暗角颗粒 */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.6) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.3  0 0 0 0 0  0 0 0 0 0  0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.5;
+}
+.raid-death-screen > * { position: relative; z-index: 2; }
+.raid-death-screen-title {
+  font-size: calc(26px * var(--app-text-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  color: #e84848;
+  text-shadow: 0 0 18px rgba(200, 0, 0, 0.7);
+  text-indent: 0.4em;
+  animation: raid-shake 0.5s ease-in-out 0.7s 2;
+}
+.raid-death-screen-desc {
+  font-size: calc(13px * var(--app-text-scale, 1));
+  line-height: 2;
+  letter-spacing: 0.1em;
+  color: rgba(244, 212, 212, 0.7);
+  font-style: italic;
+  max-width: 280px;
+}
+.raid-death-screen-count {
+  font-size: calc(11px * var(--app-text-scale, 1));
+  letter-spacing: 0.2em;
+  color: rgba(244, 212, 212, 0.5);
+}
+.raid-death-screen .raid-btn { margin-top: 8px; }
+
+.raid-clear-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 40px 28px;
+  text-align: center;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(255, 215, 130, 0.18) 0%, transparent 55%),
+    linear-gradient(180deg, #1a1505 0%, #0a0803 100%);
+  color: #f7e9b8;
+  opacity: 0;
+  animation: raid-clear-fade 1s ease forwards;
+}
+.raid-clear-screen::before {
+  /* 金色光晕呼吸 */
+  content: "";
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 215, 120, 0.32) 0%, transparent 55%);
+  animation: raid-gold-glow 2.6s ease-in-out infinite;
+}
+.raid-clear-screen::after {
+  /* 星点 */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255, 235, 170, 0.9), transparent),
+    radial-gradient(1px 1px at 70% 20%, rgba(255, 235, 170, 0.7), transparent),
+    radial-gradient(1px 1px at 40% 70%, rgba(255, 235, 170, 0.8), transparent),
+    radial-gradient(1px 1px at 85% 60%, rgba(255, 235, 170, 0.6), transparent),
+    radial-gradient(1px 1px at 15% 80%, rgba(255, 235, 170, 0.7), transparent);
+  animation: raid-twinkle 3s ease-in-out infinite;
+}
+.raid-clear-screen > * { position: relative; z-index: 2; }
+.raid-clear-screen-title {
+  font-size: calc(28px * var(--app-text-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+  color: #ffd97a;
+  text-shadow:
+    0 0 12px rgba(255, 200, 80, 0.6),
+    0 0 28px rgba(255, 180, 60, 0.45);
+}
+.raid-clear-screen-sub {
+  font-size: calc(12px * var(--app-text-scale, 1));
+  letter-spacing: 0.24em;
+  color: rgba(247, 233, 184, 0.6);
+  text-transform: uppercase;
+}
+.raid-clear-screen-desc {
+  font-size: calc(13px * var(--app-text-scale, 1));
+  line-height: 2;
+  letter-spacing: 0.08em;
+  color: rgba(247, 233, 184, 0.85);
+  font-style: italic;
+  max-width: 280px;
+}
+.raid-clear-screen .raid-btn--primary {
+  background: linear-gradient(135deg, #d4a84a, #f0c868);
+  color: #3a2a08;
+  box-shadow: 0 6px 22px rgba(255, 200, 90, 0.4);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §13  关键帧动画
+   ═══════════════════════════════════════════════════════════ */
+@keyframes raid-spin { to { transform: rotate(360deg); } }
+@keyframes raid-dots { 0% { transform: translateX(-6px); } 100% { transform: translateX(6px); } }
+@keyframes raid-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes raid-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes raid-death-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes raid-red-flash {
+  0%, 100% { box-shadow: inset 0 0 90px rgba(120, 0, 0, 0.35); opacity: 0.7; }
+  50%      { box-shadow: inset 0 0 220px rgba(190, 0, 0, 0.85); opacity: 1; }
+}
+@keyframes raid-clear-fade {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes raid-gold-glow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}
+@keyframes raid-twinkle {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+@keyframes raid-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes raid-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   ═══════════════════════════════════════════════════════════
+   §14  6 种画风主题
+   每个主题覆盖：背景 / 文字 / 卡片 / 按钮 / 边框 / 输入 / 好感渐变 / 圆角 / 阴影
+   ═══════════════════════════════════════════════════════════
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────
+   14.1  古风 ancient · 朱砂红/宣纸/墨黑 · 界栏装饰 · 书法感
+   ───────────────────────────────────────────── */
+.raid-app.raid-theme-ancient {
+  --raid-bg: #f0e8d8;
+  --raid-bg-image:
+    radial-gradient(ellipse at 20% 10%, rgba(196, 92, 72, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(139, 115, 85, 0.10) 0%, transparent 50%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.30  0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --raid-text: #2c2620;
+  --raid-text-dim: #8a7a68;
+  --raid-text-bright: #1a1410;
+  --raid-card: #fdf8f0;
+  --raid-card-border: rgba(196, 92, 72, 0.25);
+  --raid-panel: rgba(253, 248, 240, 0.92);
+  --raid-panel-border: rgba(196, 92, 72, 0.28);
+  --raid-accent: #c45c48;
+  --raid-accent-soft: rgba(196, 92, 72, 0.12);
+  --raid-accent-strong: #a03020;
+  --raid-btn: rgba(139, 115, 85, 0.08);
+  --raid-btn-text: #2c2620;
+  --raid-btn-border: rgba(196, 92, 72, 0.25);
+  --raid-btn-primary: #c45c48;
+  --raid-btn-primary-text: #fdf8f0;
+  --raid-btn-danger: #8b1a1a;
+  --raid-btn-danger-text: #fdf8f0;
+  --raid-border: rgba(139, 115, 85, 0.18);
+  --raid-input: rgba(139, 115, 85, 0.06);
+  --raid-input-border: rgba(196, 92, 72, 0.22);
+  --raid-input-text: #2c2620;
+  --raid-favor-from: #d4a878;
+  --raid-favor-to: #c45c48;
+  --raid-overlay: rgba(40, 30, 20, 0.5);
+  --raid-radius: 6px;
+  --raid-radius-sm: 4px;
+  --raid-radius-lg: 10px;
+  --raid-shadow: 0 4px 16px rgba(139, 115, 85, 0.15);
+  --raid-shadow-soft: 0 2px 8px rgba(139, 115, 85, 0.10);
+  --raid-shadow-strong: 0 8px 28px rgba(139, 115, 85, 0.22);
+  --raid-card-name-shadow: 0 2px 12px rgba(160, 48, 32, 0.3);
+  --raid-letter-spacing: 0.10em;
+  --raid-narration-style: normal;
+}
+/* 古风：界栏式旁白、朱砂装饰线、印章感 */
+.raid-app.raid-theme-ancient .raid-story-narration {
+  border: 1px solid rgba(196, 92, 72, 0.3);
+  border-left: 3px solid #c45c48;
+  border-right: 3px solid #c45c48;
+  background: rgba(253, 248, 240, 0.6);
+  color: #5a4a38;
+  font-style: normal;
+}
+.raid-app.raid-theme-ancient .raid-story-narration::before,
+.raid-app.raid-theme-ancient .raid-story-narration::after { color: #c45c48; opacity: 0.6; }
+.raid-app.raid-theme-ancient .raid-story-scene-title {
+  color: #a03020;
+  letter-spacing: 0.12em;
+}
+.raid-app.raid-theme-ancient .raid-story-speaker {
+  background: rgba(196, 92, 72, 0.12);
+  color: #c45c48;
+  border-left: 2px solid #c45c48;
+}
+.raid-app.raid-theme-ancient .raid-story-choice {
+  border-color: rgba(196, 92, 72, 0.25);
+}
+.raid-app.raid-theme-ancient .raid-story-choice::before { content: "◆"; color: #c45c48; }
+.raid-app.raid-theme-ancient .raid-story-choice:hover {
+  border-color: #c45c48;
+  background: rgba(196, 92, 72, 0.08);
+}
+.raid-app.raid-theme-ancient .raid-btn--primary {
+  background: #c45c48;
+  box-shadow: 0 2px 8px rgba(196, 92, 72, 0.3);
+}
+
+
+/* ─────────────────────────────────────────────
+   14.2  现代 modern · 樱花粉/纯黑锚点/浅灰白 · 萌系装饰
+   ───────────────────────────────────────────── */
+.raid-app.raid-theme-modern {
+  --raid-bg: #f5f5f5;
+  --raid-bg-image:
+    radial-gradient(ellipse at 15% 8%, rgba(248, 215, 232, 0.45) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 92%, rgba(248, 215, 232, 0.35) 0%, transparent 50%);
+  --raid-text: #333333;
+  --raid-text-dim: #999999;
+  --raid-text-bright: #000000;
+  --raid-card: #ffffff;
+  --raid-card-border: rgba(248, 215, 232, 0.6);
+  --raid-panel: rgba(255, 255, 255, 0.92);
+  --raid-panel-border: rgba(248, 215, 232, 0.5);
+  --raid-accent: #e88aab;
+  --raid-accent-soft: rgba(232, 138, 171, 0.12);
+  --raid-accent-strong: #d06a96;
+  --raid-btn: rgba(232, 138, 171, 0.08);
+  --raid-btn-text: #333333;
+  --raid-btn-border: rgba(232, 138, 171, 0.3);
+  --raid-btn-primary: #e88aab;
+  --raid-btn-primary-text: #ffffff;
+  --raid-btn-danger: #e85d5d;
+  --raid-btn-danger-text: #ffffff;
+  --raid-border: rgba(248, 215, 232, 0.5);
+  --raid-input: rgba(232, 138, 171, 0.05);
+  --raid-input-border: rgba(232, 138, 171, 0.25);
+  --raid-input-text: #333333;
+  --raid-favor-from: #ffc4d4;
+  --raid-favor-to: #e88aab;
+  --raid-overlay: rgba(40, 20, 30, 0.4);
+  --raid-radius: 16px;
+  --raid-radius-sm: 12px;
+  --raid-radius-lg: 24px;
+  --raid-shadow: 0 6px 22px rgba(232, 138, 171, 0.12);
+  --raid-shadow-soft: 0 2px 10px rgba(232, 138, 171, 0.08);
+  --raid-shadow-strong: 0 12px 36px rgba(232, 138, 171, 0.18);
+  --raid-card-name-shadow: 0 2px 14px rgba(232, 138, 171, 0.25);
+  --raid-letter-spacing: 0.02em;
+  --raid-narration-style: italic;
+}
+/* 现代：粉色高亮、圆角柔和、★装饰 */
+.raid-app.raid-theme-modern .raid-story-speaker {
+  background: rgba(232, 138, 171, 0.14);
+  color: #d06a96;
+}
+.raid-app.raid-theme-modern .raid-story-choice {
+  border-color: rgba(232, 138, 171, 0.3);
+  border-radius: 999px;
+}
+.raid-app.raid-theme-modern .raid-story-choice::before { content: "♡"; color: #e88aab; }
+.raid-app.raid-theme-modern .raid-story-choice:hover {
+  border-color: #e88aab;
+  background: rgba(232, 138, 171, 0.08);
+}
+.raid-app.raid-theme-modern .raid-story-narration {
+  border-color: rgba(248, 215, 232, 0.6);
+  background: rgba(255, 255, 255, 0.7);
+}
+.raid-app.raid-theme-modern .raid-story-narration::before,
+.raid-app.raid-theme-modern .raid-story-narration::after { color: #e88aab; }
+.raid-app.raid-theme-modern .raid-btn--primary {
+  background: #e88aab;
+  box-shadow: 0 4px 14px rgba(232, 138, 171, 0.3);
+}
+.raid-app.raid-theme-modern .raid-btn--primary:hover {
+  background: #d06a96;
+}
+.raid-app.raid-theme-modern .raid-dungeon-card:hover,
+.raid-app.raid-theme-modern .raid-setup-section:hover {
+  transform: translateY(-3px);
+}
+
+
+/* ─────────────────────────────────────────────
+   14.3  黑白简约 mono · 稿纸网格/虚线/纯黑白灰 · 手账感
+   ───────────────────────────────────────────── */
+.raid-app.raid-theme-mono {
+  --raid-bg: #fafafa;
+  --raid-bg-image:
+    linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px) 0 0 / 20px 20px,
+    linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px) 0 0 / 20px 20px;
+  --raid-text: #111111;
+  --raid-text-dim: #9a9a9a;
+  --raid-text-bright: #ffffff;
+  --raid-card: #ffffff;
+  --raid-card-border: #e6e6e6;
+  --raid-panel: #ffffff;
+  --raid-panel-border: #e6e6e6;
+  --raid-accent: #111111;
+  --raid-accent-soft: rgba(17, 17, 17, 0.05);
+  --raid-accent-strong: #000000;
+  --raid-btn: #ffffff;
+  --raid-btn-text: #111111;
+  --raid-btn-border: #d9d9d9;
+  --raid-btn-primary: #111111;
+  --raid-btn-primary-text: #ffffff;
+  --raid-btn-danger: #111111;
+  --raid-btn-danger-text: #ffffff;
+  --raid-border: #e6e6e6;
+  --raid-input: #f4f4f4;
+  --raid-input-border: #d9d9d9;
+  --raid-input-text: #111111;
+  --raid-favor-from: #bdbdbd;
+  --raid-favor-to: #111111;
+  --raid-overlay: rgba(0, 0, 0, 0.5);
+  --raid-radius: 4px;
+  --raid-radius-sm: 3px;
+  --raid-radius-lg: 6px;
+  --raid-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --raid-shadow-soft: 0 1px 1px rgba(0, 0, 0, 0.03);
+  --raid-shadow-strong: 0 2px 6px rgba(0, 0, 0, 0.06);
+  --raid-card-name-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  --raid-letter-spacing: 0.06em;
+  --raid-narration-style: normal;
+}
+/* mono：更细的边框、无阴影依赖、边线感强、虚线装饰 */
+.raid-app.raid-theme-mono .raid-dungeon-card,
+.raid-app.raid-theme-mono .raid-setup-section,
+.raid-app.raid-theme-mono .raid-story-dialogue-item { box-shadow: none; }
+.raid-app.raid-theme-mono .raid-dungeon-card {
+  border-style: dashed;
+  border-width: 1px;
+}
+.raid-app.raid-theme-mono .raid-story-choice {
+  border-width: 1px;
+  border-style: dashed;
+}
+.raid-app.raid-theme-mono .raid-story-choice::before { content: "—"; }
+.raid-app.raid-theme-mono .raid-story-narration {
+  border-color: #d9d9d9;
+  border-width: 1px;
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.8);
+}
+.raid-app.raid-theme-mono .raid-story-narration::before,
+.raid-app.raid-theme-mono .raid-story-narration::after { content: ""; }
+.raid-app.raid-theme-mono .raid-story-speaker {
+  background: #111;
+  color: #fff;
+}
+.raid-app.raid-theme-mono .raid-story-scene-title {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.raid-app.raid-theme-mono .raid-btn--primary {
+  background: #111;
+  border: 1px solid #111;
+}
+
+
+/* ─────────────────────────────────────────────
+   14.4  赛博 cyber · 暗底霓虹 · 紫/青荧光 · 网格背景
+   ───────────────────────────────────────────── */
+.raid-app.raid-theme-cyber {
+  --raid-bg: #07060f;
+  --raid-bg-image:
+    linear-gradient(rgba(0, 240, 255, 0.05) 1px, transparent 1px) 0 0 / 34px 34px,
+    linear-gradient(90deg, rgba(186, 0, 255, 0.05) 1px, transparent 1px) 0 0 / 34px 34px,
+    radial-gradient(ellipse at 20% 0%, rgba(186, 0, 255, 0.22) 0%, transparent 45%),
+    radial-gradient(ellipse at 80% 100%, rgba(0, 240, 255, 0.18) 0%, transparent 45%);
+  --raid-text: #e8f4ff;
+  --raid-text-dim: rgba(180, 200, 230, 0.55);
+  --raid-text-bright: #ffffff;
+  --raid-card: rgba(18, 14, 34, 0.7);
+  --raid-card-border: rgba(0, 240, 255, 0.22);
+  --raid-panel: rgba(12, 8, 24, 0.82);
+  --raid-panel-border: rgba(186, 0, 255, 0.28);
+  --raid-accent: #00f0ff;
+  --raid-accent-soft: rgba(0, 240, 255, 0.12);
+  --raid-accent-strong: #ba00ff;
+  --raid-btn: rgba(0, 240, 255, 0.06);
+  --raid-btn-text: #e8f4ff;
+  --raid-btn-border: rgba(0, 240, 255, 0.3);
+  --raid-btn-primary: linear-gradient(135deg, #ba00ff, #00f0ff);
+  --raid-btn-primary-text: #ffffff;
+  --raid-btn-danger: #ff2d75;
+  --raid-btn-danger-text: #ffffff;
+  --raid-border: rgba(0, 240, 255, 0.18);
+  --raid-input: rgba(0, 240, 255, 0.05);
+  --raid-input-border: rgba(0, 240, 255, 0.28);
+  --raid-input-text: #e8f4ff;
+  --raid-favor-from: #ba00ff;
+  --raid-favor-to: #00f0ff;
+  --raid-overlay: rgba(5, 0, 15, 0.7);
+  --raid-radius: 10px;
+  --raid-radius-sm: 7px;
+  --raid-radius-lg: 14px;
+  --raid-shadow: 0 0 18px rgba(0, 240, 255, 0.18), 0 6px 24px rgba(0, 0, 0, 0.5);
+  --raid-shadow-soft: 0 0 10px rgba(186, 0, 255, 0.14);
+  --raid-shadow-strong: 0 0 26px rgba(0, 240, 255, 0.3), 0 10px 36px rgba(0, 0, 0, 0.6);
+  --raid-card-name-shadow: 0 0 14px rgba(0, 240, 255, 0.55);
+  --raid-letter-spacing: 0.04em;
+  --raid-narration-style: italic;
+}
+/* cyber：霓虹高亮边框 / 故障感强调 / 玻璃拟态 */
+.raid-app.raid-theme-cyber .raid-story-speaker {
+  background: rgba(0, 240, 255, 0.14);
+  color: #00f0ff;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.6);
+}
+.raid-app.raid-theme-cyber .raid-btn--primary {
+  background: linear-gradient(135deg, #ba00ff, #00f0ff);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.4);
+}
+.raid-app.raid-theme-cyber .raid-story-narration {
+  border-color: rgba(0, 240, 255, 0.3);
+  border-style: dashed;
+  background: rgba(18, 14, 34, 0.5);
+  backdrop-filter: blur(8px);
+}
+.raid-app.raid-theme-cyber .raid-story-narration::before,
+.raid-app.raid-theme-cyber .raid-story-narration::after { color: #00f0ff; }
+.raid-app.raid-theme-cyber .raid-story-scene-title {
+  color: #00f0ff;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5), 2px 0 0 rgba(186, 0, 255, 0.3);
+}
+.raid-app.raid-theme-cyber .raid-story-choice {
+  border-color: rgba(0, 240, 255, 0.25);
+  background: rgba(18, 14, 34, 0.5);
+  backdrop-filter: blur(6px);
+}
+.raid-app.raid-theme-cyber .raid-story-choice::before { content: "▸"; color: #00f0ff; }
+.raid-app.raid-theme-cyber .raid-story-choice:hover {
+  border-color: #00f0ff;
+  background: rgba(0, 240, 255, 0.12);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+}
+.raid-app.raid-theme-cyber .raid-dungeon-card {
+  backdrop-filter: blur(10px);
+}
+.raid-app.raid-theme-cyber .raid-header {
+  background: rgba(12, 8, 24, 0.7);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+}
+
+
+/* ─────────────────────────────────────────────
+   14.5  恐怖 horror · 暗红黑 · 血迹纹理 · 颤抖字体
+   ───────────────────────────────────────────── */
+.raid-app.raid-theme-horror {
+  --raid-bg: #0c0608;
+  --raid-bg-image:
+    radial-gradient(ellipse at 30% 20%, rgba(120, 0, 0, 0.28) 0%, transparent 40%),
+    radial-gradient(ellipse at 70% 80%, rgba(80, 0, 0, 0.24) 0%, transparent 42%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.02  0 0 0 0 0.02  0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --raid-text: #d8c2c2;
+  --raid-text-dim: rgba(180, 120, 120, 0.55);
+  --raid-text-bright: #f0d8d8;
+  --raid-card: rgba(20, 8, 10, 0.82);
+  --raid-card-border: rgba(150, 30, 30, 0.4);
+  --raid-panel: rgba(14, 6, 8, 0.9);
+  --raid-panel-border: rgba(150, 30, 30, 0.45);
+  --raid-accent: #9a1a1a;
+  --raid-accent-soft: rgba(154, 26, 26, 0.18);
+  --raid-accent-strong: #c62828;
+  --raid-btn: rgba(154, 26, 26, 0.12);
+  --raid-btn-text: #d8c2c2;
+  --raid-btn-border: rgba(154, 26, 26, 0.4);
+  --raid-btn-primary: #6e0e0e;
+  --raid-btn-primary-text: #f0d8d8;
+  --raid-btn-danger: #b00000;
+  --raid-btn-danger-text: #fff;
+  --raid-border: rgba(154, 26, 26, 0.32);
+  --raid-input: rgba(154, 26, 26, 0.1);
+  --raid-input-border: rgba(154, 26, 26, 0.4);
+  --raid-input-text: #d8c2c2;
+  --raid-favor-from: #6e0e0e;
+  --raid-favor-to: #c62828;
+  --raid-overlay: rgba(0, 0, 0, 0.7);
+  --raid-radius: 6px;
+  --raid-radius-sm: 4px;
+  --raid-radius-lg: 8px;
+  --raid-shadow: 0 6px 22px rgba(0, 0, 0, 0.6);
+  --raid-shadow-soft: 0 2px 10px rgba(60, 0, 0, 0.4);
+  --raid-shadow-strong: 0 12px 40px rgba(0, 0, 0, 0.75);
+  --raid-card-name-shadow: 0 2px 16px rgba(0, 0, 0, 0.8);
+  --raid-letter-spacing: 0.06em;
+  --raid-narration-style: italic;
+}
+/* horror：旁白颤抖 + 血色装饰 + 封印边框 + 血晕文字 */
+.raid-app.raid-theme-horror .raid-story-narration {
+  border: 1px solid rgba(150, 30, 30, 0.45);
+  border-left: 3px solid #9a1a1a;
+  color: rgba(200, 150, 150, 0.78);
+  background: rgba(20, 8, 10, 0.6);
+  animation: raid-shake 2.6s ease-in-out infinite;
+}
+.raid-app.raid-theme-horror .raid-story-narration::before,
+.raid-app.raid-theme-horror .raid-story-narration::after { color: #9a1a1a; opacity: 0.8; }
+.raid-app.raid-theme-horror .raid-story-scene-title {
+  color: #c62828;
+  text-shadow: 0 0 8px rgba(150, 0, 0, 0.5), 0 0 16px rgba(150, 0, 0, 0.3);
+}
+.raid-app.raid-theme-horror .raid-story-choice:hover {
+  border-color: #c62828;
+  background: rgba(154, 26, 26, 0.2);
+}
+.raid-app.raid-theme-horror .raid-story-choice::before { content: "☠"; color: #9a1a1a; }
+.raid-app.raid-theme-horror .raid-story-speaker {
+  background: rgba(154, 26, 26, 0.18);
+  color: #c62828;
+  text-shadow: 0 0 4px rgba(150, 0, 0, 0.4);
+  border-left: 2px solid #9a1a1a;
+}
+.raid-app.raid-theme-horror .raid-dungeon-card {
+  border-color: rgba(150, 30, 30, 0.3);
+}
+.raid-app.raid-theme-horror .raid-dungeon-card:hover {
+  border-color: #c62828;
+  box-shadow: 0 6px 20px rgba(150, 0, 0, 0.3);
+}
+.raid-app.raid-theme-horror .raid-header {
+  background: rgba(14, 6, 8, 0.85);
+  border-bottom: 1px solid rgba(150, 30, 30, 0.3);
+}
+.raid-app.raid-theme-horror .raid-btn--primary {
+  background: #6e0e0e;
+  box-shadow: 0 0 12px rgba(150, 0, 0, 0.3);
+}
+
+
+/* ─────────────────────────────────────────────
+   14.6  温馨 cozy · 暖粉/奶白 · 圆角柔和 · 可爱治愈
+   ───────────────────────────────────────────── */
+.raid-app.raid-theme-cozy {
+  --raid-bg: #fdf6f2;
+  --raid-bg-image:
+    radial-gradient(ellipse at 15% 10%, rgba(255, 200, 210, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 90%, rgba(255, 225, 200, 0.45) 0%, transparent 50%);
+  --raid-text: #5a4a48;
+  --raid-text-dim: #b09a98;
+  --raid-text-bright: #ffffff;
+  --raid-card: #ffffff;
+  --raid-card-border: rgba(220, 180, 180, 0.5);
+  --raid-panel: rgba(255, 252, 250, 0.9);
+  --raid-panel-border: rgba(220, 180, 180, 0.5);
+  --raid-accent: #e08a8a;
+  --raid-accent-soft: rgba(224, 138, 138, 0.14);
+  --raid-accent-strong: #d06a6a;
+  --raid-btn: rgba(224, 138, 138, 0.08);
+  --raid-btn-text: #5a4a48;
+  --raid-btn-border: rgba(224, 138, 138, 0.3);
+  --raid-btn-primary: #e08a8a;
+  --raid-btn-primary-text: #ffffff;
+  --raid-btn-danger: #d67878;
+  --raid-btn-danger-text: #ffffff;
+  --raid-border: rgba(220, 180, 180, 0.45);
+  --raid-input: rgba(224, 138, 138, 0.06);
+  --raid-input-border: rgba(224, 138, 138, 0.28);
+  --raid-input-text: #5a4a48;
+  --raid-favor-from: #ffc4b8;
+  --raid-favor-to: #e08a8a;
+  --raid-overlay: rgba(90, 60, 60, 0.4);
+  --raid-radius: 18px;
+  --raid-radius-sm: 14px;
+  --raid-radius-lg: 26px;
+  --raid-shadow: 0 8px 24px rgba(224, 138, 138, 0.16);
+  --raid-shadow-soft: 0 4px 14px rgba(224, 138, 138, 0.1);
+  --raid-shadow-strong: 0 14px 40px rgba(224, 138, 138, 0.24);
+  --raid-card-name-shadow: 0 2px 14px rgba(150, 80, 80, 0.5);
+  --raid-letter-spacing: 0.02em;
+  --raid-narration-style: italic;
+}
+/* cozy：更圆、更柔，hover 上浮 · 复古游戏元素增强 */
+.raid-app.raid-theme-cozy .raid-dungeon-card:hover,
+.raid-app.raid-theme-cozy .raid-mode-option:hover { transform: translateY(-3px); }
+.raid-app.raid-theme-cozy .raid-story-choice { border-radius: var(--raid-radius); }
+.raid-app.raid-theme-cozy .raid-story-choice::before { content: "♥"; color: var(--raid-accent); }
+.raid-app.raid-theme-cozy .raid-story-narration {
+  border: none;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: var(--raid-radius);
+  color: #8a706e;
+}
+.raid-app.raid-theme-cozy .raid-story-narration::before,
+.raid-app.raid-theme-cozy .raid-story-narration::after { content: ""; }
+/* 复古游戏元素：像素风投影、8-bit 边框、按钮按压效果 */
+.raid-app.raid-theme-cozy .raid-story-speaker {
+  background: rgba(224, 138, 138, 0.14);
+  color: #d06a6a;
+  border-radius: 999px;
+  border: 2px solid #e08a8a;
+  box-shadow: 2px 2px 0 rgba(208, 106, 106, 0.3);
+}
+.raid-app.raid-theme-cozy .raid-story-scene-title {
+  color: #d06a6a;
+  text-shadow: 1px 1px 0 rgba(208, 106, 106, 0.4);
+}
+.raid-app.raid-theme-cozy .raid-btn--primary {
+  background: #e08a8a;
+  border: 2px solid #d06a6a;
+  box-shadow: 0 4px 14px rgba(224, 138, 138, 0.3), 3px 3px 0 rgba(208, 106, 106, 0.4);
+}
+.raid-app.raid-theme-cozy .raid-btn--primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 4px 14px rgba(224, 138, 138, 0.3), 1px 1px 0 rgba(208, 106, 106, 0.4);
+}
+.raid-app.raid-theme-cozy .raid-header {
+  background: rgba(253, 246, 242, 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 2px solid rgba(220, 180, 180, 0.4);
+}
+.raid-app.raid-theme-cozy .raid-dungeon-card {
+  border: 2px solid rgba(220, 180, 180, 0.4);
+  box-shadow: var(--raid-shadow-soft), 3px 3px 0 rgba(224, 138, 138, 0.2);
+}
+.raid-app.raid-theme-cozy .raid-dungeon-card:hover {
+  box-shadow: var(--raid-shadow), 3px 3px 0 rgba(224, 138, 138, 0.3);
+}
+.raid-app.raid-theme-cozy .raid-mode-option {
+  box-shadow: var(--raid-shadow-soft), 2px 2px 0 rgba(224, 138, 138, 0.2);
+}
+.raid-app.raid-theme-cozy .raid-mode-option:hover {
+  box-shadow: var(--raid-shadow), 2px 2px 0 rgba(224, 138, 138, 0.3);
+}
+.raid-app.raid-theme-cozy .raid-story-choice {
+  box-shadow: 2px 2px 0 rgba(224, 138, 138, 0.15);
+}
+.raid-app.raid-theme-cozy .raid-story-choice:hover {
+  box-shadow: 2px 2px 0 rgba(224, 138, 138, 0.3);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   §15  移动端适配 & 防溢出
+   ═══════════════════════════════════════════════════════════ */
+.raid-app, .raid-app * { max-width: 100%; }
+.raid-app img, .raid-app video { max-width: 100%; height: auto; display: block; }
+/* 角色卡片图片需要撑满，覆盖全局规则 */
+.raid-char-card-img { max-width: none; height: 100%; }
+.raid-char-cards { -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 360px) {
+  .raid-char-card { width: 42vw; }
+  .raid-theme-grid, .raid-novel-grid { grid-template-columns: repeat(2, 1fr); }
+  .raid-mode-select { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .raid-app *,
+  .raid-app *::before,
+  .raid-app *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   §15  聊天式小说模式 & 选项面板
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Header 工具栏 ── */
+.raid-header-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.raid-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--raid-radius);
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s, background 0.2s;
+}
+.raid-icon-btn:hover { opacity: 1; background: var(--raid-panel); }
+.raid-icon-btn--active { opacity: 1; }
+
+/* ── 好感度芯片 ── */
+.raid-favor-panel--compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--raid-panel);
+}
+.raid-favor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--raid-card);
+  font-size: 12px;
+  color: var(--raid-text);
+}
+.raid-favor-chip-name { opacity: 0.7; }
+.raid-favor-chip-value { font-weight: 700; }
+.raid-favor-chip--low .raid-favor-chip-value { color: var(--raid-favor-low); }
+
+/* ── BGM 条 ── */
+.raid-bgm-bar {
+  padding: 3px 12px;
+  background: var(--raid-panel);
+  font-size: 11px;
+  color: var(--raid-text-dim);
+}
+
+/* ── 语音指示 ── */
+.raid-voice-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--raid-radius);
+  background: var(--raid-overlay);
+  backdrop-filter: blur(4px);
+  color: var(--raid-text);
+  font-size: 13px;
+}
+
+/* ── 聊天式日志 ── */
+.raid-body--chat {
+  padding: 8px 12px;
+  overflow-y: auto;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+.raid-chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.raid-chat-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: raid-fade-in 0.3s ease;
+}
+
+/* 玩家选择气泡 */
+.raid-chat-bubble--player {
+  align-self: flex-end;
+  max-width: 80%;
+  padding: 7px 12px;
+  border-radius: 14px;
+  border-bottom-right-radius: 4px;
+  background: linear-gradient(135deg, rgba(255, 140, 170, 0.18), rgba(200, 120, 255, 0.12));
+  border: 1px solid rgba(255, 140, 170, 0.3);
+  color: var(--raid-text);
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  word-break: break-word;
+}
+.raid-chat-bubble-icon { font-size: 12px; flex-shrink: 0; margin-top: 1px; }
+.raid-chat-bubble-text { flex: 1; }
+
+/* 章节分隔 */
+.raid-chat-chapter-divider {
+  text-align: center;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--raid-text-dim);
+  position: relative;
+}
+.raid-chat-chapter-divider::before,
+.raid-chat-chapter-divider::after {
+  content: "";
+  display: inline-block;
+  width: 40px;
+  height: 1px;
+  background: var(--raid-border);
+  vertical-align: middle;
+  margin: 0 8px;
+}
+
+/* 旁白气泡（左对齐、半透明） */
+.raid-chat-bubble--narration {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border-bottom-left-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--raid-text-dim);
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* 对话气泡（左对齐、NPC名+台词） */
+.raid-chat-bubble--dialogue {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border-bottom-left-radius: 4px;
+  background: var(--raid-card);
+  border: 1px solid var(--raid-border);
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+/* 攻略目标对话高亮 */
+.raid-chat-bubble--target {
+  border-color: var(--raid-accent);
+  background: var(--raid-panel);
+}
+.raid-chat-bubble--target .raid-chat-speaker {
+  color: var(--raid-favor-high);
+}
+
+.raid-chat-speaker {
+  font-weight: 700;
+  color: var(--raid-accent);
+  margin-right: 4px;
+}
+.raid-chat-emotion {
+  font-size: 12px;
+  color: var(--raid-text-dim);
+  margin-right: 4px;
+  font-style: italic;
+}
+.raid-chat-dialogue-text { }
+
+/* 好感度变化结果（选完后显示） */
+.raid-chat-favor-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0 2px;
+}
+.raid-favor-delta {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.raid-favor-delta--up {
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.15);
+}
+.raid-favor-delta--down {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.15);
+}
+
+/* ── 选项面板 ── */
+.raid-choice-panel {
+  padding: 6px 12px 8px;
+  background: var(--raid-panel);
+  border-top: 1px solid var(--raid-border);
+}
+.raid-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.raid-choice-item { position: relative; }
+.raid-choice-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--raid-border);
+  border-radius: 10px;
+  background: var(--raid-card);
+  color: var(--raid-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+.raid-choice-btn:hover {
+  border-color: var(--raid-accent);
+  background: var(--raid-panel);
+  transform: translateY(-1px);
+}
+/* 紧凑模式：更小、不显示数值 */
+.raid-choice-btn--compact {
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.raid-choice-btn--safe { border-left: 3px solid #4caf50; }
+.raid-choice-btn--risky { border-left: 3px solid #ff9800; }
+.raid-choice-btn--deadly { border-left: 3px solid #f44336; }
+.raid-choice-text { flex: 1; }
+.raid-choice-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.raid-choice-edit-icon {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0.4;
+  padding: 2px;
+  transition: opacity 0.2s;
+}
+.raid-choice-edit-icon:hover { opacity: 1; }
+.raid-choice-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.raid-choice-edit-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--raid-accent);
+  border-radius: 8px;
+  background: var(--raid-input);
+  color: var(--raid-text);
+  font-size: 14px;
+  resize: vertical;
+}
+.raid-choice-edit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* ── 编辑面板 ── */
+.raid-edit-panel-toggle {
+  margin-top: 6px;
+  text-align: center;
+}
+.raid-edit-panel-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--raid-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+.raid-edit-panel-toggle-btn:hover { color: var(--raid-accent); }
+.raid-edit-panel {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.raid-guidance-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--raid-border);
+  border-radius: 8px;
+  background: var(--raid-input);
+  color: var(--raid-text);
+  font-size: 13px;
+  resize: vertical;
+}
+.raid-edit-panel-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   §16  立绘模式 9:16 竖屏
+   ═══════════════════════════════════════════════════════════ */
+.raid-portrait-fullscreen {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.raid-portrait-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.raid-portrait-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.raid-portrait-bg-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.raid-portrait-gen-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--raid-text-dim);
+  font-size: 13px;
+}
+.raid-portrait-gradient {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(to bottom,
+    transparent 0%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.3) 60%,
+    rgba(0, 0, 0, 0.8) 85%,
+    rgba(0, 0, 0, 0.95) 100%
+  );
+}
+
+/* 角色立绘 */
+.raid-portrait-figure-full {
+  position: absolute;
+  bottom: 35%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  max-height: 65%;
+}
+.raid-portrait-figure-img {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: bottom center;
+  filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.4));
+}
+.raid-portrait-figure-placeholder {
+  position: absolute;
+  bottom: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+.raid-portrait-avatar-lg {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--raid-accent), var(--raid-accent-soft));
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* 章节标记 */
+.raid-portrait-chapter-tag {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 对话框 */
+.raid-portrait-dialogue-box {
+  position: relative;
+  z-index: 5;
+  margin-top: auto;
+  padding: 16px 16px 12px;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.85));
+  color: #fff;
+}
+.raid-portrait-current-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.raid-portrait-speaker-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #7eb8ff;
+}
+.raid-portrait-emotion {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+}
+.raid-portrait-dialogue-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 10px;
+}
+
+/* 选项（蓝半透明按钮） */
+.raid-portrait-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.raid-portrait-choice-btn {
+  padding: 7px 14px;
+  border: 1px solid rgba(126, 184, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(30, 80, 140, 0.4);
+  backdrop-filter: blur(6px);
+  color: #e0f0ff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+.raid-portrait-choice-btn:hover {
+  background: rgba(50, 110, 180, 0.5);
+  border-color: rgba(126, 184, 255, 0.7);
+}
+
+/* 编辑面板 */
+.raid-portrait-edit-toggle {
+  text-align: center;
+  margin-bottom: 4px;
+}
+.raid-portrait-edit-toggle button {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  cursor: pointer;
+}
+.raid-portrait-edit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.raid-portrait-edit-panel textarea {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 13px;
+  resize: none;
+}
+.raid-portrait-edit-panel textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+.raid-portrait-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* 加载动画 */
+@keyframes raid-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   §17  立绘管理弹窗
+   ═══════════════════════════════════════════════════════════ */
+
+/* —— 浮动入口按钮（立绘模式右上角） —— */
+.raid-portrait-mgr-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.raid-portrait-mgr-btn:hover {
+  background: rgba(0, 0, 0, 0.65);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.08);
+}
+
+/* —— 空立绘时的提示文字 —— */
+.raid-portrait-add-hint {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  cursor: pointer;
+}
+
+/* —— 遮罩层 —— */
+.raid-portrait-mgr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--raid-overlay, rgba(0, 0, 0, 0.5));
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: raid-fade-in 0.2s ease;
+}
+
+/* —— 弹窗主体 —— */
+.raid-portrait-mgr-panel {
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--raid-card);
+  border: 1px solid var(--raid-card-border);
+  border-radius: var(--raid-radius-lg, 20px);
+  box-shadow: var(--raid-shadow-strong, 0 14px 40px rgba(0, 0, 0, 0.2));
+  display: flex;
+  flex-direction: column;
+}
+
+/* —— 头部 —— */
+.raid-portrait-mgr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--raid-border);
+  flex-shrink: 0;
+}
+.raid-portrait-mgr-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--raid-text);
+  letter-spacing: var(--raid-letter-spacing, 0);
+}
+.raid-portrait-mgr-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: var(--raid-btn);
+  color: var(--raid-text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.raid-portrait-mgr-close:hover {
+  background: var(--raid-accent-soft);
+  color: var(--raid-accent);
+}
+
+/* —— 区块 —— */
+.raid-portrait-mgr-section {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--raid-border);
+}
+.raid-portrait-mgr-section:last-child {
+  border-bottom: none;
+}
+.raid-portrait-mgr-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--raid-text-dim);
+  margin-bottom: 10px;
+  letter-spacing: var(--raid-letter-spacing, 0);
+}
+
+/* —— 缩略图网格 —— */
+.raid-portrait-mgr-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* —— 立绘缩略图（竖图 3:4） —— */
+.raid-portrait-mgr-thumb {
+  position: relative;
+  width: 72px;
+  height: 96px;
+  border-radius: var(--raid-radius-sm, 10px);
+  overflow: hidden;
+  border: 2px solid var(--raid-card-border);
+  background: var(--raid-input);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.raid-portrait-mgr-thumb:hover {
+  border-color: var(--raid-accent);
+  box-shadow: var(--raid-shadow-soft, 0 4px 14px rgba(0, 0, 0, 0.1));
+  transform: translateY(-2px);
+}
+.raid-portrait-mgr-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+/* —— 参考图缩略图（方图 1:1） —— */
+.raid-portrait-mgr-thumb--ref {
+  width: 72px;
+  height: 72px;
+}
+
+/* —— 删除按钮 —— */
+.raid-portrait-mgr-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 2;
+}
+.raid-portrait-mgr-thumb:hover .raid-portrait-mgr-del {
+  opacity: 1;
+}
+.raid-portrait-mgr-del:hover {
+  background: var(--raid-btn-danger, #c0392b);
+}
+
+/* —— 上传按钮 —— */
+.raid-portrait-mgr-upload {
+  width: 72px;
+  height: 96px;
+  border-radius: var(--raid-radius-sm, 10px);
+  border: 2px dashed var(--raid-accent);
+  background: var(--raid-accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.raid-portrait-mgr-upload:hover {
+  background: var(--raid-accent);
+  border-style: solid;
+  transform: translateY(-2px);
+}
+.raid-portrait-mgr-upload span {
+  font-size: 11px;
+  color: var(--raid-accent);
+  text-align: center;
+  line-height: 1.4;
+  font-weight: 500;
+}
+.raid-portrait-mgr-upload:hover span {
+  color: var(--raid-btn-primary-text, #fff);
+}
+
+/* —— 参考图上传按钮（方图） —— */
+.raid-portrait-mgr-upload--ref {
+  height: 72px;
+}
+
+/* —— AI 生成按钮 —— */
+.raid-portrait-mgr-gen {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* —— 提示文字 —— */
+.raid-portrait-mgr-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--raid-text-dim);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* —— 立绘计数器（多张立绘时显示当前/总数） —— */
+.raid-portrait-counter {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   §18  副本卡片封面 + 非剧情页面增强
+   ═══════════════════════════════════════════════════════════ */
+
+/* —— 副本卡片：有封面时 —— */
+.raid-dungeon-card--has-cover {
+  position: relative;
+  overflow: hidden;
+  min-height: 140px;
+  border: none;
+}
+.raid-dungeon-card-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.raid-dungeon-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.raid-dungeon-card-cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.25) 40%,
+    rgba(0, 0, 0, 0.65) 100%
+  );
+}
+/* 有封面时卡片内容文字变白 */
+.raid-dungeon-card--has-cover .raid-dungeon-card-body {
+  position: relative;
+  z-index: 1;
+}
+.raid-dungeon-card--has-cover .raid-dungeon-card-name {
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.raid-dungeon-card--has-cover .raid-dungeon-card-meta {
+  color: rgba(255, 255, 255, 0.85);
+}
+.raid-dungeon-card--has-cover .raid-dungeon-card-meta .raid-death-count {
+  color: #ffb0b0;
+}
+.raid-dungeon-card--has-cover .raid-dungeon-card-theme {
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.raid-dungeon-card--has-cover .raid-dungeon-card-status {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* —— 封面上传/移除按钮 —— */
+.raid-dungeon-card-cover-btn,
+.raid-dungeon-card-cover-remove {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.raid-dungeon-card-cover-btn:hover,
+.raid-dungeon-card-cover-remove:hover {
+  background: rgba(0, 0, 0, 0.6);
+  transform: scale(1.1);
+}
+
+/* —— 主页面增强：更饱满的视觉 —— */
+.raid-app .raid-header {
+  background: var(--raid-card);
+  border-bottom: 1px solid var(--raid-border);
+  backdrop-filter: blur(10px);
+}
+.raid-app .raid-header h1 {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: var(--raid-letter-spacing, 0.02em);
+}
+.raid-app .raid-header-sub {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+.raid-app .raid-new-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--raid-accent);
+  color: var(--raid-btn-primary-text);
+  font-size: 22px;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--raid-shadow-soft);
+  transition: all 0.2s;
+}
+.raid-app .raid-new-btn:hover {
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: var(--raid-shadow);
+}
+
+/* —— 副本列表：更紧凑、卡片式 —— */
+.raid-dungeon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.raid-dungeon-card {
+  position: relative;
+  border-radius: var(--raid-radius, 14px);
+  background: var(--raid-card);
+  border: 1px solid var(--raid-card-border);
+  box-shadow: var(--raid-shadow-soft);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.raid-dungeon-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--raid-shadow);
+  border-color: var(--raid-accent);
+}
+.raid-dungeon-card-body {
+  padding: 16px 18px;
+}
+.raid-dungeon-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--raid-text);
+  margin: 0 0 4px;
+}
+.raid-dungeon-card-meta {
+  font-size: 12px;
+  color: var(--raid-text-dim);
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.raid-dungeon-card-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.raid-dungeon-card:hover .raid-dungeon-card-actions {
+  opacity: 1;
+}
+.raid-dungeon-card-settings,
+.raid-dungeon-card-delete {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.raid-dungeon-card-settings:hover,
+.raid-dungeon-card-delete:hover {
+  background: rgba(0, 0, 0, 0.5);
+  transform: scale(1.1);
+}
+
+/* —— 空状态增强 —— */
+.raid-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+.raid-empty-icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+/* —— 创建页面增强 —— */
+.raid-setup-section {
+  border-radius: var(--raid-radius, 14px);
+  background: var(--raid-card);
+  border: 1px solid var(--raid-card-border);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--raid-shadow-soft);
+}
+
+/* —— 设置页面增强 —— */
+.raid-settings {
+  max-width: 600px;
+  margin: 0 auto;
+}
+.raid-settings-hint {
+  font-size: 13px;
+  color: var(--raid-text-dim);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.raid-css-textarea {
+  width: 100%;
+  border-radius: var(--raid-radius-sm, 10px);
+  border: 1px solid var(--raid-input-border);
+  background: var(--raid-input);
+  color: var(--raid-input-text);
+  padding: 12px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.raid-settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
