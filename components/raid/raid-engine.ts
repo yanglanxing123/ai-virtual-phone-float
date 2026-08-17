@@ -466,6 +466,14 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
 
     const lastSummary = summarizeLastBeat(dungeon);
 
+    // 计算当前章节已有的 beat 数量（即选项轮数）
+    const currentChapterBeatCount = dungeon.storyBeats.filter(
+        (b) => b.chapter === dungeon.currentChapter,
+    ).length;
+    // 当前章节已累计好感度增量
+    const favorGainThisChapter = dungeon.favorGainPerChapter?.[dungeon.currentChapter] || 0;
+    const favorGainRemaining = Math.max(0, 20 - favorGainThisChapter);
+
     const npcRoster = dungeon.npcs
         .map((n) => {
             const fav = dungeon.favor[n.id] ?? n.initialFavor ?? 0;
@@ -481,11 +489,32 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
     // 第 5 条规则按当前局势动态切换
     let rule5: string;
     if (isDeathTriggered) {
-        rule5 = `5. 【重要】当前已有目标好感度（${minFavor}）低于死亡线 ${deathThreshold}，本次必须生成死亡结局：isDeath=true，写一段具有冲击力的死亡/失败收尾，choices 留空数组 []。`;
+        const deathStyles = [
+            "【荒诞社死式】主角因为一个离谱到家的原因社死/翻车，比如：在大庭广众下裤裆裂开导致人设崩塌、被自己养的猫当众鄙视后社死、走错厕所被当成变态追了三条街、关键告白时打了个惊天动地的喷嚏把假牙喷到对方脸上、在重要场合假发突然飞出去挂在了吊灯上……结局要荒诞、搞笑、出人意料但又有因可循。",
+            "【反高潮翻车式】在看似要成功的瞬间突然因为一个滑稽到极点的原因功亏一篑，比如：表白时踩到香蕉皮一个滑铲飞出窗外、深情告白时被突然闯入的外卖小哥打断还送错了餐、接吻时假牙掉进对方嘴里、求婚时戒指滚进了下水道还被老鼠叼走了、深情独白时肚子发出雷鸣般的巨响把对方吓得跳起来……",
+            "【乌龙误会式】因为一系列阴差阳错的误会以沙雕方式收场，比如：被误认为是偷猪贼被全村追着跑、在婚礼上被前任的宠物鹅追着啄了三条街、试图英雄救美结果自己被对方救了、被当成通缉犯因为长得跟画像上的人撞脸、给对方送花结果送成了一把芹菜对方还拿去做了一道菜……",
+            "【尴尬社死式】主角在最重要最关键的时刻遭遇最尴尬的事，比如：重要告白时肚子叫得比广播还响、深情对视时鼻涕泡突然冒出来、在高端晚宴上不小心打翻汤碗浇了贵宾一脸、关键时刻打了个响屁全场寂静、深情拥抱时假发片掉下来露出地中海……",
+            "【神转折式】眼看就要成功，突然来了一个完全意想不到的神转折，比如：发现对方其实是自己失散多年的远房表亲、发现关键信物其实是超市打折赠品、发现养了三年的猫其实是别人家的、发现暗恋对象的真实身份居然是自己的相亲对象他妈、发现对方其实是自己以前网上对骂了三年的死对头……",
+            "【道具灾难式】关键道具引发一系列灾难性连锁反应，比如：精心准备的告白气球突然飞走缠住了市长的车、准备好的烟花不小心点燃了隔壁的柴火堆、送的礼物盒打开弹出一个小丑把对方吓晕了、准备的惊喜蛋糕上蜡烛倒了烧掉了对方的假睫毛、精心布置的场景被一阵妖风刮得面目全非……",
+            "【动物搅局式】动物在关键时刻制造混乱导致攻略崩盘，比如：告白时一只野猫跳到头上抓着不放、深情拥抱时被对方的宠物鹅啄了屁股、约会被一群广场舞大妈的狗追了八条街、关键时刻被一只突然发情的鸽子盯上怎么也甩不掉、精心准备的野餐被一群蚂蚁搬走了所有食物……",
+            "【天降横祸式】完全不可控的外部因素以最沙雕的方式毁灭一切，比如：告白到一半突然下起冰雹砸得满头包、深情对视时一个广告牌砸下来把气氛全毁了、关键时刻广播突然播放停水通知、约会时路边施工突然喷出一股水柱把双方浇成落汤鸡、表白时头顶的路灯突然炸了引发连锁尖叫……",
+            "【社交网络社死式】社交媒体或公共平台以最尴尬的方式曝光了一切，比如：告白情话不小心发到了公司群、深情告白被路过的主播直播出去了还上了热搜、精心准备的表白视频被同事投屏到了会议室大屏、给对方的朋友圈评论结果评论成了公开可见、表白邮件误发给了全公司还带附件……",
+            "【物理定律背刺式】物理现象以最离谱的方式背刺主角，比如：深情拥抱时踩到冰面两人一起滑进了喷泉池、告白时风太大把情书吹到了对面楼的阳台上、约会被一只突然弹开的弹簧门拍飞了、深情下跪时膝盖卡在地板缝里起不来了、拥抱时两人假牙撞在一起崩了半颗……",
+            "【身份错位式】身份信息在关键时刻以最尴尬的方式错位，比如：深情告白时发现叫错了对方名字（叫成了前对象）、深情款款时对方掏出身份证发现名字完全不对、约会上错车坐到了陌生人旁边还聊了一路、给对方打电话结果打到对方他妈手机上了还被录音了……",
+            "【食物灾难式】与食物相关的沙雕事故彻底毁掉一切，比如：深情告白时吃火锅假牙飞进了锅里、约会时精心点的高级料理其实是对方最过敏的东西、表白时喝口水呛到喷了对方一脸、深情吃蛋糕时奶油糊了一脸还蹭到对方身上、约会被一杯奶茶绊倒直接趴在了对方身上……",
+        ];
+        const deathStyle = deathStyles[Math.floor(Math.random() * deathStyles.length)];
+        rule5 = `5. 【重要】当前已有目标好感度（${minFavor}）低于死亡线 ${deathThreshold}，本次必须生成死亡结局：isDeath=true。要求写一段荒诞、沙雕、令人哭笑不得的失败收尾，风格参考：${deathStyle}\n  narration 要写得生动有趣、有画面感、有反转，让玩家被逗笑而不是沮丧（150-300字）。\n  dialogue 要写得有梗有笑点，NPC的反应也要搞笑（2-4句）。\n  choices 留空数组 []。\n  sceneTitle 要取一个有梗的搞笑标题。`;
     } else if (canClimax) {
         rule5 = `5. 当前目标好感度已达 ${maxFavor}（≥80），可以生成高潮圆满结局：isClimax=true，写一段高潮收尾，choices 留空数组 []；若你认为剧情仍有发展空间，也可继续推进（isClimax=false）并给出选项。`;
     } else {
-        rule5 = "5. 当前正常推进剧情，isDeath=false、isClimax=false。";
+        // 正常推进：根据当前章节 beat 数量决定是否推进到下一章
+        const shouldAdvanceChapter = currentChapterBeatCount >= 4 + Math.floor(Math.random() * 5); // 4-8 次
+        if (shouldAdvanceChapter && currentChapterBeatCount >= 4) {
+            rule5 = `5. 当前章节已有 ${currentChapterBeatCount} 个剧情节点，应推进到下一章（chapter=${dungeon.currentChapter + 1}），开启新的事件章节。每个章节只有一个核心事件，围绕该事件展开。isDeath=false、isClimax=false。`;
+        } else {
+            rule5 = `5. 当前正常推进剧情，isDeath=false、isClimax=false。当前章节已有 ${currentChapterBeatCount} 个节点，继续在本章推进（至少 4 次、最多 8 次选择后才进入下一章）。每章围绕一个核心事件展开。`;
+        }
     }
 
     const systemPrompt = [
@@ -505,6 +534,8 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
         "",
         "【当前进度】",
         `当前章节：第 ${dungeon.currentChapter} 章`,
+        `当前章节已有 ${currentChapterBeatCount} 个剧情节点（4-8 次后进入下一章）`,
+        `本章已累计好感度增量：${favorGainThisChapter}/20（剩余可加：${favorGainRemaining}）`,
         `已死亡次数：${dungeon.deathCount}`,
         `目标最低好感度：${minFavor}　最高：${maxFavor}`,
         "",
@@ -519,13 +550,14 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
             : "",
         "生成要求：",
         "1. 根据玩家选择推进剧情：narration 写 100-300 字第三人称旁白（场景、心理、氛围）；dialogue 写 2-6 句对话，每句含 speaker（NPC 名）与 text，可带 emotion。",
-        `2. choices 生成 2-4 个选项，每个含 text（选项内容）、hint（后果提示，如"勇气+5"或"风险：可能激怒对方"）、riskLevel、favorDelta（选择该选项预估的好感度变化，正负整数，如 12、-8、18）。风险分布：${riskGuide}`,
-        "3. favorChanges 是本次剧情/玩家选择带来的好感度变化，键为 NPC 的 id（见上方阵容表），值为整数（正数加好感，负数减好感）。目标角色（男主）好感变化幅度通常较大。开局第一章且玩家无选择时，favorChanges 可为空对象 {}。",
+        `2. choices 生成 2-4 个选项，每个含 text（选项内容）、hint（后果提示，如"勇气+5"或"风险：可能激怒对方"）、riskLevel、favorDelta（选择该选项预估的好感度变化，正负整数）。风险分布：${riskGuide}`,
+        `3. favorChanges 是本次剧情/玩家选择带来的好感度变化，键为 NPC 的 id（见上方阵容表），值为整数。重要限制：每个章节好感度正向增益总和最多 20 点，当前本章剩余可加 ${favorGainRemaining} 点，请勿超出。负数不受限制。开局第一章且玩家无选择时，favorChanges 可为空对象 {}。`,
         `4. 好感度变化会被难度系数 ${favorMod} 调整（正向收益 ×${favorMod}，负向不变）。`,
         rule5,
         "6. sceneTitle 取一个有小说感的场景标题（8-16 字）。chapter 填本节点所属章节号（通常等于当前章节；若本节点开启新章节，填 currentChapter+1）。",
         "7. 参考番茄小说的爽点（逆袭、打脸、甜宠）与虐点（误会、背叛、错过）节奏，让剧情有张力、有钩子，让人欲罢不能。",
         "8. scenePrompt 写一段 30-80 字的英文画面描述，用于 AI 生成场景背景图（landscape, anime style, no text, atmospheric lighting matching the scene mood）。",
+        "9. 每个章节围绕一个核心事件展开剧情，不要在同一章节内跳跃多个不同事件。推进到下一章才开启新事件。",
         "",
         "严格返回如下 JSON（不要输出任何额外文字）：",
         "{",

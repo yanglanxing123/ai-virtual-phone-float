@@ -552,19 +552,14 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
             )}
 
             {/* 死亡覆盖层 */}
-            {isDead && (
-                <div className="raid-death-screen">
-                    <h2 className="raid-death-title">攻略失败</h2>
-                    <p className="raid-death-desc">你在这个世界的故事到此终结……</p>
-                    <div className="raid-death-actions">
-                        <button className="raid-btn raid-btn--primary" onClick={handleRestart}>
-                            重新开始
-                        </button>
-                        <button className="raid-btn raid-btn--ghost" onClick={onBack}>
-                            返回
-                        </button>
-                    </div>
-                </div>
+            {isDead && currentBeat && (
+                <DeathScreen
+                    beat={currentBeat}
+                    deathCount={dungeon.deathCount}
+                    chapter={dungeon.currentChapter}
+                    onRestart={handleRestart}
+                    onBack={onBack}
+                />
             )}
 
             {/* 通关覆盖层 */}
@@ -1097,14 +1092,102 @@ function PortraitMode(props: PortraitModeProps) {
                 {/* 死亡/通关 */}
                 {isDead && (
                     <div className="raid-portrait-ending raid-portrait-ending--dead">
-                        <p>攻略失败……</p>
+                        <div className="raid-portrait-ending-emoji">💀</div>
+                        <p className="raid-portrait-ending-title">攻略失败</p>
+                        {beat.narration && (
+                            <p className="raid-portrait-ending-narration">{beat.narration}</p>
+                        )}
+                        {beat.dialogue.length > 0 && (
+                            <div className="raid-portrait-ending-dialogue">
+                                {beat.dialogue.slice(0, 3).map((line, i) => (
+                                    <p key={i} className="raid-portrait-ending-line">
+                                        <span className="raid-portrait-ending-speaker">{line.speaker}：</span>
+                                        {line.text}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
                 {isCleared && (
                     <div className="raid-portrait-ending raid-portrait-ending--clear">
-                        <p>攻略成功！</p>
+                        <div className="raid-portrait-ending-emoji">🎉</div>
+                        <p className="raid-portrait-ending-title">攻略成功！</p>
                     </div>
                 )}
+            </div>
+        </div>
+    );
+}
+
+// ── 死亡结局界面（展示沙雕死亡剧情） ──
+
+const DEATH_EMOJIS = ["💀", "👻", "🤡", "🤦", "💀", "😵", "🤪", "😭", "🫠", "🩲", "🦆", "🍌"];
+const DEATH_SUBTITLES = [
+    "你在这个世界的故事……以一种离谱的方式终结了",
+    "这大概是最社死的结局了",
+    "连编剧都没想到你会这样收场",
+    "这不是他们想要的结局，但确实很好笑",
+    "你的攻略之路，止步于此（笑）",
+    "也许换个活法会更好……大概吧",
+    "这一幕将成为传说……被人嘲笑的那种",
+    "至少你走得很……有画面感",
+    "史书上不会记载这一天，但表情包会",
+    "如果尴尬能致死，那你已经死了三次",
+    "这一刻，空气都凝固了……然后炸了",
+    "攻略失败，但你的社死成功了",
+];
+
+type DeathScreenProps = {
+    beat: StoryBeat;
+    deathCount: number;
+    chapter: number;
+    onRestart: () => void;
+    onBack: () => void;
+};
+
+function DeathScreen({ beat, deathCount, chapter, onRestart, onBack }: DeathScreenProps) {
+    const emoji = useMemo(() => DEATH_EMOJIS[Math.floor(Math.random() * DEATH_EMOJIS.length)], []);
+    const subtitle = useMemo(() => DEATH_SUBTITLES[Math.floor(Math.random() * DEATH_SUBTITLES.length)], []);
+
+    return (
+        <div className="raid-death-screen">
+            <div className="raid-death-emoji">{emoji}</div>
+            <h2 className="raid-death-screen-title">攻略失败</h2>
+            <p className="raid-death-screen-subtitle">{subtitle}</p>
+
+            {beat.sceneTitle && (
+                <div className="raid-death-scene-title">「{beat.sceneTitle}」</div>
+            )}
+
+            {beat.narration && (
+                <div className="raid-death-narration">
+                    <p>{beat.narration}</p>
+                </div>
+            )}
+
+            {beat.dialogue.length > 0 && (
+                <div className="raid-death-dialogue">
+                    {beat.dialogue.map((line, i) => (
+                        <div key={i} className="raid-death-dialogue-line">
+                            <span className="raid-death-speaker">{line.speaker}</span>
+                            <span className="raid-death-line-text">{line.text}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <p className="raid-death-screen-count">
+                第 {chapter} 章 · 累计死亡 {deathCount} 次
+            </p>
+
+            <div className="raid-death-actions">
+                <button className="raid-btn raid-btn--primary" onClick={onRestart}>
+                    重新开始
+                </button>
+                <button className="raid-btn raid-btn--ghost" onClick={onBack}>
+                    返回
+                </button>
             </div>
         </div>
     );

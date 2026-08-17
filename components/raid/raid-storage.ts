@@ -119,19 +119,56 @@ export function deleteSaveSlot(dungeonId: string, slotId: string): void {
 }
 
 // ── 追加剧情节点 ──────────────────────────────────────
+
+/** 每个章节好感度正向增益上限 */
+const MAX_FAVOR_GAIN_PER_CHAPTER = 20;
+
 export function appendStoryBeat(dungeonId: string, beat: StoryBeat): RaidDungeon | null {
     const dungeon = findDungeon(dungeonId);
     if (!dungeon) return null;
     const storyBeats = [...dungeon.storyBeats, beat];
     const favor = { ...dungeon.favor };
+
+    // 每章好感度上限限制：追踪本章已累计的正向增益
+    const favorGainPerChapter = { ...(dungeon.favorGainPerChapter || {}) };
+    const chapterKey = beat.chapter;
+    let chapterGained = favorGainPerChapter[chapterKey] || 0;
+
     for (const [npcId, delta] of Object.entries(beat.favorChanges)) {
-        favor[npcId] = Math.max(-100, Math.min(100, (favor[npcId] || 0) + delta));
+        let actualDelta = delta;
+        // 正向增益受每章上限限制
+        if (delta > 0) {
+            const remaining = MAX_FAVOR_GAIN_PER_CHAPTER - chapterGained;
+            if (remaining <= 0) {
+                // 本章好感度已满，不再增加
+                actualDelta = 0;
+            } else if (delta > remaining) {
+                // 超出上限，截断
+                actualDelta = remaining;
+                chapterGained = MAX_FAVOR_GAIN_PER_CHAPTER;
+            } else {
+                chapterGained += delta;
+            }
+        }
+        if (actualDelta !== 0) {
+            favor[npcId] = Math.max(-100, Math.min(100, (favor[npcId] || 0) + actualDelta));
+        }
     }
+
+    // 更新本章累计好感度
+    favorGainPerChapter[chapterKey] = chapterGained;
+
+    // 如果进入新章节，重置新章节的好感度计数
+    if (beat.chapter > dungeon.currentChapter) {
+        favorGainPerChapter[beat.chapter] = 0;
+    }
+
     return updateDungeon(dungeonId, {
         storyBeats,
         currentBeatId: beat.id,
         currentChapter: beat.chapter,
         favor,
+        favorGainPerChapter,
         status: beat.isDeath ? "failed" : beat.isClimax ? "cleared" : "playing",
     });
 }

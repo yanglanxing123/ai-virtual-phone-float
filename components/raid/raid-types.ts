@@ -124,6 +124,8 @@ export type RaidDungeon = {
     coverImage?: string;
     /** 用户上传的画风参考图（dataUrl），作用于整个剧本，每次生图时参考 */
     styleReferenceImage?: string;
+    /** 每个章节已累计的好感度增量（正数之和），用于限制每章最多+20 */
+    favorGainPerChapter?: Record<number, number>;
 };
 
 /** 预设模板 */
