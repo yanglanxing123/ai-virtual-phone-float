@@ -2434,7 +2434,6 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  pointer-events: none;
 }
 .raid-portrait-bg-img {
   width: 100%;
@@ -2673,13 +2672,23 @@
 .raid-portrait-bottom-area {
   position: absolute;
   top: 50%;
-  left: 50px;
-  right: 50px;
+  left: 0;
+  right: 0;
   transform: translateY(-50%);
   z-index: 10;
+  padding: 0 50px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* 容器本身不拦截点击，让导航箭头等可被点击 */
+  pointer-events: none;
+}
+/* 容器内的交互元素恢复点击 */
+.raid-portrait-bottom-area > .raid-portrait-dialogue-box,
+.raid-portrait-bottom-area > .raid-portrait-choices,
+.raid-portrait-bottom-area > .raid-portrait-continue-hint,
+.raid-portrait-bottom-area > .raid-portrait-ending {
+  pointer-events: auto;
 }
 
 /* 对话框 — 半透明磨砂玻璃质感，大圆角，金色描边 */
@@ -2816,7 +2825,7 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 8;
+  z-index: 15;
   width: 34px;
   height: 34px;
   border-radius: 50%;
