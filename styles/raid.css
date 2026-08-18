@@ -984,29 +984,7 @@
 .raid-portrait-figure[data-side="right"]  { transform: translateX(6%); }
 .raid-portrait-figure[data-dim="true"]    { filter: brightness(0.6) drop-shadow(0 12px 28px rgba(0,0,0,0.35)); }
 
-.raid-portrait-dialogue-box {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
-  z-index: 10;
-  padding: 16px 18px 14px;
-  background: var(--raid-panel);
-  border: 1px solid var(--raid-panel-border);
-  border-radius: var(--raid-radius);
-  box-shadow: var(--raid-shadow);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  animation: raid-fade-up 0.35s ease both;
-}
-.raid-portrait-dialogue-box .raid-story-speaker { margin-bottom: 8px; }
-.raid-portrait-dialogue-box p {
-  margin: 0;
-  font-size: calc(13.5px * var(--app-text-scale, 1));
-  line-height: 1.9;
-  color: var(--raid-text);
-}
-
+/* 旧版立绘对话框样式已迁移至 §8b 新版立绘模式区域，此处保留空壳避免回退 */
 
 /* ═══════════════════════════════════════════════════════════
    §9  存档列表
@@ -2483,18 +2461,19 @@
   inset: 0;
   z-index: 2;
   background:
-    radial-gradient(ellipse at 50% 25%, transparent 0%, transparent 50%, rgba(0,0,0,0.12) 85%),
+    radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.18) 0%, transparent 45%),
     linear-gradient(to bottom,
-      rgba(0,0,0,0.12) 0%,
-      transparent 12%,
-      transparent 30%,
-      rgba(8, 8, 12, 0.12) 38%,
-      rgba(8, 8, 12, 0.25) 50%,
-      rgba(8, 8, 12, 0.12) 62%,
-      transparent 72%,
-      rgba(8, 8, 12, 0.3) 82%,
-      rgba(8, 8, 12, 0.65) 92%,
-      rgba(8, 8, 12, 0.85) 100%
+      rgba(0,0,0,0.15) 0%,
+      transparent 10%,
+      transparent 35%,
+      rgba(8, 8, 12, 0.1) 42%,
+      rgba(8, 8, 12, 0.22) 50%,
+      rgba(8, 8, 12, 0.1) 58%,
+      transparent 65%,
+      transparent 75%,
+      rgba(8, 8, 12, 0.35) 85%,
+      rgba(8, 8, 12, 0.7) 95%,
+      rgba(8, 8, 12, 0.88) 100%
     );
   pointer-events: none;
 }
@@ -2566,9 +2545,52 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-/* 章节标记 — 立绘模式下不再显示 */
+/* 章节标记 — 旧版居中式已废弃，改为顶部章节标题 */
 .raid-portrait-chapter-tag {
   display: none;
+}
+
+/* 章节标题 — 正上方居中显示 */
+.raid-portrait-chapter-title {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  max-width: 70%;
+  overflow: hidden;
+}
+.raid-portrait-chapter-num {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(212, 175, 55, 0.9);
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+.raid-portrait-chapter-sep {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+}
+.raid-portrait-chapter-name {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 角色名称标签 — 浮动在对话框左上角，半透明磨砂质感 */
@@ -2646,14 +2668,15 @@
   letter-spacing: 0.02em;
 }
 
-/* 剧情区域：居中偏下位置，不贴底 */
+/* 剧情区域：垂直居中，与导航箭头对齐 */
 .raid-portrait-bottom-area {
   position: absolute;
-  top: 38%;
+  top: 50%;
   left: 0;
   right: 0;
+  transform: translateY(-50%);
   z-index: 10;
-  padding: 0 14px;
+  padding: 0 50px;
   display: flex;
   flex-direction: column;
   gap: 6px;
