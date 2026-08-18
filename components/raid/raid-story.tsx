@@ -1221,7 +1221,67 @@ type PanelProps = {
     onClose: () => void;
 };
 
+// ── 属性面板头像：兼容字符串 / {url} 对象，加载失败回退到场景图，再回退到首字母 ──
+function AttrAvatar({ npc, fallbackSceneImage }: { npc: DungeonNpc; fallbackSceneImage?: string }) {
+    // 从 portraits / referenceImages 中提取可显示的 URL（兼容纯字符串与 {url|dataUrl|src|imageUrl} 对象）
+    const directUrl = useMemo(() => {
+        const toUrl = (v: unknown): string | null => {
+            if (typeof v === "string" && v.trim()) return v;
+            if (v && typeof v === "object") {
+                const o = v as Record<string, unknown>;
+                const u = o.url ?? o.dataUrl ?? o.src ?? o.imageUrl;
+                if (typeof u === "string" && u.trim()) return u;
+            }
+            return null;
+        };
+        return toUrl(npc.portraits?.[0]) ?? toUrl(npc.referenceImages?.[0]) ?? null;
+    }, [npc.portraits, npc.referenceImages]);
+
+    const [stage, setStage] = useState<"direct" | "scene" | "none">(
+        directUrl ? "direct" : fallbackSceneImage ? "scene" : "none",
+    );
+
+    // 数据变化时重置回退阶段
+    useEffect(() => {
+        setStage(directUrl ? "direct" : fallbackSceneImage ? "scene" : "none");
+    }, [directUrl, fallbackSceneImage]);
+
+    if (stage === "direct" && directUrl) {
+        return (
+            <img
+                src={directUrl}
+                alt={npc.name}
+                onError={() => setStage(fallbackSceneImage ? "scene" : "none")}
+            />
+        );
+    }
+    if (stage === "scene" && fallbackSceneImage) {
+        return (
+            <img
+                src={fallbackSceneImage}
+                alt={npc.name}
+                onError={() => setStage("none")}
+            />
+        );
+    }
+    return (
+        <span className="raid-portrait-attr-avatar-fallback">
+            {npc.name?.[0] ?? "?"}
+        </span>
+    );
+}
+
 function AttributesPanel({ dungeon, onClose }: PanelProps) {
+    // 备用头像：取最近一张已生成的「人物+背景」融合图，保证属性面板一定能看到角色
+    const fallbackSceneImage = useMemo(() => {
+        for (let i = dungeon.storyBeats.length - 1; i >= 0; i--) {
+            if (dungeon.storyBeats[i].portraitSceneImage) {
+                return dungeon.storyBeats[i].portraitSceneImage;
+            }
+        }
+        return undefined;
+    }, [dungeon.storyBeats]);
+
     return (
         <div className="raid-portrait-overlay-panel">
             <div className="raid-portrait-overlay-header">
@@ -1236,17 +1296,11 @@ function AttributesPanel({ dungeon, onClose }: PanelProps) {
                     return (
                         <div key={npc.id} className="raid-portrait-attr-card">
                             <div className="raid-portrait-attr-avatar">
-                                {npc.portraits?.[0] ? (
-                                    <img src={npc.portraits[0]} alt={npc.name} />
-                                ) : npc.referenceImages?.[0] ? (
-                                    <img src={npc.referenceImages[0]} alt={npc.name} />
-                                ) : (
-                                    <span className="raid-portrait-attr-avatar-fallback">{npc.name[0]}</span>
-                                )}
-                                <span className="raid-portrait-attr-card-role-overlay">{NPC_ROLE_LABELS[npc.role]}</span>
-                                <span className="raid-portrait-attr-card-name-overlay">{npc.name}</span>
+                                <AttrAvatar npc={npc} fallbackSceneImage={fallbackSceneImage} />
                             </div>
                             <div className="raid-portrait-attr-info">
+                                <div className="raid-portrait-attr-name">{npc.name}</div>
+                                <div className="raid-portrait-attr-role">{NPC_ROLE_LABELS[npc.role]}</div>
                                 <div className="raid-portrait-attr-bar">
                                     <span className="raid-portrait-attr-bar-label">好感</span>
                                     <div className="raid-portrait-attr-bar-track">
