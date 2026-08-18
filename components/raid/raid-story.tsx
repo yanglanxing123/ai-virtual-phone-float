@@ -998,6 +998,17 @@ function PortraitMode(props: PortraitModeProps) {
                 </svg>
             </button>
 
+            {/* 章节标题（正上方居中） */}
+            <div className="raid-portrait-chapter-title">
+                <span className="raid-portrait-chapter-num">第 {beat.chapter} 章</span>
+                {beat.sceneTitle && (
+                    <>
+                        <span className="raid-portrait-chapter-sep">·</span>
+                        <span className="raid-portrait-chapter-name">{beat.sceneTitle}</span>
+                    </>
+                )}
+            </div>
+
             {/* 段落导航箭头（左） */}
             {canGoBack && (
                 <button
