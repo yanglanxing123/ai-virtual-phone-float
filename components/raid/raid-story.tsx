@@ -495,6 +495,10 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                     onStopVoice={handleStopVoice}
                     voicePlayingNpcId={voicePlayingNpcId}
                     voicePlayingLineKey={voicePlayingLineKey}
+                    bgmVolume={bgmVolume}
+                    voiceVolume={voiceVolume}
+                    onBgmVolumeChange={setBgmVolume}
+                    onVoiceVolumeChange={setVoiceVolume}
                 />
             ) : (
                 <>
@@ -872,6 +876,10 @@ type PortraitModeProps = {
     onStopVoice: () => void;
     voicePlayingNpcId: string | null;
     voicePlayingLineKey: string | null;
+    bgmVolume: number;
+    voiceVolume: number;
+    onBgmVolumeChange: (v: number) => void;
+    onVoiceVolumeChange: (v: number) => void;
 };
 
 function PortraitMode(props: PortraitModeProps) {
@@ -882,7 +890,13 @@ function PortraitMode(props: PortraitModeProps) {
         onEditingChoiceTextChange, onConfirmEdit, onCancelEdit,
         isDead, isCleared,
         onPlayVoice, onStopVoice, voicePlayingNpcId, voicePlayingLineKey,
+        bgmVolume, voiceVolume, onBgmVolumeChange, onVoiceVolumeChange,
     } = props;
+
+    // 底部工具栏面板状态
+    const [bottomPanel, setBottomPanel] = useState<"none" | "attributes" | "log" | "volume">("none");
+    // 自动播放
+    const [autoPlay, setAutoPlay] = useState(false);
 
     // 立绘模式只使用一张「人物+背景」融合图
     const fusedImage = beat.portraitSceneImage;
@@ -919,6 +933,17 @@ function PortraitMode(props: PortraitModeProps) {
         setSegmentIndex(0);
     }, [beat.id]);
 
+    // 自动播放：每隔 2.5 秒推进段落
+    useEffect(() => {
+        if (!autoPlay || isDead || isCleared) return;
+        if (!isLastSegment) {
+            const timer = setTimeout(() => {
+                setSegmentIndex((i) => Math.min(segments.length - 1, i + 1));
+            }, 2500);
+            return () => clearTimeout(timer);
+        }
+    }, [autoPlay, segmentIndex, isLastSegment, isDead, isCleared, segments.length]);
+
     const currentSeg = segments[segmentIndex] || segments[0];
     const canGoBack = segmentIndex > 0;
     const canGoForward = segmentIndex < segments.length - 1;
@@ -933,13 +958,13 @@ function PortraitMode(props: PortraitModeProps) {
     const isVoicePlaying = voicePlayingLineKey === lineKey;
 
     return (
-        <div className="raid-portrait-fullscreen">
+        <div className={`raid-portrait-fullscreen raid-theme-${dungeon.theme}`}>
             {/* 单张融合图（人物为主体+背景衬托） */}
             <div className="raid-portrait-bg">
                 {fusedImage ? (
                     <img src={fusedImage} alt={beat.sceneTitle} className="raid-portrait-bg-img" />
                 ) : (
-                    <div className={`raid-portrait-bg-placeholder raid-theme-${dungeon.theme}`}>
+                    <div className="raid-portrait-bg-placeholder">
                         {portraitLoading && (
                             <div className="raid-portrait-gen-loading">
                                 <div className="raid-loading" />
@@ -979,8 +1004,8 @@ function PortraitMode(props: PortraitModeProps) {
                 </button>
             )}
 
-            {/* 底部对话+选项区 */}
-            <div className={`raid-portrait-bottom-area ${!isLastSegment || isDead || isCleared ? "raid-portrait-bottom-area--no-choices" : ""}`}>
+            {/* 底部紧凑剧情框 + 工具栏（参考图1布局） */}
+            <div className="raid-portrait-bottom-area">
                 {/* 当前剧情段落 */}
                 <div
                     className="raid-portrait-dialogue-box"
@@ -990,7 +1015,10 @@ function PortraitMode(props: PortraitModeProps) {
                     {currentSeg?.type === "dialogue" ? (
                         <>
                             <div className="raid-portrait-current-line">
-                                <span className="raid-portrait-speaker-name">{currentSeg.speaker}</span>
+                                <span className="raid-portrait-speaker-name">
+                                    <span className="raid-portrait-speaker-diamond">◆</span>
+                                    {currentSeg.speaker}
+                                </span>
                                 {currentSeg.emotion && (
                                     <span className="raid-portrait-emotion">（{currentSeg.emotion}）</span>
                                 )}
@@ -1018,18 +1046,6 @@ function PortraitMode(props: PortraitModeProps) {
                     )}
                 </div>
 
-                {/* 段落进度指示 */}
-                {segments.length > 1 && (
-                    <div className="raid-portrait-segment-dots">
-                        {segments.map((_, i) => (
-                            <span
-                                key={i}
-                                className={`raid-portrait-dot ${i === segmentIndex ? "raid-portrait-dot--active" : ""} ${i < segmentIndex ? "raid-portrait-dot--read" : ""}`}
-                            />
-                        ))}
-                    </div>
-                )}
-
                 {/* 选项区：只在最后一段时显示 */}
                 {!isDead && !isCleared && isLastSegment && (
                     <div className="raid-portrait-choices">
@@ -1052,41 +1068,11 @@ function PortraitMode(props: PortraitModeProps) {
                     </div>
                 )}
 
-                {/* 继续提示：不在最后一段时显示 */}
+                {/* 继续提示 */}
                 {!isLastSegment && !isDead && !isCleared && (
                     <div className="raid-portrait-continue-hint">
                         点击继续 ▸
                     </div>
-                )}
-
-                {/* 编辑面板 */}
-                {!isDead && !isCleared && isLastSegment && (
-                    <>
-                        <div className="raid-portrait-edit-toggle">
-                            <button onClick={onToggleEditPanel}>
-                                {showEditPanel ? "▼" : "▶"} 剧情指导
-                            </button>
-                        </div>
-                        {showEditPanel && (
-                            <div className="raid-portrait-edit-panel">
-                                <textarea
-                                    placeholder="剧情方向指导（选填）"
-                                    value={guidance}
-                                    onChange={(e) => onGuidanceChange(e.target.value)}
-                                    rows={1}
-                                />
-                                <div className="raid-portrait-edit-actions">
-                                    <button
-                                        className="raid-btn raid-btn--ghost raid-btn-sm"
-                                        onClick={onAiFill}
-                                        disabled={fillingGuidance}
-                                    >
-                                        {fillingGuidance ? "填充中…" : "AI 填入"}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </>
                 )}
 
                 {/* 死亡/通关 */}
@@ -1115,6 +1101,230 @@ function PortraitMode(props: PortraitModeProps) {
                         <p className="raid-portrait-ending-title">攻略成功！</p>
                     </div>
                 )}
+            </div>
+
+            {/* 底部工具栏（参考图1：音乐/自动/回顾/属性） */}
+            {!isDead && !isCleared && (
+                <div className="raid-portrait-toolbar">
+                    <button
+                        className={`raid-portrait-toolbar-btn ${bottomPanel === "volume" ? "raid-portrait-toolbar-btn--active" : ""}`}
+                        onClick={() => setBottomPanel(bottomPanel === "volume" ? "none" : "volume")}
+                    >
+                        <span className="raid-portrait-toolbar-icon">🎵</span>
+                        <span className="raid-portrait-toolbar-label">音乐</span>
+                    </button>
+                    <button
+                        className={`raid-portrait-toolbar-btn ${autoPlay ? "raid-portrait-toolbar-btn--active" : ""}`}
+                        onClick={() => setAutoPlay(!autoPlay)}
+                    >
+                        <span className="raid-portrait-toolbar-icon">▶</span>
+                        <span className="raid-portrait-toolbar-label">自动</span>
+                    </button>
+                    <button
+                        className={`raid-portrait-toolbar-btn ${bottomPanel === "log" ? "raid-portrait-toolbar-btn--active" : ""}`}
+                        onClick={() => setBottomPanel(bottomPanel === "log" ? "none" : "log")}
+                    >
+                        <span className="raid-portrait-toolbar-icon">📜</span>
+                        <span className="raid-portrait-toolbar-label">回顾</span>
+                    </button>
+                    <button
+                        className={`raid-portrait-toolbar-btn ${bottomPanel === "attributes" ? "raid-portrait-toolbar-btn--active" : ""}`}
+                        onClick={() => setBottomPanel(bottomPanel === "attributes" ? "none" : "attributes")}
+                    >
+                        <span className="raid-portrait-toolbar-icon">❤</span>
+                        <span className="raid-portrait-toolbar-label">属性</span>
+                    </button>
+                </div>
+            )}
+
+            {/* 人物属性面板 */}
+            {bottomPanel === "attributes" && (
+                <AttributesPanel dungeon={dungeon} onClose={() => setBottomPanel("none")} />
+            )}
+
+            {/* 剧情回顾面板 */}
+            {bottomPanel === "log" && (
+                <StoryLogPanel dungeon={dungeon} onClose={() => setBottomPanel("none")} />
+            )}
+
+            {/* 音量面板 */}
+            {bottomPanel === "volume" && (
+                <VolumePanel
+                    bgmVolume={bgmVolume}
+                    voiceVolume={voiceVolume}
+                    onBgmVolumeChange={onBgmVolumeChange}
+                    onVoiceVolumeChange={onVoiceVolumeChange}
+                    onClose={() => setBottomPanel("none")}
+                />
+            )}
+
+            {/* 编辑面板（浮动，不影响布局） */}
+            {!isDead && !isCleared && isLastSegment && showEditPanel && (
+                <div className="raid-portrait-edit-panel raid-portrait-edit-panel--floating">
+                    <textarea
+                        placeholder="剧情方向指导（选填）"
+                        value={guidance}
+                        onChange={(e) => onGuidanceChange(e.target.value)}
+                        rows={1}
+                    />
+                    <div className="raid-portrait-edit-actions">
+                        <button
+                            className="raid-btn raid-btn--ghost raid-btn-sm"
+                            onClick={onAiFill}
+                            disabled={fillingGuidance}
+                        >
+                            {fillingGuidance ? "填充中…" : "AI 填入"}
+                        </button>
+                        <button
+                            className="raid-btn raid-btn--ghost raid-btn-sm"
+                            onClick={onToggleEditPanel}
+                        >
+                            关闭
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── 人物属性面板（参考图3） ──
+
+type PanelProps = {
+    dungeon: RaidDungeon;
+    onClose: () => void;
+};
+
+function AttributesPanel({ dungeon, onClose }: PanelProps) {
+    return (
+        <div className="raid-portrait-overlay-panel">
+            <div className="raid-portrait-overlay-header">
+                <h2>人物属性</h2>
+                <span className="raid-portrait-overlay-subtitle">CHARACTER PROFILE</span>
+                <button className="raid-portrait-overlay-close" onClick={onClose}>×</button>
+            </div>
+            <div className="raid-portrait-overlay-body">
+                {dungeon.npcs.filter((n) => n.isTarget).map((npc) => {
+                    const favor = dungeon.favor[npc.id] ?? 0;
+                    const favorPct = Math.max(0, Math.min(100, (favor + 100) / 2));
+                    return (
+                        <div key={npc.id} className="raid-portrait-attr-card">
+                            <div className="raid-portrait-attr-avatar">
+                                {npc.portraits?.[0] ? (
+                                    <img src={npc.portraits[0]} alt={npc.name} />
+                                ) : (
+                                    <span>{npc.name[0]}</span>
+                                )}
+                            </div>
+                            <div className="raid-portrait-attr-info">
+                                <div className="raid-portrait-attr-name">{npc.name}</div>
+                                <div className="raid-portrait-attr-role">{NPC_ROLE_LABELS[npc.role]}</div>
+                                <div className="raid-portrait-attr-bar">
+                                    <span className="raid-portrait-attr-bar-label">好感</span>
+                                    <div className="raid-portrait-attr-bar-track">
+                                        <div className="raid-portrait-attr-bar-fill" style={{ width: `${favorPct}%` }} />
+                                    </div>
+                                    <span className="raid-portrait-attr-bar-val">{favor}</span>
+                                </div>
+                                <div className="raid-portrait-attr-persona">{npc.persona}</div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+// ── 剧情回顾面板（参考图2） ──
+
+function StoryLogPanel({ dungeon, onClose }: PanelProps) {
+    const allSegments = useMemo(() => {
+        const result: Array<{
+            beatIdx: number;
+            type: "narration" | "dialogue";
+            text: string;
+            speaker?: string;
+            emotion?: string;
+            chapter: number;
+            sceneTitle: string;
+        }> = [];
+        dungeon.storyBeats.forEach((beat, beatIdx) => {
+            const narrationParts = splitSentences(beat.narration);
+            narrationParts.forEach((text) => {
+                result.push({ beatIdx, type: "narration", text, chapter: beat.chapter, sceneTitle: beat.sceneTitle });
+            });
+            beat.dialogue.forEach((line) => {
+                result.push({ beatIdx, type: "dialogue", text: line.text, speaker: line.speaker, emotion: line.emotion, chapter: beat.chapter, sceneTitle: beat.sceneTitle });
+            });
+        });
+        return result;
+    }, [dungeon.storyBeats]);
+
+    return (
+        <div className="raid-portrait-overlay-panel">
+            <div className="raid-portrait-overlay-header">
+                <h2>剧情回顾</h2>
+                <span className="raid-portrait-overlay-subtitle">STORY LOG</span>
+                <button className="raid-portrait-overlay-close" onClick={onClose}>×</button>
+            </div>
+            <div className="raid-portrait-overlay-body raid-portrait-log-body">
+                {allSegments.map((seg, i) => (
+                    <div key={i} className="raid-portrait-log-entry">
+                        {seg.type === "dialogue" ? (
+                            <p className="raid-portrait-log-dialogue">
+                                <span className="raid-portrait-speaker-diamond">◆</span>
+                                <span className="raid-portrait-log-speaker">{seg.speaker}</span>
+                                <span className="raid-portrait-log-text">{seg.text}</span>
+                            </p>
+                        ) : (
+                            <p className="raid-portrait-log-narration">{seg.text}</p>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// ── 音量面板 ──
+
+type VolumePanelProps = {
+    bgmVolume: number;
+    voiceVolume: number;
+    onBgmVolumeChange: (v: number) => void;
+    onVoiceVolumeChange: (v: number) => void;
+    onClose: () => void;
+};
+
+function VolumePanel({ bgmVolume, voiceVolume, onBgmVolumeChange, onVoiceVolumeChange, onClose }: VolumePanelProps) {
+    return (
+        <div className="raid-portrait-overlay-panel raid-portrait-overlay-panel--sm">
+            <div className="raid-portrait-overlay-header">
+                <h2>音量</h2>
+                <button className="raid-portrait-overlay-close" onClick={onClose}>×</button>
+            </div>
+            <div className="raid-portrait-overlay-body raid-portrait-volume-body">
+                <div className="raid-portrait-volume-row">
+                    <span className="raid-portrait-volume-label">背景音乐</span>
+                    <input
+                        type="range" min={0} max={1} step={0.01}
+                        value={bgmVolume}
+                        onChange={(e) => onBgmVolumeChange(parseFloat(e.target.value))}
+                        className="raid-portrait-volume-slider"
+                    />
+                    <span className="raid-portrait-volume-val">{Math.round(bgmVolume * 100)}%</span>
+                </div>
+                <div className="raid-portrait-volume-row">
+                    <span className="raid-portrait-volume-label">角色语音</span>
+                    <input
+                        type="range" min={0} max={1} step={0.01}
+                        value={voiceVolume}
+                        onChange={(e) => onVoiceVolumeChange(parseFloat(e.target.value))}
+                        className="raid-portrait-volume-slider"
+                    />
+                    <span className="raid-portrait-volume-val">{Math.round(voiceVolume * 100)}%</span>
+                </div>
             </div>
         </div>
     );
