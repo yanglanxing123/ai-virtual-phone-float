@@ -1243,10 +1243,10 @@ function AttributesPanel({ dungeon, onClose }: PanelProps) {
                                 ) : (
                                     <span className="raid-portrait-attr-avatar-fallback">{npc.name[0]}</span>
                                 )}
+                                <span className="raid-portrait-attr-card-role-overlay">{NPC_ROLE_LABELS[npc.role]}</span>
+                                <span className="raid-portrait-attr-card-name-overlay">{npc.name}</span>
                             </div>
                             <div className="raid-portrait-attr-info">
-                                <div className="raid-portrait-attr-name">{npc.name}</div>
-                                <div className="raid-portrait-attr-role">{NPC_ROLE_LABELS[npc.role]}</div>
                                 <div className="raid-portrait-attr-bar">
                                     <span className="raid-portrait-attr-bar-label">好感</span>
                                     <div className="raid-portrait-attr-bar-track">
