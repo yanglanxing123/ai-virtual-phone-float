@@ -2482,15 +2482,48 @@
   position: absolute;
   inset: 0;
   z-index: 2;
-  background: linear-gradient(to bottom,
-    transparent 0%,
-    transparent 30%,
-    rgba(8, 8, 12, 0.15) 45%,
-    rgba(8, 8, 12, 0.4) 65%,
-    rgba(8, 8, 12, 0.7) 85%,
-    rgba(8, 8, 12, 0.9) 100%
-  );
+  background:
+    radial-gradient(ellipse at 50% 30%, transparent 0%, transparent 50%, rgba(0,0,0,0.15) 85%),
+    linear-gradient(to bottom,
+      rgba(0,0,0,0.12) 0%,
+      transparent 12%,
+      transparent 45%,
+      rgba(8, 8, 12, 0.1) 55%,
+      rgba(8, 8, 12, 0.35) 72%,
+      rgba(8, 8, 12, 0.65) 88%,
+      rgba(8, 8, 12, 0.85) 100%
+    );
   pointer-events: none;
+}
+
+/* 返回按钮 — 左上角小型半透明圆形 */
+.raid-portrait-back-btn {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 20;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.raid-portrait-back-btn:hover {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+}
+.raid-portrait-back-btn:active {
+  transform: scale(0.92);
 }
 
 /* 角色立绘 */
@@ -2530,27 +2563,39 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-/* 章节标记 — 参考图1：主题色点缀深色底 */
+/* 章节标记 — 立绘模式下不再显示 */
 .raid-portrait-chapter-tag {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 4;
-  padding: 4px 16px;
-  border-radius: 999px;
-  background: rgba(8, 8, 12, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: var(--raid-accent);
-  font-size: 12px;
-  white-space: nowrap;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  border: 1px solid var(--raid-accent-soft);
-  letter-spacing: 0.05em;
+  display: none;
 }
 
-/* 对话框内部元素 */
+/* 角色名称标签 — 浮动在对话框左上角，半透明磨砂质感 */
+.raid-portrait-name-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  position: relative;
+  z-index: 7;
+  margin-left: 20px;
+  margin-bottom: -13px;
+  padding: 5px 16px 5px 14px;
+  border-radius: 12px;
+  background: rgba(20, 20, 30, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s;
+}
+.raid-portrait-name-tag-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* 对话框内部元素（保留兼容） */
 .raid-portrait-current-line {
   display: flex;
   align-items: center;
@@ -2563,7 +2608,6 @@
   gap: 4px;
   font-size: 14px;
   font-weight: 700;
-  /* 名牌样式：参考图1的矩形铭牌效果，颜色跟随画风主题 */
   color: var(--raid-accent);
   background: var(--raid-accent-soft);
   padding: 2px 10px 2px 6px;
@@ -2584,53 +2628,66 @@
   text-shadow: 0 1px 5px rgba(0, 0, 0, 1);
 }
 .raid-portrait-dialogue-text {
-  font-size: 14px;
-  line-height: 1.75;
+  font-size: 15px;
+  line-height: 1.85;
   color: #ffffff;
   margin-bottom: 6px;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 1), 0 0 12px rgba(0, 0, 0, 0.8);
   letter-spacing: 0.02em;
 }
 
-/* 底部区域：紧凑剧情框，只占底部一小块区域 */
+/* 底部区域：剧情框，与底部工具栏保持间距 */
 .raid-portrait-bottom-area {
   position: absolute;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 52px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 68px);
   left: 0;
   right: 0;
   z-index: 10;
-  padding: 0 8px;
+  padding: 0 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
-/* 对话框 — 紧凑型，接近全宽 */
+/* 对话框 — 半透明磨砂玻璃质感，大圆角，金色描边 */
 .raid-portrait-dialogue-box {
   position: relative;
   z-index: 5;
-  padding: 12px 16px 10px;
+  padding: 18px 20px 16px;
   color: #f5f5f5;
-  background: rgba(8, 8, 12, 0.88);
-  border-radius: 10px;
-  border: 1px solid var(--raid-accent-soft);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3);
-  min-height: 60px;
-  max-height: 35vh;
+  background: rgba(18, 18, 28, 0.45);
+  border-radius: 18px;
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow:
+    0 -2px 24px rgba(0, 0, 0, 0.35),
+    0 4px 20px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  min-height: 64px;
+  max-height: 32vh;
   overflow-y: auto;
 }
-/* 对话框顶部装饰线 */
+/* 对话框内部轻微提亮，保证文字清晰可读 */
+.raid-portrait-dialogue-box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: -1;
+}
+/* 对话框顶部金色装饰线 */
 .raid-portrait-dialogue-box::before {
   content: "";
   position: absolute;
   top: 0;
-  left: 20%;
-  right: 20%;
+  left: 25%;
+  right: 25%;
   height: 1px;
-  background: linear-gradient(to right, transparent, var(--raid-accent), transparent);
-  opacity: 0.5;
+  background: linear-gradient(to right, transparent, rgba(212, 175, 55, 0.5), transparent);
+  opacity: 0.6;
 }
 
 /* 选项（参考图1：主题色边框） */
@@ -2642,15 +2699,15 @@
   margin-bottom: 4px;
 }
 .raid-portrait-choice-btn--compact {
-  padding: 6px 14px !important;
-  border: 1px solid var(--raid-accent-soft) !important;
-  border-radius: 8px !important;
-  background: rgba(8, 8, 12, 0.65) !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  padding: 8px 16px !important;
+  border: 1px solid rgba(212, 175, 55, 0.22) !important;
+  border-radius: 12px !important;
+  background: rgba(18, 18, 28, 0.5) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   color: #f0f0f0 !important;
-  font-size: 12.5px !important;
-  line-height: 1.35;
+  font-size: 13px !important;
+  line-height: 1.4;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -2665,14 +2722,13 @@
 .raid-portrait-choice-btn--compact::before {
   content: "◆";
   font-size: 7px;
-  color: var(--raid-accent);
+  color: rgba(212, 175, 55, 0.7);
   opacity: 0.7;
 }
 .raid-portrait-choice-btn--compact:hover {
-  background: rgba(20, 20, 30, 0.7) !important;
-  border-color: var(--raid-accent) !important;
+  background: rgba(25, 25, 38, 0.6) !important;
+  border-color: rgba(212, 175, 55, 0.5) !important;
   color: #ffffff !important;
-  transform: translateX(2px);
 }
 .raid-portrait-choice-btn--compact:active {
   transform: scale(0.98);
@@ -2725,15 +2781,15 @@
   top: 50%;
   transform: translateY(-50%);
   z-index: 8;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  border: 1px solid var(--raid-accent-soft);
-  background: rgba(8, 8, 12, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  color: var(--raid-accent);
-  font-size: 22px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -2741,16 +2797,16 @@
   justify-content: center;
   transition: all 0.2s;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-  opacity: 0.85;
+  opacity: 0.7;
 }
 .raid-portrait-nav-arrow:hover {
-  background: rgba(20, 20, 30, 0.7);
-  border-color: var(--raid-accent);
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.3);
   color: #ffffff;
   opacity: 1;
 }
-.raid-portrait-nav-arrow--left { left: 8px; }
-.raid-portrait-nav-arrow--right { right: 8px; }
+.raid-portrait-nav-arrow--left { left: 10px; }
+.raid-portrait-nav-arrow--right { right: 10px; }
 
 /* 段落进度点 */
 .raid-portrait-segment-dots {
@@ -2794,11 +2850,11 @@
   50% { opacity: 0.8; }
 }
 
-/* 旁白文本（段落模式）— 参考图2：斜体灰色与白色对话形成区分 */
+/* 旁白文本 — 斜体柔和色与白色对话形成区分 */
 .raid-portrait-narration-text {
-  font-size: 14px;
-  line-height: 1.85;
-  color: rgba(200, 200, 200, 0.85);
+  font-size: 15px;
+  line-height: 1.9;
+  color: rgba(230, 230, 240, 0.88);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 1), 0 0 12px rgba(0, 0, 0, 0.8);
   font-style: italic;
   padding: 2px 0;
@@ -2807,12 +2863,18 @@
 
 /* 内联语音按钮 */
 .raid-portrait-voice-btn--inline {
+  position: static !important;
   width: 24px !important;
   height: 24px !important;
   font-size: 13px !important;
   border: none !important;
   background: transparent !important;
   padding: 0 !important;
+  top: auto !important;
+  right: auto !important;
+  z-index: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* 结局显示 */
@@ -2871,44 +2933,46 @@
   color: var(--raid-accent);
 }
 
-/* ═══ 底部工具栏（参考图1：音乐/自动/回顾/属性） ═══ */
+/* ═══ 底部工具栏 — 半透明黑色横向底栏，悬浮底部 ═══ */
 .raid-portrait-toolbar {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 11;
-  height: calc(env(safe-area-inset-bottom, 0px) + 48px);
+  height: calc(env(safe-area-inset-bottom, 0px) + 52px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   display: flex;
   align-items: center;
   justify-content: space-around;
-  background: linear-gradient(to bottom, transparent 0%, rgba(8, 8, 12, 0.7) 30%, rgba(8, 8, 12, 0.95) 100%);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border-top: 1px solid var(--raid-accent-soft);
+  background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.55) 25%, rgba(0, 0, 0, 0.82) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .raid-portrait-toolbar-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 4px 12px;
-  color: rgba(255, 255, 255, 0.6);
+  padding: 6px 14px;
+  color: rgba(255, 255, 255, 0.62);
   transition: all 0.2s;
+  border-radius: 8px;
 }
 .raid-portrait-toolbar-btn:hover {
   color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
 }
 .raid-portrait-toolbar-btn--active {
-  color: var(--raid-accent);
+  color: rgba(212, 175, 55, 0.95);
 }
 .raid-portrait-toolbar-icon {
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
 }
 .raid-portrait-toolbar-label {
@@ -2924,20 +2988,20 @@
   z-index: 50;
   display: flex;
   flex-direction: column;
-  background: rgba(5, 5, 8, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(8, 8, 14, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   animation: raid-fade-in 0.3s ease;
 }
 .raid-portrait-overlay-panel--sm {
   inset: auto;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 52px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 68px);
   left: 50%;
   transform: translateX(-50%);
   width: 90%;
   max-width: 360px;
-  border-radius: 12px;
-  border: 1px solid var(--raid-accent-soft);
+  border-radius: 14px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
 }
 
@@ -3155,24 +3219,24 @@
 /* ── 浮动编辑面板 ── */
 .raid-portrait-edit-panel--floating {
   position: absolute;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 52px);
-  left: 8px;
-  right: 8px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 68px);
+  left: 14px;
+  right: 14px;
   z-index: 12;
-  background: rgba(8, 8, 12, 0.92);
-  border: 1px solid var(--raid-accent-soft);
-  border-radius: 10px;
+  background: rgba(18, 18, 28, 0.7);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 14px;
   padding: 10px 12px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.35);
 }
 .raid-portrait-edit-panel--floating textarea {
   width: 100%;
   padding: 6px 10px;
-  border: 1px solid var(--raid-accent-soft);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
-  background: rgba(8, 8, 12, 0.7);
+  background: rgba(0, 0, 0, 0.3);
   color: #f0f0f0;
   font-size: 13px;
   resize: none;
