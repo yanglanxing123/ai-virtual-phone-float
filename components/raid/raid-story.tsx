@@ -987,10 +987,18 @@ function PortraitMode(props: PortraitModeProps) {
                 <div className="raid-portrait-gradient" />
             </div>
 
-            {/* 返回按钮（左上角小型半透明） */}
+            {/* 返回按钮（左上角）— 如果有面板打开，先关闭面板；否则退出 */}
             <button
                 className="raid-portrait-back-btn"
-                onClick={onBack}
+                onClick={() => {
+                    if (bottomPanel !== "none") {
+                        setBottomPanel("none");
+                    } else if (autoPlay) {
+                        setAutoPlay(false);
+                    } else {
+                        onBack();
+                    }
+                }}
                 title="返回"
             >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
