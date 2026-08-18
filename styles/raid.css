@@ -2434,6 +2434,7 @@
   position: absolute;
   inset: 0;
   z-index: 1;
+  pointer-events: none;
 }
 .raid-portrait-bg-img {
   width: 100%;
@@ -2672,11 +2673,10 @@
 .raid-portrait-bottom-area {
   position: absolute;
   top: 50%;
-  left: 0;
-  right: 0;
+  left: 50px;
+  right: 50px;
   transform: translateY(-50%);
   z-index: 10;
-  padding: 0 50px;
   display: flex;
   flex-direction: column;
   gap: 6px;
