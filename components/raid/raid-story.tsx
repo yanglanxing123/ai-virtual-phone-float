@@ -336,7 +336,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
 
     return (
         <>
-            {/* 立绘模式下隐藏顶部栏，由 PortraitMode 内部提供返回按钮 */}
+            {/* 顶部标题栏 — 立绘模式下不渲染，由 PortraitMode 内部提供返回按钮 */}
             {!isPortraitMode && (
                 <header className="raid-header">
                     <button className="raid-back-btn" onClick={onBack}>←</button>
@@ -358,7 +358,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                 </header>
             )}
 
-            {/* 好感度面板 — 立绘模式下隐藏 */}
+            {/* 好感度面板 — 立绘模式下不渲染 */}
             {!isPortraitMode && (
                 <div className="raid-favor-panel raid-favor-panel--compact">
                 {targetNpcs.map((npc) => (
@@ -385,7 +385,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
 
             {dungeon.bgmUrl && <audio ref={audioRef} src={dungeon.bgmUrl} loop preload="auto" />}
 
-            {/* 音量控制按钮 — 立绘模式下隐藏（由工具栏"音乐"按钮替代） */}
+            {/* 音量控制按钮 — 立绘模式下不渲染（由工具栏"音乐"按钮替代） */}
             {!isPortraitMode && (
             <button
                 className="raid-volume-toggle"
@@ -426,7 +426,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                 </div>
             )}
 
-            {/* BGM 播放器 — 立绘模式下隐藏 */}
+            {/* BGM 播放条 — 立绘模式下不渲染 */}
             {dungeon.bgmUrl && !isPortraitMode && (
                 <div className="raid-bgm-bar">
                     <span>🎵 {dungeon.bgmName || "BGM"}</span>
