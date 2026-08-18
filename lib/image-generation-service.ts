@@ -509,6 +509,8 @@ export async function generateImageFromConfiguredApi(params: {
   referenceImageDataUrl?: string;
   settings?: ImageGenerationSettings;
   signal?: AbortSignal;
+  /** 覆盖 API 配置中的 size（如立绘模式强制 9:16） */
+  sizeOverride?: string;
 }): Promise<ImageGenerationResult | null> {
   const settings = params.settings ?? loadImageGenerationSettings();
   if (!settings.enabled) return null;
@@ -518,6 +520,11 @@ export async function generateImageFromConfiguredApi(params: {
 
   const description = params.description.trim();
   if (!description || !config.apiKey.trim() || !config.baseUrl.trim() || !config.model.trim()) return null;
+
+  // 立绘模式等场景可覆盖默认 size
+  const effectiveConfig = params.sizeOverride
+    ? { ...config, size: params.sizeOverride }
+    : config;
 
   // 优先使用直接传入的参考图 dataUrl；否则走角色参考图系统
   let referenceImageDataUrl: string | null = null;
@@ -537,9 +544,9 @@ export async function generateImageFromConfiguredApi(params: {
   throwIfAborted(params.signal);
   const prompt = mergePrompt(description, settings.extraPrompt);
 
-  const data = config.requestMode === "direct"
-    ? await generateImageDirect({ config, prompt, referenceImageDataUrl, signal: params.signal })
-    : await generateImageViaServerOrProxy({ config, prompt, referenceImageDataUrl, signal: params.signal });
+  const data = effectiveConfig.requestMode === "direct"
+    ? await generateImageDirect({ config: effectiveConfig, prompt, referenceImageDataUrl, signal: params.signal })
+    : await generateImageViaServerOrProxy({ config: effectiveConfig, prompt, referenceImageDataUrl, signal: params.signal });
 
   throwIfAborted(params.signal);
   const mimeType = data.mimeType || "image/png";
