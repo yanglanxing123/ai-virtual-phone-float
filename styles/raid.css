@@ -2434,12 +2434,13 @@
   position: absolute;
   inset: 0;
   z-index: 1;
+  pointer-events: none;
 }
 .raid-portrait-bg-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center;
+  object-position: center bottom;
 }
 .raid-portrait-bg-placeholder {
   width: 100%;
@@ -2478,17 +2479,17 @@
   pointer-events: none;
 }
 
-/* 返回按钮 — 左上角小型半透明圆形 */
+/* 返回按钮 — 左上角小型半透明圆形（缩小并提高层级确保可点击） */
 .raid-portrait-back-btn {
   position: absolute;
-  top: 14px;
-  left: 14px;
-  z-index: 20;
-  width: 36px;
-  height: 36px;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   color: rgba(255, 255, 255, 0.85);
@@ -2498,9 +2499,11 @@
   justify-content: center;
   transition: all 0.2s;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
 }
 .raid-portrait-back-btn:hover {
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.5);
   border-color: rgba(255, 255, 255, 0.35);
   color: #ffffff;
 }
@@ -2550,29 +2553,29 @@
   display: none;
 }
 
-/* 章节标题 — 正上方居中显示 */
+/* 章节标题 — 正上方居中显示（缩小紧凑） */
 .raid-portrait-chapter-title {
   position: absolute;
-  top: 18px;
+  top: 8px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 20;
+  z-index: 100;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 18px;
+  gap: 4px;
+  padding: 3px 12px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
   pointer-events: none;
-  max-width: 70%;
+  max-width: 60%;
   overflow: hidden;
 }
 .raid-portrait-chapter-num {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   color: rgba(212, 175, 55, 0.9);
   letter-spacing: 0.05em;
@@ -2580,11 +2583,11 @@
   white-space: nowrap;
 }
 .raid-portrait-chapter-sep {
-  font-size: 11px;
+  font-size: 10px;
   color: rgba(255, 255, 255, 0.3);
 }
 .raid-portrait-chapter-name {
-  font-size: 12px;
+  font-size: 10px;
   color: rgba(255, 255, 255, 0.75);
   letter-spacing: 0.03em;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
@@ -2668,27 +2671,16 @@
   letter-spacing: 0.02em;
 }
 
-/* 剧情区域：垂直居中，与导航箭头对齐 */
+/* 剧情区域：底部定位，不覆盖图片中心区域 */
 .raid-portrait-bottom-area {
   position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  transform: translateY(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 52px);
+  left: 8px;
+  right: 8px;
   z-index: 10;
-  padding: 0 50px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  /* 容器本身不拦截点击，让导航箭头等可被点击 */
-  pointer-events: none;
-}
-/* 容器内的交互元素恢复点击 */
-.raid-portrait-bottom-area > .raid-portrait-dialogue-box,
-.raid-portrait-bottom-area > .raid-portrait-choices,
-.raid-portrait-bottom-area > .raid-portrait-continue-hint,
-.raid-portrait-bottom-area > .raid-portrait-ending {
-  pointer-events: auto;
 }
 
 /* 对话框 — 半透明磨砂玻璃质感，大圆角，金色描边 */
@@ -2823,18 +2815,17 @@
 /* 段落导航箭头 */
 .raid-portrait-nav-arrow {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 15;
-  width: 34px;
-  height: 34px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 120px);
+  z-index: 100;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   color: rgba(255, 255, 255, 0.7);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -2843,6 +2834,8 @@
   transition: all 0.2s;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
   opacity: 0.7;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
 }
 .raid-portrait-nav-arrow:hover {
   background: rgba(0, 0, 0, 0.45);
@@ -3096,61 +3089,100 @@
   padding: 12px 16px 16px;
 }
 
-/* ── 属性面板卡片 ── */
+/* ── 属性面板卡片 — 参考角色选择界面的卡片风格 ── */
 .raid-portrait-attr-card {
+  position: relative;
   display: flex;
-  gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  background: rgba(18, 18, 28, 0.5);
+  margin-bottom: 14px;
 }
 .raid-portrait-attr-card:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
+/* 头像区 — 竖向卡片式，参考角色选择卡片 */
 .raid-portrait-attr-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
   overflow: hidden;
   flex-shrink: 0;
   background: linear-gradient(135deg, rgba(212, 175, 55, 0.15), rgba(74, 111, 165, 0.1));
-  border: 2px solid rgba(212, 175, 55, 0.3);
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.3), 0 0 8px rgba(212, 175, 55, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.8);
 }
 .raid-portrait-attr-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
 }
 .raid-portrait-attr-avatar-fallback {
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  font-size: 48px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
+/* 头像底部渐变遮罩 */
+.raid-portrait-attr-avatar::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(to bottom, transparent 0%, rgba(8, 8, 14, 0.5) 50%, rgba(8, 8, 14, 0.9) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+/* 头像上的角色名 */
+.raid-portrait-attr-card-name-overlay {
+  position: absolute;
+  bottom: 8px;
+  left: 14px;
+  z-index: 2;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  letter-spacing: 0.06em;
+}
+.raid-portrait-attr-card-role-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+/* 信息区 */
 .raid-portrait-attr-info {
-  flex: 1;
-  min-width: 0;
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .raid-portrait-attr-name {
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 2px;
+  display: none; /* 名字已移到头像上 */
 }
 .raid-portrait-attr-role {
-  font-size: 11px;
-  color: var(--raid-accent);
-  opacity: 0.7;
-  margin-bottom: 6px;
+  display: none; /* 角色已移到头像上 */
 }
 .raid-portrait-attr-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
 }
 .raid-portrait-attr-bar-label {
   font-size: 11px;
@@ -3180,9 +3212,10 @@
 }
 .raid-portrait-attr-persona {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.55);
   line-height: 1.5;
-  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* ── 剧情回顾面板 ── */
