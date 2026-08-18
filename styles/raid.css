@@ -2434,12 +2434,19 @@
   position: absolute;
   inset: 0;
   z-index: 1;
+  overflow: hidden;
+  /* 深色底，配合下方 translateY 让出的顶部空隙形成干净顶栏 */
+  background: #06060a;
 }
 .raid-portrait-bg-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 25%;
+  /* 有裁切时锚定顶部；无裁切时由 translateY 兜底 */
+  object-position: center top;
+  /* 物理下移 8%，无论图片是否被裁切都生效，把角色从头/上半身位置往下挪，避开顶部按钮 */
+  transform: translateY(8%);
+  transition: transform 0.4s ease;
 }
 .raid-portrait-bg-placeholder {
   width: 100%;
