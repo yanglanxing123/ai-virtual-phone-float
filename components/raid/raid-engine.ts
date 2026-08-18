@@ -702,11 +702,12 @@ export async function generateSceneImage(
     const basePrompt = beat.scenePrompt
         ? beat.scenePrompt
         : `${beat.sceneTitle}, ${beat.narration.slice(0, 100)}`;
-    const prompt = `${basePrompt}. ${styleSuffix}. landscape orientation, 9:16 aspect ratio, no text, no watermark, anime illustration`;
+    const prompt = `${basePrompt}. ${styleSuffix}. vertical portrait orientation, 9:16 aspect ratio, no text, no watermark, anime illustration`;
     try {
         const result = await generateImageFromConfiguredApi({
             description: prompt,
             signal,
+            sizeOverride: "1024x1792",
         });
         return result?.dataUrl ?? null;
     } catch {
@@ -753,6 +754,7 @@ export async function generatePortraitSceneImage(
                 characterId: npc.characterId,
                 useReferenceImage: true,
                 signal,
+                sizeOverride: "1024x1792",
             });
             if (result?.dataUrl) return result.dataUrl;
         }
@@ -761,6 +763,7 @@ export async function generatePortraitSceneImage(
         const result = await generateImageFromConfiguredApi({
             description: prompt,
             signal,
+            sizeOverride: "1024x1792",
         });
         return result?.dataUrl ?? null;
     } catch {
@@ -796,6 +799,7 @@ export async function generateNpcPortrait(
                 characterId: npc.characterId,
                 useReferenceImage: true,
                 signal,
+                sizeOverride: "1024x1792",
             });
             if (result?.dataUrl) return result.dataUrl;
         }
@@ -804,6 +808,7 @@ export async function generateNpcPortrait(
         const result = await generateImageFromConfiguredApi({
             description: prompt,
             signal,
+            sizeOverride: "1024x1792",
         });
         return result?.dataUrl ?? null;
     } catch {
@@ -825,6 +830,7 @@ async function generateWithReferenceImage(
             description: prompt,
             referenceImageDataUrl: referenceDataUrl,
             signal,
+            sizeOverride: "1024x1792",
         });
         return result?.dataUrl ?? null;
     } catch {

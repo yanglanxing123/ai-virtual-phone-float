@@ -1227,8 +1227,10 @@ function AttributesPanel({ dungeon, onClose }: PanelProps) {
                             <div className="raid-portrait-attr-avatar">
                                 {npc.portraits?.[0] ? (
                                     <img src={npc.portraits[0]} alt={npc.name} />
+                                ) : npc.referenceImages?.[0] ? (
+                                    <img src={npc.referenceImages[0]} alt={npc.name} />
                                 ) : (
-                                    <span>{npc.name[0]}</span>
+                                    <span className="raid-portrait-attr-avatar-fallback">{npc.name[0]}</span>
                                 )}
                             </div>
                             <div className="raid-portrait-attr-info">
