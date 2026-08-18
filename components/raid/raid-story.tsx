@@ -332,30 +332,35 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
 
     const targetNpcs = dungeon.npcs.filter((n) => n.isTarget);
     const otherNpcs = dungeon.npcs.filter((n) => !n.isTarget);
+    const isPortraitMode = dungeon.mode === "portrait" && !!currentBeat;
 
     return (
         <>
-            <header className="raid-header">
-                <button className="raid-back-btn" onClick={onBack}>←</button>
-                <div className="raid-header-title">
-                    <h1>{dungeon.name}</h1>
-                    <span className="raid-header-sub">
-                        第 {dungeon.currentChapter} 章 · {DIFFICULTY_LABELS[dungeon.difficulty]}
-                    </span>
-                </div>
-                <div className="raid-header-actions">
-                    <button
-                        className="raid-icon-btn"
-                        onClick={() => setShowSaves(!showSaves)}
-                        title="存档"
-                    >
-                        💾
-                    </button>
-                </div>
-            </header>
+            {/* 立绘模式下隐藏顶部栏，由 PortraitMode 内部提供返回按钮 */}
+            {!isPortraitMode && (
+                <header className="raid-header">
+                    <button className="raid-back-btn" onClick={onBack}>←</button>
+                    <div className="raid-header-title">
+                        <h1>{dungeon.name}</h1>
+                        <span className="raid-header-sub">
+                            第 {dungeon.currentChapter} 章 · {DIFFICULTY_LABELS[dungeon.difficulty]}
+                        </span>
+                    </div>
+                    <div className="raid-header-actions">
+                        <button
+                            className="raid-icon-btn"
+                            onClick={() => setShowSaves(!showSaves)}
+                            title="存档"
+                        >
+                            💾
+                        </button>
+                    </div>
+                </header>
+            )}
 
-            {/* 好感度面板 */}
-            <div className="raid-favor-panel raid-favor-panel--compact">
+            {/* 好感度面板 — 立绘模式下隐藏 */}
+            {!isPortraitMode && (
+                <div className="raid-favor-panel raid-favor-panel--compact">
                 {targetNpcs.map((npc) => (
                     <FavorChip
                         key={npc.id}
@@ -376,10 +381,12 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                     </details>
                 )}
             </div>
+            )}
 
             {dungeon.bgmUrl && <audio ref={audioRef} src={dungeon.bgmUrl} loop preload="auto" />}
 
-            {/* 音量控制按钮 */}
+            {/* 音量控制按钮 — 立绘模式下隐藏（由工具栏"音乐"按钮替代） */}
+            {!isPortraitMode && (
             <button
                 className="raid-volume-toggle"
                 onClick={() => setShowVolumePanel(!showVolumePanel)}
@@ -387,7 +394,8 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
             >
                 🔊
             </button>
-            {showVolumePanel && (
+            )}
+            {showVolumePanel && !isPortraitMode && (
                 <div className="raid-volume-panel">
                     <div className="raid-volume-row">
                         <span className="raid-volume-label">🎵 BGM</span>
@@ -418,8 +426,8 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                 </div>
             )}
 
-            {/* BGM 播放器 */}
-            {dungeon.bgmUrl && (
+            {/* BGM 播放器 — 立绘模式下隐藏 */}
+            {dungeon.bgmUrl && !isPortraitMode && (
                 <div className="raid-bgm-bar">
                     <span>🎵 {dungeon.bgmName || "BGM"}</span>
                 </div>
@@ -458,13 +466,14 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
             )}
 
             {/* 主体内容 */}
-            {dungeon.mode === "portrait" && currentBeat ? (
+            {isPortraitMode ? (
                 <PortraitMode
                     beat={currentBeat}
                     dungeon={dungeon}
                     loading={loading}
                     portraitLoading={portraitLoading}
                     onChoice={handleChoice}
+                    onBack={onBack}
                     guidance={guidance}
                     onGuidanceChange={setGuidance}
                     onAiFill={handleAiFill}
@@ -859,6 +868,7 @@ type PortraitModeProps = {
     loading: boolean;
     portraitLoading: boolean;
     onChoice: (text: string, guidance?: string) => void;
+    onBack: () => void;
     guidance: string;
     onGuidanceChange: (v: string) => void;
     onAiFill: () => void;
@@ -884,7 +894,7 @@ type PortraitModeProps = {
 
 function PortraitMode(props: PortraitModeProps) {
     const {
-        beat, dungeon, loading, portraitLoading, onChoice,
+        beat, dungeon, loading, portraitLoading, onChoice, onBack,
         guidance, onGuidanceChange, onAiFill, fillingGuidance,
         showEditPanel, onToggleEditPanel, editingChoiceId, onEditChoice,
         onEditingChoiceTextChange, onConfirmEdit, onCancelEdit,
@@ -977,10 +987,16 @@ function PortraitMode(props: PortraitModeProps) {
                 <div className="raid-portrait-gradient" />
             </div>
 
-            {/* 章节标记 */}
-            <div className="raid-portrait-chapter-tag">
-                第 {beat.chapter} 章 · {beat.sceneTitle}
-            </div>
+            {/* 返回按钮（左上角小型半透明） */}
+            <button
+                className="raid-portrait-back-btn"
+                onClick={onBack}
+                title="返回"
+            >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M15 18l-6-6 6-6" />
+                </svg>
+            </button>
 
             {/* 段落导航箭头（左） */}
             {canGoBack && (
@@ -1004,8 +1020,34 @@ function PortraitMode(props: PortraitModeProps) {
                 </button>
             )}
 
-            {/* 底部紧凑剧情框 + 工具栏（参考图1布局） */}
+            {/* 底部紧凑剧情框 + 工具栏 */}
             <div className="raid-portrait-bottom-area">
+                {/* 角色名称标签（浮动在对话框左上角） */}
+                {currentSeg?.type === "dialogue" && currentSeg.speaker && (
+                    <div className="raid-portrait-name-tag">
+                        <span className="raid-portrait-name-tag-text">{currentSeg.speaker}</span>
+                        {currentSeg.emotion && (
+                            <span className="raid-portrait-emotion">（{currentSeg.emotion}）</span>
+                        )}
+                        {hasVoice && speakerNpc && (
+                            <button
+                                className="raid-portrait-voice-btn raid-portrait-voice-btn--inline"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    isVoicePlaying ? onStopVoice() : onPlayVoice(speakerNpc.id, currentSeg.text, lineKey);
+                                }}
+                                title={isVoicePlaying ? "停止语音" : "播放语音"}
+                            >
+                                {isVoicePlaying ? (
+                                    <span className="raid-portrait-voice-bars">
+                                        <span></span><span></span><span></span>
+                                    </span>
+                                ) : "🔊"}
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {/* 当前剧情段落 */}
                 <div
                     className="raid-portrait-dialogue-box"
@@ -1013,34 +1055,7 @@ function PortraitMode(props: PortraitModeProps) {
                     style={{ cursor: canGoForward ? "pointer" : "default" }}
                 >
                     {currentSeg?.type === "dialogue" ? (
-                        <>
-                            <div className="raid-portrait-current-line">
-                                <span className="raid-portrait-speaker-name">
-                                    <span className="raid-portrait-speaker-diamond">◆</span>
-                                    {currentSeg.speaker}
-                                </span>
-                                {currentSeg.emotion && (
-                                    <span className="raid-portrait-emotion">（{currentSeg.emotion}）</span>
-                                )}
-                                {hasVoice && speakerNpc && (
-                                    <button
-                                        className="raid-portrait-voice-btn raid-portrait-voice-btn--inline"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            isVoicePlaying ? onStopVoice() : onPlayVoice(speakerNpc.id, currentSeg.text, lineKey);
-                                        }}
-                                        title={isVoicePlaying ? "停止语音" : "播放语音"}
-                                    >
-                                        {isVoicePlaying ? (
-                                            <span className="raid-portrait-voice-bars">
-                                                <span></span><span></span><span></span>
-                                            </span>
-                                        ) : "🔊"}
-                                    </button>
-                                )}
-                            </div>
-                            <p className="raid-portrait-dialogue-text">{currentSeg.text}</p>
-                        </>
+                        <p className="raid-portrait-dialogue-text">{currentSeg.text}</p>
                     ) : (
                         <p className="raid-portrait-narration-text">{currentSeg?.text}</p>
                     )}
