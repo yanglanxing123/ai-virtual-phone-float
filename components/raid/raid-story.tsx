@@ -1226,7 +1226,7 @@ function PortraitMode(props: PortraitModeProps) {
                             </div>
                         ) : (
                             <>
-                                {/* 剧情选项 */}
+                                {/* 剧情选项 — 参考恋与深空：仅简略方向文字 */}
                                 {beat.choices.map((choice) => (
                                     <button
                                         key={choice.id}
@@ -1234,9 +1234,6 @@ function PortraitMode(props: PortraitModeProps) {
                                         onClick={() => onChoice(choice.text, guidance)}
                                     >
                                         <span className="raid-portrait-choice-btn-text">{choice.text}</span>
-                                        {choice.hint && (
-                                            <span className="raid-portrait-choice-btn-hint">{choice.hint}</span>
-                                        )}
                                     </button>
                                 ))}
                                 {/* 指导输入 + 继续按钮 */}
