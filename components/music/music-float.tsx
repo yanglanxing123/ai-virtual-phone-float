@@ -1,7 +1,7 @@
-// components/music/music-float.tsx — Floating music control widget (draggable vinyl)
+// components/music/music-float.tsx — Floating music control widget (draggable vinyl) + lyrics
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { useMusicControlsOptional } from "@/lib/music-context";
 
 const DRAG_START_THRESHOLD = 6;
@@ -10,6 +10,53 @@ const SWIPE_DISMISS_SPEED = 1.5; // px/ms
 const SWIPE_DISMISS_ARMING_X = 88;
 const SWIPE_INERTIA_MS = 140;
 const SWIPE_VELOCITY_RECENT_MS = 180;
+
+// ── LRC 歌词解析 ──────────────────────────────────────────
+
+type LyricLine = { time: number; text: string };
+
+function parseLrc(lrc: string): LyricLine[] {
+    if (!lrc) return [];
+    const lines: LyricLine[] = [];
+    const timeRe = /\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]/g;
+    for (const raw of lrc.split("\n")) {
+        const matches = [...raw.matchAll(timeRe)];
+        if (matches.length === 0) continue;
+        const text = raw.replace(timeRe, "").trim();
+        for (const m of matches) {
+            const min = parseInt(m[1], 10);
+            const sec = parseInt(m[2], 10);
+            const ms = m[3] ? parseInt(m[3].padEnd(3, "0"), 10) : 0;
+            lines.push({ time: min * 60 + sec + ms / 1000, text });
+        }
+    }
+    lines.sort((a, b) => a.time - b.time);
+    return lines;
+}
+
+function findCurrentLyric(lines: LyricLine[], currentTime: number): { current: LyricLine | null; next: LyricLine | null } {
+    let current: LyricLine | null = null;
+    let next: LyricLine | null = null;
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].time <= currentTime) {
+            current = lines[i];
+            next = lines[i + 1] || null;
+        } else {
+            if (!next) next = lines[i];
+            break;
+        }
+    }
+    return { current, next };
+}
+
+// ── 歌词行组件 ──
+
+const LyricLineView = memo(function LyricLineView({ text }: { text: string }) {
+    if (!text) return <span className="music-float-lyric-placeholder">♪</span>;
+    return <span className="music-float-lyric-text">{text}</span>;
+});
+
+// ── 主组件 ──
 
 export default function MusicFloat({ hidden }: { hidden?: boolean }) {
     const player = useMusicControlsOptional();
@@ -38,6 +85,37 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
     const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [expanded, setExpanded] = useState(false);
     const [dismissing, setDismissing] = useState(false);
+
+    // ── 歌词状态 ──
+    const [lyrics, setLyrics] = useState<LyricLine[]>([]);
+    const [progressTime, setProgressTime] = useState(0);
+
+    // 解析歌词
+    useEffect(() => {
+        const lrc = player?.currentTrack?.lyrics;
+        if (lrc) {
+            setLyrics(parseLrc(lrc));
+        } else {
+            setLyrics([]);
+        }
+    }, [player?.currentTrack?.lyrics]);
+
+    // 轮询播放进度
+    useEffect(() => {
+        if (!player || !player.isPlaying) return;
+        const interval = setInterval(() => {
+            try {
+                const bridge = (window as any).__musicControlBridge;
+                if (bridge?.getState) {
+                    const s = bridge.getState();
+                    if (s?.currentTime != null) {
+                        setProgressTime(s.currentTime);
+                    }
+                }
+            } catch { /* 静默 */ }
+        }, 500);
+        return () => clearInterval(interval);
+    }, [player, player?.isPlaying]);
 
     const clampPos = useCallback((x: number, y: number) => {
         const el = floatRef.current;
@@ -165,6 +243,7 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
     if (!player || !player.currentTrack || hidden || player.floatDismissed) return null;
 
     const track = player.currentTrack;
+    const { current: currentLyric } = findCurrentLyric(lyrics, progressTime);
 
     return (
         <div
@@ -196,10 +275,14 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
                     </div>
                 </div>
 
-                {/* Track Info */}
+                {/* Track Info + Lyrics */}
                 <div className="music-float-info">
                     <div className="music-float-title">{track.title}</div>
                     <div className="music-float-artist">{track.artist}</div>
+                    {/* 歌词单行 */}
+                    <div className="music-float-lyric" key={currentLyric?.time ?? "none"}>
+                        <LyricLineView text={currentLyric?.text || ""} />
+                    </div>
                 </div>
 
                 {/* Compact Controls */}
