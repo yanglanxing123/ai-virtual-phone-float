@@ -9,6 +9,7 @@ import { MediaMaintenanceScheduler } from "@/components/media-maintenance-schedu
 import { DesktopShell } from "./desktop-shell";
 import { SplashAnimation } from "./splash-animation";
 import { MusicProvider } from "@/lib/music-context";
+import { ListenTogetherOverlay, clearLtOverlayState } from "./chat/listen-together";
 import { hydrateKvDb } from "@/lib/kv-db";
 import { getThemeAssetMap, readThemeProfile } from "@/lib/theme-storage";
 import { resolveActiveIconSkins, type ThemeProfile } from "@/lib/theme-types";
@@ -285,6 +286,7 @@ export function MainApp() {
               initialThemeProfile={preparedDesktopTheme?.profile}
               initialThemeAssets={preparedDesktopTheme?.assets}
             />
+            <ListenTogetherOverlay onClose={clearLtOverlayState} />
             <CloudBackupScheduler />
             <MediaMaintenanceScheduler />
           </MusicProvider>
