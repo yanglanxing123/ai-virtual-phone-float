@@ -6871,3 +6871,351 @@
   object-fit: cover;
   display: block;
 }
+
+/* ══════════════════════════════════════════
+   一起听 (Listen Together) 组件样式
+   ══════════════════════════════════════════ */
+
+/* ── 顶部状态栏 ── */
+.lt-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(255,182,193,0.15) 0%, rgba(255,228,225,0.08) 100%);
+  border-bottom: 1px solid rgba(255,105,135,0.12);
+  position: relative;
+  z-index: 5;
+}
+
+.lt-avatars {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lt-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.lt-avatar-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255,105,135,0.3);
+}
+
+.lt-avatar-fallback {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #FFB6C1, #FFC0CB);
+  color: #fff;
+  border: 2px solid rgba(255,105,135,0.3);
+}
+
+.lt-avatar-name {
+  font-size: 10px;
+  color: var(--c-icon);
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 心电图跳动爱心动画 ── */
+.lt-heartbeat-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  position: relative;
+  width: 56px;
+  height: 32px;
+}
+
+.lt-ecg-svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.lt-ecg-line {
+  stroke-dasharray: 80;
+  stroke-dashoffset: 80;
+  animation: lt-ecg-draw 1.2s ease-in-out infinite;
+}
+
+@keyframes lt-ecg-draw {
+  0% { stroke-dashoffset: 80; }
+  50% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -80; }
+}
+
+.lt-heart-pulse {
+  animation: lt-heart-beat 1.2s ease-in-out infinite;
+  z-index: 1;
+}
+
+@keyframes lt-heart-beat {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  15% { transform: scale(1.25); opacity: 1; }
+  30% { transform: scale(1); opacity: 0.85; }
+  45% { transform: scale(1.15); opacity: 1; }
+  60% { transform: scale(1); opacity: 0.85; }
+}
+
+/* ── 计时信息 ── */
+.lt-timer-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  margin-left: auto;
+}
+
+.lt-timer-label {
+  font-size: 10px;
+  color: var(--c-icon);
+}
+
+.lt-timer-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #FF6B8A;
+}
+
+/* ── 关闭按钮 ── */
+.lt-close-btn {
+  background: none;
+  border: none;
+  color: var(--c-icon);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s, color 0.2s;
+}
+
+.lt-close-btn:hover {
+  background: rgba(255,105,135,0.1);
+  color: #FF6B8A;
+}
+
+/* ── 悬浮播放预览卡片 ── */
+.lt-floating-wrap {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  margin: 0 8px 4px;
+}
+
+.lt-floating-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,228,225,0.9) 100%);
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+  border: 1px solid rgba(255,105,135,0.1);
+  animation: lt-card-slide-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes lt-card-slide-in {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.lt-floating-card-cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f0f0f0, #e0e0e0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.lt-floating-card-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lt-floating-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.lt-floating-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lt-floating-card-artist {
+  font-size: 11px;
+  color: var(--c-icon);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lt-floating-card-source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--c-icon);
+}
+
+.lt-floating-card-status {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.lt-playing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #FF6B8A;
+  animation: lt-playing-blink 1s ease-in-out infinite;
+}
+
+@keyframes lt-playing-blink {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* ── 音乐系统消息卡片 ── */
+.lt-music-system-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 14px;
+  margin: 4px auto;
+  max-width: 85%;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,182,193,0.08) 0%, rgba(255,228,225,0.05) 100%);
+  border: 1px solid rgba(255,105,135,0.08);
+  animation: lt-msg-fade-in 300ms ease-out;
+}
+
+@keyframes lt-msg-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.lt-music-system-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255,105,135,0.08);
+  color: #FF6B8A;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.lt-music-system-content {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.lt-music-system-action {
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.lt-music-system-action-text {
+  color: var(--c-text);
+}
+
+.lt-music-system-title {
+  color: #E84855;
+  font-weight: 600;
+}
+
+.lt-music-system-artist {
+  color: var(--c-icon);
+  font-size: 11px;
+}
+
+.lt-music-system-source {
+  color: var(--c-icon);
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.lt-music-system-playlist {
+  color: var(--c-icon);
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* ── Toast 提示 ── */
+.lt-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.75);
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+  animation: lt-toast-in 200ms ease-out;
+}
+
+@keyframes lt-toast-in {
+  from { opacity: 0; transform: translate(-50%, -45%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* ── 响应式调整 ── */
+@media (max-width: 380px) {
+  .lt-avatar-name {
+    max-width: 36px;
+    font-size: 9px;
+  }
+  .lt-floating-card-title {
+    font-size: 12px;
+  }
+  .lt-music-system-content {
+    font-size: 11px;
+  }
+}
