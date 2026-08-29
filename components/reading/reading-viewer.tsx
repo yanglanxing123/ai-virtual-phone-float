@@ -18,7 +18,7 @@ import {
     DEFAULT_READING_INTERACTION_CONFIG,
 } from "@/lib/reading-storage";
 import { generateAnnotationBatch, generateReadingChat, parseReadingDiscussResponse, type ReadingDiscussAction, type ReadingDiscussContext } from "@/lib/reading-engine";
-import { loadChatMessages, pushChatMessage, deleteChatMessage, editChatMessage, loadChatContacts, loadChatSessions, CHAT_MESSAGE_PUSHED_EVENT, CHAT_MESSAGES_DELETED_EVENT } from "@/lib/chat-storage";
+import { loadChatMessages, pushChatMessage, deleteChatMessage, editChatMessage, loadChatContacts, loadChatSessions, saveChatSessions, CHAT_MESSAGE_PUSHED_EVENT, CHAT_MESSAGES_DELETED_EVENT } from "@/lib/chat-storage";
 import type { ChatMessage, ChatSession } from "@/lib/chat-storage";
 import { loadCharacters } from "@/lib/character-storage";
 import { parseAIResponse } from "@/lib/rich-message-parser";
@@ -30,6 +30,55 @@ import { decodeTxtArrayBuffer, parsePdfPageRange, PDF_PAGES_PER_CHAPTER, parseTx
 import type { Book, BookChapter, ReadingAnnotation, ReadingProgress } from "@/lib/reading-types";
 import type { Character } from "@/lib/character-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
+
+/**
+ * 过滤系统级内容：移除 XML 标签、系统指令等不应展示给用户的内容。
+ * 防止 <action_result>、<system> 等标签和系统提示泄露到聊天界面。
+ * 此函数在保存时和渲染时都会调用，确保已存储的旧消息也能被清理。
+ */
+function filterSystemContent(text: string): string {
+    if (!text) return "";
+    let cleaned = text;
+    // 移除所有 XML/HTML 风格的标签及其内容（系统级标签）
+    // 使用非贪婪匹配，避免误删过多内容
+    const systemTags = [
+        "action_result", "action", "system", "instruction",
+        "tool_call", "function_call", "tool_result", "memory_write",
+        "tool_use", "memory_request", "function_result",
+    ];
+    for (const tag of systemTags) {
+        // 移除 <tag>...</tag> 格式（含属性）
+        const openRe = new RegExp(`<${tag}[^>]*>`, "gi");
+        const closeRe = new RegExp(`</${tag}>`, "gi");
+        const pairRe = new RegExp(`<${tag}[^>]*>[\\s\\S]*?</${tag}>`, "gi");
+        cleaned = cleaned.replace(pairRe, "");
+        // 清理残留的未配对标签
+        cleaned = cleaned.replace(openRe, "");
+        cleaned = cleaned.replace(closeRe, "");
+    }
+    // 移除其他常见的系统标签对（使用捕获组确保配对匹配）
+    const otherSystemTags = ["result", "response", "output", "error", "status"];
+    for (const tag of otherSystemTags) {
+        const pairRe = new RegExp(`<(${tag})[^>]*>[\\s\\S]*?</\\1>`, "gi");
+        cleaned = cleaned.replace(pairRe, "");
+        const standaloneRe = new RegExp(`</?${tag}[^>]*>`, "gi");
+        cleaned = cleaned.replace(standaloneRe, "");
+    }
+    // 移除残留的自闭合或未闭合系统标签
+    cleaned = cleaned.replace(/<\/?(?:action_result|action|system|instruction|tool_call|function_call|tool_result|memory_write|tool_use|memory_request|function_result|result|response|output|error|status)[^>]*\/?>/gi, "");
+    // 移除系统提示语（更全面匹配）
+    cleaned = cleaned.replace(/以下是系统处理结果[：:].*?(?=\n|$)/gs, "");
+    cleaned = cleaned.replace(/请基于以上结果[，,].*?(?:角色身份|继续|回复)[^。]*。/gs, "");
+    cleaned = cleaned.replace(/不要重复你之前已经[说做]过[^。]*。/g, "");
+    cleaned = cleaned.replace(/不要再次执行相同的动作[^。]*。/g, "");
+    // 移除其他常见系统指令模式
+    cleaned = cleaned.replace(/请以.*?角色.*?身份.*?(?:回复|继续)[^。]*。/gs, "");
+    cleaned = cleaned.replace(/系统提示[：:].*?(?=\n\n|\n(?=[^\s])|$)/gs, "");
+    cleaned = cleaned.replace(/\[系统\].*?(?=\n\n|\n(?=[^\s])|$)/g, "");
+    // 清理多余空行和前后空白
+    cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
+    return cleaned;
+}
 
 type TxtPageItem =
     | { kind: "line"; text: string; chapterIndex: number; paragraphIndex: number; indent?: boolean; segEnd?: boolean }
@@ -436,11 +485,26 @@ export function ReadingViewer({ book, onBack }: Props) {
         }
     }, [defaultTranslationExpanded, isPdf]);
 
-    // Find or create chat session for companion
+    // Find or create chat session for companion — 确保阅读APP和聊天APP共享同一会话
     const getSession = useCallback((): ChatSession | null => {
         if (!companionId) return null;
         const sessions = loadChatSessions();
-        return sessions.find(s => !s.isGroup && s.contactId === companionId) || null;
+        const existing = sessions.find(s => !s.isGroup && s.contactId === companionId);
+        if (existing) return existing;
+        // 会话不存在时自动创建，确保聊天APP能同步看到消息
+        const contacts = loadChatContacts();
+        const contact = contacts.find(c => c.characterId === companionId);
+        const newSession: ChatSession = {
+            id: `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            contactId: companionId,
+            isGroup: false,
+            createdAt: Date.now(),
+            lastMessageAt: Date.now(),
+            unreadCount: 0,
+            title: contact?.name || "阅读讨论",
+        };
+        saveChatSessions([...sessions, newSession]);
+        return newSession;
     }, [companionId]);
 
 
@@ -557,8 +621,42 @@ export function ReadingViewer({ book, onBack }: Props) {
     const refreshChatMessages = useCallback(() => {
         const session = getSession();
         if (!session) { setChatMessages([]); return; }
-        const msgs = loadChatMessages(session.id)
-            .slice(-50);
+        // 加载当前会话消息
+        let msgs = loadChatMessages(session.id);
+        // 同时合并来自其他同 contactId 会话的消息（确保聊天APP的消息也能显示）
+        if (session.contactId && !session.isGroup) {
+            try {
+                const sessions = loadChatSessions();
+                const otherSessions = sessions.filter(s =>
+                    s.id !== session.id &&
+                    !s.isGroup &&
+                    s.contactId === session.contactId
+                );
+                for (const otherSession of otherSessions) {
+                    const otherMsgs = loadChatMessages(otherSession.id);
+                    msgs = [...msgs, ...otherMsgs];
+                }
+                // 去重并按时间排序
+                if (otherSessions.length > 0) {
+                    const seen = new Set<string>();
+                    msgs = msgs.filter(m => {
+                        if (seen.has(m.id)) return false;
+                        seen.add(m.id);
+                        return true;
+                    });
+                    msgs.sort((a, b) => {
+                        const ta = a.createdAt || 0;
+                        const tb = b.createdAt || 0;
+                        if (ta !== tb) return ta - tb;
+                        return a.id.localeCompare(b.id);
+                    });
+                }
+            } catch {
+                // 静默处理
+            }
+        }
+        // 取最后50条，并对内容进行系统内容过滤
+        msgs = msgs.slice(-50);
         setChatMessages(msgs);
     }, [getSession]);
 
@@ -566,9 +664,7 @@ export function ReadingViewer({ book, onBack }: Props) {
 
     // Real-time sync: listen for chat message events from the chat app
     useEffect(() => {
-        const handler = () => {
-            try { refreshChatMessages(); } catch { /* 静默处理 */ }
-        };
+        const handler = () => { refreshChatMessages(); };
         window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, handler);
         window.addEventListener(CHAT_MESSAGES_DELETED_EVENT, handler);
         return () => {
@@ -1097,7 +1193,7 @@ export function ReadingViewer({ book, onBack }: Props) {
         const session = getSession();
         if (!session) return;
 
-        // Save user message
+        // Save user message — pushChatMessage dispatches event, refreshChatMessages() will pick it up
         const userMsg = pushChatMessage({
             sessionId: session.id,
             role: "user",
@@ -1105,7 +1201,8 @@ export function ReadingViewer({ book, onBack }: Props) {
             origin: "reading_discuss",
             mediaData: { readingBookTitle: book.title },
         });
-        setChatMessages(prev => [...prev, userMsg]);
+        // 不直接 setChatMessages，依赖 refreshChatMessages 从 storage 加载，避免重复
+        refreshChatMessages();
 
         setChatting(true);
         try {
@@ -1123,27 +1220,34 @@ export function ReadingViewer({ book, onBack }: Props) {
             const rawReply = await generateReadingChat(session, book, discussContext, companionId);
             if (rawReply) {
                 const { reply, actions } = parseReadingDiscussResponse(rawReply);
+                // 过滤系统级内容：移除 XML 标签、系统指令等不应展示给用户的内容
+                const cleanReply = reply ? filterSystemContent(reply) : "";
                 // Parse like chat: split into parts, extract inner monologue, state values, media
-                if (reply) {
-                    const { parts, statusPanel, innerMonologue, stateValues, freshStateValues } = parseAIResponse(reply, []);
+                if (cleanReply) {
+                    const { parts, statusPanel, innerMonologue, stateValues, freshStateValues } = parseAIResponse(cleanReply, []);
                     const newMsgs: ChatMessage[] = [];
                     const saveParts: typeof parts = parts.length > 0 || !(statusPanel || innerMonologue) ? parts : [{ content: "" }];
                     for (let i = 0; i < saveParts.length; i++) {
+                        // 对每个部分再次过滤系统内容，确保存储的消息是干净的
+                        const partContent = saveParts[i].content ? filterSystemContent(saveParts[i].content) : saveParts[i].content;
+                        // 跳过过滤后为空的部分（非媒体类型）
+                        if (!partContent?.trim() && !saveParts[i].mediaType) continue;
                         const msg = pushChatMessage({
                             sessionId: session.id,
                             role: "assistant",
-                            content: saveParts[i].content,
+                            content: partContent,
                             mediaType: saveParts[i].mediaType,
                             origin: "reading_discuss",
                             mediaData: { ...saveParts[i].mediaData, readingBookTitle: book.title },
                             statusPanel: i === 0 && statusPanel ? statusPanel : undefined,
-                            innerMonologue: i === 0 && innerMonologue ? innerMonologue : undefined,
+                            innerMonologue: i === 0 && innerMonologue ? filterSystemContent(innerMonologue) : undefined,
                             stateValues: i === 0 && stateValues.length > 0 ? stateValues : undefined,
                             freshStateValues: i === 0 ? freshStateValues : undefined,
                         });
                         newMsgs.push(msg);
                     }
-                    setChatMessages(prev => [...prev, ...newMsgs]);
+                    // 不直接 setChatMessages，依赖 refreshChatMessages 从 storage 加载，避免重复
+                    refreshChatMessages();
                 }
                 if (actions.length > 0) {
                     await applyDiscussActions(actions);
@@ -1852,9 +1956,16 @@ export function ReadingViewer({ book, onBack }: Props) {
                                 {chatMessages.length === 0 && (
                                     <div className="text-center ts-13 text-[var(--c-icon)] py-6">和{companion?.name}聊聊这章内容吧</div>
                                 )}
-                                {chatMessages.map(msg => (
-                                    <div key={msg.id} className="chat-msg-wrapper" data-role={msg.role}
-                                        onPointerDown={(e) => { e.stopPropagation(); handleReadingMessagePointerDown(e, msg); }}
+                                {chatMessages.map(msg => {
+                                    // 渲染时过滤系统内容：确保旧消息和来自聊天APP的消息也能被清理
+                                    const displayMsg = (msg.content && /<action_result|<system|<instruction|以下是系统处理结果|请基于以上结果|不要重复你之前|不要再次执行/.test(msg.content))
+                                        ? { ...msg, content: filterSystemContent(msg.content) }
+                                        : msg;
+                                    // 过滤后内容为空则跳过显示
+                                    if (!displayMsg.content?.trim() && !displayMsg.mediaType) return null;
+                                    return (
+                                    <div key={displayMsg.id} className="chat-msg-wrapper" data-role={displayMsg.role}
+                                        onPointerDown={(e) => { e.stopPropagation(); handleReadingMessagePointerDown(e, displayMsg); }}
                                         onPointerUp={(e) => { e.stopPropagation(); cancelReadingMessageLongPress(); }}
                                         onPointerCancel={cancelReadingMessageLongPress}
                                         onPointerLeave={cancelReadingMessageLongPress}
@@ -1864,19 +1975,19 @@ export function ReadingViewer({ book, onBack }: Props) {
                                             e.stopPropagation();
                                             cancelReadingMessageLongPress();
                                             setActiveAnnotationId(null);
-                                            setActiveMessageId(msg.id);
-                                            setReadingMessageMenu({ messageId: msg.id, x: e.clientX, y: e.clientY });
+                                            setActiveMessageId(displayMsg.id);
+                                            setReadingMessageMenu({ messageId: displayMsg.id, x: e.clientX, y: e.clientY });
                                         }}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if (readingMessageMenu && readingMessageMenu.messageId !== msg.id) closeReadingMessageMenu();
+                                            if (readingMessageMenu && readingMessageMenu.messageId !== displayMsg.id) closeReadingMessageMenu();
                                         }}
                                     >
-                                        <div className={`chat-bubble-role-${msg.role} rounded-lg ${msg.mediaType && ["sticker", "red_packet", "transfer", "image", "location", "music_share", "xiaohongshu_note_share"].includes(msg.mediaType) ? "chat-bubble-media" : "max-w-[80%]"} break-words relative`}
-                                            data-ui={msg.role === "user" ? "bubble-user" : "bubble-bot"}
-                                            {...(activeMessageId === msg.id ? { "data-active": "" } : {})}>
+                                        <div className={`chat-bubble-role-${displayMsg.role} rounded-lg ${displayMsg.mediaType && ["sticker", "red_packet", "transfer", "image", "location", "music_share", "xiaohongshu_note_share"].includes(displayMsg.mediaType) ? "chat-bubble-media" : "max-w-[80%]"} break-words relative`}
+                                            data-ui={displayMsg.role === "user" ? "bubble-user" : "bubble-bot"}
+                                            {...(activeMessageId === displayMsg.id ? { "data-active": "" } : {})}>
                                             <MessageBubble
-                                                msg={msg}
+                                                msg={displayMsg}
                                                 charName={companion?.name}
                                                 userName=""
                                                 characterId={companionId || undefined}
@@ -1885,7 +1996,8 @@ export function ReadingViewer({ book, onBack }: Props) {
                                             />
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                                 {chatting && <div className="ts-13 text-[var(--c-icon)] py-1">{companion?.name} 正在思考...</div>}
                             </div>
                             <div className="reading-chat-float-input">
