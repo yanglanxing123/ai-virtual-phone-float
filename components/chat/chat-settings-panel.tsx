@@ -1,6 +1,26 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { Component, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+
+// ── Error Boundary：防止子组件崩溃导致整个设置面板白屏 ──
+class SafeSectionBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean }> {
+    constructor(props: { children: ReactNode; fallback?: ReactNode }) {
+        super(props);
+        this.state = { hasError: false };
+    }
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+    componentDidCatch(error: unknown) {
+        console.warn("[ChatSettingsPanel] SafeSectionBoundary caught:", error);
+    }
+    render() {
+        if (this.state.hasError) {
+            return this.props.fallback ?? null;
+        }
+        return this.props.children;
+    }
+}
 import {
     CHAT_INITIAL_VISIBLE_MESSAGE_COUNT,
     CHAT_LOAD_MORE_MESSAGE_COUNT,
@@ -1095,7 +1115,17 @@ export function ChatSettingsPanel({
                             <span className="menu-desc">调节音量、绑定本地提示音，区分普通与特别关心</span>
                         </div>
                     </div>
-                    <ChatSoundSettings />
+                    <SafeSectionBoundary
+                        fallback={
+                            <div className="menu-item" style={{ cursor: "default" }}>
+                                <div className="menu-label-group">
+                                    <span className="menu-desc">提示音设置加载失败，请刷新页面重试</span>
+                                </div>
+                            </div>
+                        }
+                    >
+                        <ChatSoundSettings />
+                    </SafeSectionBoundary>
                 </div>
 
                 {/* Backgrounds & UI */}

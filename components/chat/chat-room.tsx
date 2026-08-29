@@ -78,8 +78,12 @@ import {
     isMusicSystemMessage,
     useListenTogetherTimer,
     pushMusicSystemMessage,
+    setLtOverlayState,
+    clearLtOverlayState,
+    consumeBridgeCallFlag,
     type ListenTogetherTrack,
 } from "./listen-together";
+// getNeteaseLyrics already imported above from music-service
 import {
     formatChatDiceResultMessage,
     isDiceOnlyMessage,
@@ -1113,6 +1117,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [enterToSendEnabled, setEnterToSendEnabled] = useState(() => loadChatAppSettings().enterToSendEnabled === true);
 
     // ── 一起听功能状态 ──
+    const LT_PERSIST_KEY = "ai_phone_lt_state_v1";
     const [ltActive, setLtActive] = useState(false);
     const [ltStartTime, setLtStartTime] = useState<number | null>(null);
     const [ltPausedDuration, setLtPausedDuration] = useState(0);
@@ -1121,6 +1126,72 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [ltToast, setLtToast] = useState<string | null>(null);
     const ltPrevTrackRef = useRef<ListenTogetherTrack | null>(null);
     const ltElapsed = useListenTogetherTimer(ltActive, ltIsPlaying, ltStartTime, ltPausedDuration);
+
+    // 持久化一起听状态，使其跨页面刷新保持
+    const persistLtState = useCallback(() => {
+        try {
+            kvSet(LT_PERSIST_KEY, JSON.stringify({
+                active: ltActive,
+                startTime: ltStartTime,
+                pausedDuration: ltPausedDuration,
+                currentTrack: ltCurrentTrack,
+                isPlaying: ltIsPlaying,
+            }));
+        } catch { /* 静默 */ }
+    }, [ltActive, ltStartTime, ltPausedDuration, ltCurrentTrack, ltIsPlaying]);
+
+    // 一起听：页面刷新后恢复状态（延迟检查音乐是否仍在播放）
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        try {
+            const raw = kvGet(LT_PERSIST_KEY);
+            if (!raw) return;
+            const saved = JSON.parse(raw) as {
+                active: boolean;
+                startTime: number | null;
+                pausedDuration: number;
+                currentTrack: ListenTogetherTrack | null;
+                isPlaying: boolean;
+            };
+            if (!saved.active) return;
+            // 延迟 1.5 秒等待音乐APP注册 bridge
+            const restoreTimer = setTimeout(() => {
+                const bridge = getMusicControlBridge();
+                if (!bridge) {
+                    // 音乐APP未打开，清除持久化状态
+                    try { kvRemove(LT_PERSIST_KEY); } catch { /* 静默 */ }
+                    return;
+                }
+                try {
+                    const state = bridge.getState();
+                    if (state?.currentTrack && state.isPlaying) {
+                        // 音乐仍在播放，恢复一起听状态
+                        setLtActive(true);
+                        setLtStartTime(saved.startTime ?? Date.now());
+                        setLtPausedDuration(saved.pausedDuration ?? 0);
+                        const restoredTrack: ListenTogetherTrack = {
+                            title: state.currentTrack.title || "未知歌曲",
+                            artist: state.currentTrack.artist,
+                            coverUrl: state.currentTrack.coverUrl,
+                            source: "网易云导入",
+                        };
+                        setLtCurrentTrack(restoredTrack);
+                        setLtIsPlaying(true);
+                        ltPrevTrackRef.current = restoredTrack;
+                    } else {
+                        // 音乐已停止，清除持久化状态
+                        try { kvRemove(LT_PERSIST_KEY); } catch { /* 静默 */ }
+                    }
+                } catch { /* 静默 */ }
+            }, 1500);
+            return () => clearTimeout(restoreTimer);
+        } catch { /* 静默 */ }
+    }, []);
+
+    // 状态变化时持久化
+    useEffect(() => {
+        persistLtState();
+    }, [persistLtState]);
 
     // syncMessagesFromStorage 在后面才声明，用 ref 在回调中安全引用
     const syncMessagesRef = useRef<() => void>(() => {});
@@ -1136,6 +1207,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         // 尝试获取当前播放状态
         let currentTrack: ListenTogetherTrack | null = null;
         let isPlaying = false;
+        let currentTime = 0;
+        let duration = 0;
         try {
             const state = bridge.getState();
             if (state?.currentTrack) {
@@ -1145,8 +1218,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     artist: t.artist,
                     coverUrl: t.coverUrl,
                     source: "网易云导入",
+                    songId: (t as any)?.id ? Number((t as any).id) : undefined,
+                    lyrics: t.lyrics,
+                    duration: t.duration,
                 };
                 isPlaying = !!state.isPlaying;
+                currentTime = state.currentTime || 0;
+                duration = state.duration || 0;
             }
         } catch { /* 静默 */ }
 
@@ -1164,10 +1242,36 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         ltPrevTrackRef.current = currentTrack;
         setShowPlusMenu(false);
 
+        // 初始化全局浮窗状态
+        setLtOverlayState({
+            active: true,
+            track: currentTrack,
+            isPlaying,
+            elapsedSeconds: 0,
+            charName: character?.name || "对方",
+            userNickname: userIdentity?.name || "我",
+            userAvatar: userIdentity?.avatarUrl,
+            charAvatar: character?.avatar || undefined,
+            currentTime,
+            duration,
+            switchedBy: null,
+        });
+
+        // 异步获取歌词
+        if (currentTrack.songId && !currentTrack.lyrics) {
+            getNeteaseLyrics(currentTrack.songId).then(lrc => {
+                if (lrc) {
+                    const trackWithLyrics = { ...currentTrack!, lyrics: lrc };
+                    setLtCurrentTrack(trackWithLyrics);
+                    setLtOverlayState({ track: trackWithLyrics });
+                }
+            }).catch(() => {});
+        }
+
         // 插入"播放歌曲"系统消息
         pushMusicSystemMessage(session.id, "play", character?.name || "对方", currentTrack);
         syncMessagesRef.current();
-    }, [session.id, character?.name]);
+    }, [session.id, character?.name, userIdentity?.name, userIdentity?.avatarUrl, character?.avatar]);
 
     // 一起听：关闭
     const closeListenTogether = useCallback(() => {
@@ -1177,6 +1281,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         setLtCurrentTrack(null);
         setLtIsPlaying(false);
         ltPrevTrackRef.current = null;
+        clearLtOverlayState();
+        try { kvRemove("ai_phone_lt_state_v1"); } catch { /* 静默 */ }
     }, []);
 
     // 一起听：监听音乐APP的播放状态变化
@@ -1196,16 +1302,37 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     title: t.title || "未知歌曲",
                     artist: t.artist,
                     coverUrl: t.coverUrl,
-                    source: "网易云导入",
+                    source: t.lyrics ? "网易云导入" : "网易云导入",
+                    songId: (t as any)?.id ? Number((t as any).id) : undefined,
+                    lyrics: t.lyrics || ltCurrentTrack?.lyrics,
+                    duration: t.duration,
                 } : null;
 
                 const newIsPlaying = !!state.isPlaying;
 
                 // 检测切歌
                 if (newTrack && ltPrevTrackRef.current && newTrack.title !== ltPrevTrackRef.current.title) {
-                    pushMusicSystemMessage(session.id, "play", character?.name || "对方", newTrack);
+                    // 判断是谁切的歌
+                    const isAiSwitch = consumeBridgeCallFlag();
+                    const actor = isAiSwitch ? (character?.name || "对方") : "我";
+                    const actionType = isAiSwitch ? "switch" : "switch";
+                    pushMusicSystemMessage(session.id, actionType, actor, newTrack);
                     syncMessagesRef.current();
                     ltPrevTrackRef.current = newTrack;
+
+                    // 异步获取歌词
+                    if (newTrack.songId && !newTrack.lyrics) {
+                        getNeteaseLyrics(newTrack.songId).then(lrc => {
+                            if (lrc) {
+                                const trackWithLyrics = { ...newTrack, lyrics: lrc };
+                                setLtCurrentTrack(trackWithLyrics);
+                                setLtOverlayState({
+                                    track: trackWithLyrics,
+                                    switchedBy: isAiSwitch ? "character" : "user",
+                                });
+                            }
+                        }).catch(() => {});
+                    }
                 } else if (newTrack && !ltPrevTrackRef.current) {
                     ltPrevTrackRef.current = newTrack;
                 }
@@ -1214,7 +1341,6 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 if (newIsPlaying !== ltIsPlaying) {
                     setLtIsPlaying(newIsPlaying);
                     if (newIsPlaying && ltCurrentTrack) {
-                        // 从暂停恢复
                         pushMusicSystemMessage(session.id, "resume", character?.name || "对方", ltCurrentTrack);
                         syncMessagesRef.current();
                     }
@@ -1230,11 +1356,25 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 if (newTrack) {
                     setLtCurrentTrack(newTrack);
                 }
+
+                // 更新全局浮窗状态
+                setLtOverlayState({
+                    active: true,
+                    track: newTrack || ltCurrentTrack,
+                    isPlaying: newIsPlaying,
+                    elapsedSeconds: ltElapsed,
+                    charName: character?.name || "对方",
+                    userNickname: userIdentity?.name || "我",
+                    userAvatar: userIdentity?.avatarUrl,
+                    charAvatar: character?.avatar || undefined,
+                    currentTime: state.currentTime || 0,
+                    duration: state.duration || 0,
+                });
             } catch { /* 静默 */ }
         }, 2000);
 
         return () => clearInterval(pollInterval);
-    }, [ltActive, ltIsPlaying, ltCurrentTrack, session.id, character?.name, closeListenTogether]);
+    }, [ltActive, ltIsPlaying, ltCurrentTrack, session.id, character?.name, closeListenTogether, ltElapsed, userIdentity?.name, userIdentity?.avatarUrl, character?.avatar]);
 
     // Rich media input modals
     const [richModal, setRichModal] = useState<RichModalKind | null>(null);
@@ -5375,6 +5515,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             {/* 一起听状态栏：仅在激活一起听模式时显示 */}
             {ltActive && (
                 <ListenTogetherStatusBar
+                    userAvatar={userIdentity?.avatarUrl || undefined}
                     userNickname={userIdentity?.name || "我"}
                     charName={character?.name || "对方"}
                     charAvatar={character?.avatar || undefined}
@@ -6051,6 +6192,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                             track={ltCurrentTrack}
                             isPlaying={ltIsPlaying}
                             charName={character?.name || "对方"}
+                            elapsedSeconds={ltElapsed}
                         />
                     </div>
                 )}
