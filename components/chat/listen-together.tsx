@@ -257,17 +257,17 @@ const ECGHeartbeat = memo(function ECGHeartbeat({ beating = true }: { beating?: 
     return (
         <div className={`lt-heartbeat-wrap ${beating ? "lt-heartbeat-active" : "lt-heartbeat-idle"}`}>
             <svg
-                width="48"
-                height="28"
-                viewBox="0 0 48 28"
+                width="56"
+                height="32"
+                viewBox="0 0 56 32"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 className="lt-ecg-svg"
             >
                 <path
-                    d="M2 14 L12 14 L16 7 L20 21 L24 3 L28 25 L32 14 L46 14"
+                    d="M2 16 L14 16 L18 8 L22 24 L26 4 L30 28 L34 16 L54 16"
                     stroke="var(--lt-heart-color, #FF6B8A)"
-                    strokeWidth="2"
+                    strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     fill="none"
@@ -275,7 +275,7 @@ const ECGHeartbeat = memo(function ECGHeartbeat({ beating = true }: { beating?: 
                 />
             </svg>
             <Heart
-                size={18}
+                size={22}
                 fill="var(--lt-heart-color, #FF6B8A)"
                 color="var(--lt-heart-color, #FF6B8A)"
                 className="lt-heart-pulse"
@@ -315,27 +315,29 @@ export const ListenTogetherStatusBar = memo(function ListenTogetherStatusBar({
     const timeStr = minutes > 0 ? `一起听了 ${minutes}分${seconds}秒` : `一起听了 ${seconds}秒`;
 
     return (
-        <div className="lt-status-bar lt-status-bar-inline lt-status-bar-permanent">
-            <div className="lt-avatars-inline">
-                <div className="lt-avatar-mini lt-avatar-user">
+        <div className="lt-status-bar lt-status-bar-permanent">
+            <div className="lt-header-avatars">
+                <div className="lt-header-avatar lt-header-avatar-user">
                     {userAvatar ? (
-                        <img src={userAvatar} alt={userNickname} className="lt-avatar-img" />
+                        <img src={userAvatar} alt={userNickname} className="lt-header-avatar-img" />
                     ) : (
-                        <span className="lt-avatar-fallback">{userNickname[0] || "?"}</span>
+                        <span className="lt-header-avatar-fallback">{userNickname[0] || "?"}</span>
                     )}
                 </div>
-                <ECGHeartbeat beating={isPlaying} />
-                <div className="lt-avatar-mini lt-avatar-char">
+                <div className="lt-header-center">
+                    <ECGHeartbeat beating={isPlaying} />
+                    {showTimer && elapsedSeconds > 0 && (
+                        <span className="lt-header-timer">{timeStr}</span>
+                    )}
+                </div>
+                <div className="lt-header-avatar lt-header-avatar-char">
                     {charAvatar ? (
-                        <img src={charAvatar} alt={charName} className="lt-avatar-img" />
+                        <img src={charAvatar} alt={charName} className="lt-header-avatar-img" />
                     ) : (
-                        <span className="lt-avatar-fallback">{charName[0] || "?"}</span>
+                        <span className="lt-header-avatar-fallback">{charName[0] || "?"}</span>
                     )}
                 </div>
             </div>
-            {showTimer && elapsedSeconds > 0 && (
-                <span className="lt-timer-inline">{timeStr}</span>
-            )}
             {showClose && onClose && (
                 <button
                     className="lt-close-btn"
