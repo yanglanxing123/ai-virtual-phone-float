@@ -48,6 +48,8 @@ export type ChatSession = {
     isBlacklisted?: boolean;
     customCSS?: string;
     isMuted?: boolean;
+    /** 特别关心：置顶显示 + 专属提示音 */
+    isSpecial?: boolean;
     bilingualTranslationEnabled?: boolean;
     collapseBilingualTranslation?: boolean;
     /** 丢弃角色输出的无效表情包（名称不在角色表情包与内置表情中时直接滤除该消息） */
@@ -270,6 +272,52 @@ export const CHAT_APP_SETTINGS_UPDATED_EVENT = "chat-app-settings-updated";
 export const CHAT_MESSAGE_PUSHED_EVENT = "chat-message-pushed";
 export const CHAT_MESSAGES_DELETED_EVENT = "chat-messages-deleted";
 export const CHAT_REQUEST_REPLY_EVENT = "chat-request-reply";
+export const CHAT_UNREAD_UPDATED_EVENT = "chat-unread-updated";
+
+// ── Active session tracking ─────────────────────────
+// Tracks which session the user is currently viewing so pushChatMessage knows
+// whether to increment unread count.
+let _activeSessionId: string | null = null;
+
+export function setActiveChatSessionId(sessionId: string | null): void {
+    _activeSessionId = sessionId;
+    if (sessionId) clearUnreadCount(sessionId);
+}
+
+export function getActiveChatSessionId(): string | null {
+    return _activeSessionId;
+}
+
+/** Increment unread count for a session (skipped if session is currently active). */
+export function incrementUnreadCount(sessionId: string): void {
+    if (sessionId === _activeSessionId) return;
+    const sessions = loadChatSessions();
+    const idx = sessions.findIndex(s => s.id === sessionId);
+    if (idx === -1) return;
+    sessions[idx].unreadCount = (sessions[idx].unreadCount || 0) + 1;
+    saveChatSessions(sessions);
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(CHAT_UNREAD_UPDATED_EVENT, { detail: { sessionId } }));
+    }
+}
+
+/** Reset unread count to zero for a session. */
+export function clearUnreadCount(sessionId: string): void {
+    const sessions = loadChatSessions();
+    const idx = sessions.findIndex(s => s.id === sessionId);
+    if (idx === -1) return;
+    if (sessions[idx].unreadCount === 0) return;
+    sessions[idx].unreadCount = 0;
+    saveChatSessions(sessions);
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(CHAT_UNREAD_UPDATED_EVENT, { detail: { sessionId } }));
+    }
+}
+
+/** Sum of unread counts across all sessions. */
+export function getTotalUnreadCount(): number {
+    return loadChatSessions().reduce((sum, s) => sum + (s.unreadCount || 0), 0);
+}
 
 // ── Media Preview Map ─────────────────────────
 const MEDIA_PREVIEW_MAP: Record<string, string> = {
@@ -1138,6 +1186,11 @@ export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "sta
         }
         sessions[sessIdx].updatedAt = newMsg.createdAt;
         saveChatSessions(sessions);
+    }
+
+    // 未读计数：AI 回复时自增（当前正在查看的会话跳过）
+    if (newMsg.role === "assistant") {
+        incrementUnreadCount(newMsg.sessionId);
     }
 
     if (typeof window !== "undefined") {

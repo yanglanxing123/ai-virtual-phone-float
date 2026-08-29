@@ -7,6 +7,10 @@ export type ChatMessageNoticeDetail = {
   senderName?: string;
   avatar?: string | null;
   isGroup?: boolean;
+  /** 特别关心联系人：使用专属提示音 */
+  isSpecial?: boolean;
+  /** 会话是否被静音（免打扰） */
+  isMuted?: boolean;
 };
 
 export function dispatchChatMessageNotice(detail: ChatMessageNoticeDetail): void {

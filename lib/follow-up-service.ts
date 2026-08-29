@@ -723,6 +723,8 @@ export async function parseAndSaveResponse(
                     senderName: charName,
                     body: body.slice(0, 80),
                     ...(isGroup ? { isGroup: true } : {}),
+                    isSpecial: sess?.isSpecial,
+                    isMuted: sess?.isMuted,
                 });
             }, index * 1000);
         });
