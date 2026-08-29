@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages } from "@/lib/chat-storage";
+import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, CHAT_MESSAGE_PUSHED_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages, clearUnreadCount } from "@/lib/chat-storage";
 import type { StateValue } from "@/lib/chat-storage";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-parser";
@@ -1123,6 +1123,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         emitChatPluginEvent("session.opened", { sessionId: session.id, isGroup: !!session.isGroup });
     }, [session.id, session.isGroup]);
 
+    // 进入会话时清除未读计数
+    useEffect(() => {
+        clearUnreadCount(session.id);
+    }, [session.id]);
+
     // 聊天插件：监听插件 toast（支持常驻加载态 + 手动关闭）
     const chatToastIdRef = useRef<string | null>(null);
     useEffect(() => {
@@ -1412,6 +1417,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         setChatActive(true, flushCallback);
         return () => { setChatActive(false); };
     }, [session.id]);
+
+    // --- Listen for messages pushed from other apps (e.g. Reading app) ---
+    useEffect(() => {
+        const onMessagePushed = (e: Event) => {
+            const detail = (e as CustomEvent<{ message?: ChatMessage }>).detail;
+            if (!detail?.message) return;
+            if (detail.message.sessionId === session.id) {
+                syncMessagesFromStorage();
+            }
+        };
+        window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, onMessagePushed);
+        return () => window.removeEventListener(CHAT_MESSAGE_PUSHED_EVENT, onMessagePushed);
+    }, [session.id, syncMessagesFromStorage]);
 
     // --- Follow-up: listen for background service events ---
     useEffect(() => {
@@ -2418,6 +2436,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         senderName: session.groupName || "群聊",
                         body: `${pokeSender}: ${msg.content}`.slice(0, 80),
                         isGroup: true,
+                        isSpecial: session.isSpecial,
+                        isMuted: session.isMuted,
                     });
                     continue;
                 }
@@ -2459,6 +2479,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     senderName: session.groupName || "群聊",
                     body: `${r.characterName}: ${body}`.slice(0, 80),
                     isGroup: true,
+                    isSpecial: session.isSpecial,
+                    isMuted: session.isMuted,
                 });
             }
             // 面板没落到任何正常气泡上（纯静默，或整段只有拍一拍/群管理通知）→ 补空消息驮面板
@@ -2848,6 +2870,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 senderName: charN,
                 avatar: character?.avatar || null,
                 body: body.slice(0, 80),
+                isSpecial: session.isSpecial,
+                isMuted: session.isMuted,
             });
         };
 
