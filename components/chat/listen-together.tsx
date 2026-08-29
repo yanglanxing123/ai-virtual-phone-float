@@ -257,8 +257,8 @@ const ECGHeartbeat = memo(function ECGHeartbeat({ beating = true }: { beating?: 
     return (
         <div className={`lt-heartbeat-wrap ${beating ? "lt-heartbeat-active" : "lt-heartbeat-idle"}`}>
             <svg
-                width="56"
-                height="32"
+                width="80"
+                height="44"
                 viewBox="0 0 56 32"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -275,7 +275,7 @@ const ECGHeartbeat = memo(function ECGHeartbeat({ beating = true }: { beating?: 
                 />
             </svg>
             <Heart
-                size={22}
+                size={32}
                 fill="var(--lt-heart-color, #FF6B8A)"
                 color="var(--lt-heart-color, #FF6B8A)"
                 className="lt-heart-pulse"
@@ -338,16 +338,6 @@ export const ListenTogetherStatusBar = memo(function ListenTogetherStatusBar({
                     )}
                 </div>
             </div>
-            {showClose && onClose && (
-                <button
-                    className="lt-close-btn"
-                    onClick={onClose}
-                    aria-label="退出一起听"
-                    title="退出一起听"
-                >
-                    <X size={16} strokeWidth={2} />
-                </button>
-            )}
         </div>
     );
 });
