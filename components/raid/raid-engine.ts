@@ -453,8 +453,10 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
     const config = getApiConfig();
 
     const difficulty = dungeon.difficulty;
-    const deathThreshold = DIFFICULTY_DEATH_THRESHOLD[difficulty];
-    const favorMod = DIFFICULTY_FAVOR_MOD[difficulty];
+    const revivalCount = dungeon.revivalCount || 0;
+    // 复活后逐渐增加难度：死亡线提高5/次，好感增幅降低0.1/次
+    const deathThreshold = DIFFICULTY_DEATH_THRESHOLD[difficulty] + revivalCount * 5;
+    const favorMod = DIFFICULTY_FAVOR_MOD[difficulty] - revivalCount * 0.1;
 
     // 以目标角色（男主）的好感度判定死亡 / 高潮；无目标时退化为全部 NPC
     const targetNpcs = dungeon.npcs.filter((n) => n.isTarget);
@@ -530,7 +532,7 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
         `名称：${dungeon.name}`,
         `小说类型：${novelLabel}`,
         `画风：${THEME_LABELS[dungeon.theme]}`,
-        `难度：${diffLabel}（死亡线：目标好感度 ≤ ${deathThreshold} 即死；好感度 ≥ 80 可触发高潮结局）`,
+        `难度：${diffLabel}（死亡线：目标好感度 ≤ ${deathThreshold} 即死；好感度 ≥ 80 可触发高潮结局）${revivalCount > 0 ? `\n复活加成：已复活 ${revivalCount} 次，难度提升（死亡线+${revivalCount * 5}，好感增益降低 ${Math.round(revivalCount * 0.1 * 100)}%）` : ""}`,
         "世界观：",
         dungeon.worldview || "（未提供）",
         "",

@@ -128,6 +128,10 @@ export type RaidDungeon = {
     styleReferenceImage?: string;
     /** 每个章节已累计的好感度增量（正数之和），用于限制每章最多+20 */
     favorGainPerChapter?: Record<number, number>;
+    /** 复活次数，用于逐渐增加难度 */
+    revivalCount?: number;
+    /** 用户选择历史记录 */
+    choiceHistory?: { beatId: string; choiceText: string; chapter: number; timestamp: string }[];
 };
 
 /** 预设模板 */

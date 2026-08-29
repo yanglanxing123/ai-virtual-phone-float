@@ -23,6 +23,7 @@ import {
     aiFillGuidance,
 } from "./raid-engine";
 import { resolveVoiceConfig, synthesizeSpeech, playAudioBlob, setTtsVolume, getTtsVolume } from "@/lib/tts-service";
+import { loadCharacters } from "@/lib/character-storage";
 import type { ContentAppId } from "@/lib/settings-types";
 
 const RAID_APP_ID = "raid" as ContentAppId;
@@ -251,6 +252,14 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
             });
             const updated = appendStoryBeat(dungeon.id, beat);
             if (updated) {
+                // 记录用户选择到历史
+                const choiceHistory = [...(dungeon.choiceHistory || []), {
+                    beatId: beat.id,
+                    choiceText,
+                    chapter: dungeon.currentChapter,
+                    timestamp: new Date().toISOString(),
+                }];
+                updateDungeon(dungeon.id, { choiceHistory });
                 if (beat.isDeath) {
                     updateDungeon(dungeon.id, { deathCount: dungeon.deathCount + 1 });
                 }
@@ -293,6 +302,41 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
             setLoading(false);
             abortRef.current = null;
         }
+    }
+
+    function handleRevive() {
+        // 直接复活：恢复状态为 playing，增加复活次数（影响后续难度）
+        const revivalCount = (dungeon.revivalCount || 0) + 1;
+        // 移除死亡 beat，回到上一个正常 beat 继续游戏
+        const beats = dungeon.storyBeats.slice();
+        let lastBeatId = null;
+        // 找到最后一个非死亡的 beat
+        for (let i = beats.length - 1; i >= 0; i--) {
+            if (!beats[i].isDeath && !beats[i].isClimax) {
+                lastBeatId = beats[i].id;
+                break;
+            }
+        }
+        // 如果找到了正常 beat，回到那个；否则保留所有 beat 但状态改为 playing
+        if (lastBeatId) {
+            const cutIndex = beats.findIndex(b => b.id === lastBeatId) + 1;
+            const keptBeats = beats.slice(0, cutIndex);
+            updateDungeon(dungeon.id, {
+                status: "playing",
+                revivalCount,
+                storyBeats: keptBeats,
+                currentBeatId: lastBeatId,
+            });
+        } else {
+            updateDungeon(dungeon.id, {
+                status: "playing",
+                revivalCount,
+            });
+        }
+        const fresh = findDungeon(dungeon.id);
+        if (fresh) setDungeon(fresh);
+        onUpdate();
+        onNotice?.(`已复活（第${revivalCount}次），难度将提升`);
     }
 
     async function handleAiFill() {
@@ -351,6 +395,8 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
             favor,
             status: "setup",
             deathCount: dungeon.deathCount,
+            revivalCount: 0,
+            choiceHistory: [],
         });
         if (updated) {
             setDungeon(updated);
@@ -443,7 +489,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                         <input
                             type="range"
                             min="0"
-                            max="1"
+                            max="2"
                             step="0.05"
                             value={voiceVolume}
                             onChange={(e) => setVoiceVolume(parseFloat(e.target.value))}
@@ -600,7 +646,9 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                     beat={currentBeat}
                     deathCount={dungeon.deathCount}
                     chapter={dungeon.currentChapter}
+                    revivalCount={dungeon.revivalCount || 0}
                     onRestart={handleRestart}
+                    onRevive={handleRevive}
                     onBack={onBack}
                 />
             )}
@@ -693,9 +741,9 @@ function NovelChatLog({
     return (
         <div className="raid-chat-log">
             {dungeon.storyBeats.map((beat, idx) => {
-                const prevBeat = idx > 0 ? dungeon.storyBeats[idx - 1] : null;
-                // 玩家选择消息：用上一次的选择文本
-                const playerChoice = beat.playerGuidance || prevBeat?.choices[0]?.text || undefined;
+                // 从选择历史中查找当前 beat 对应的用户选择
+                const choiceRecord = dungeon.choiceHistory?.find((h) => h.beatId === beat.id);
+                const playerChoice = choiceRecord?.choiceText || undefined;
                 const narrationParts = splitSentences(beat.narration);
 
                 return (
@@ -964,11 +1012,16 @@ function PortraitMode(props: PortraitModeProps) {
     // 将当前 beat 的旁白和对话拆分为「剧情段落」，逐段显示
     const segments = useMemo(() => {
         const segs: Array<{
-            type: "narration" | "dialogue";
+            type: "narration" | "dialogue" | "choice";
             text: string;
             speaker?: string;
             emotion?: string;
         }> = [];
+        // 用户选择（如果有，显示在最前面）
+        const choiceRecord = dungeon.choiceHistory?.find((h) => h.beatId === beat.id);
+        if (choiceRecord) {
+            segs.push({ type: "choice", text: choiceRecord.choiceText });
+        }
         // 旁白按句拆分
         const narrationParts = splitSentences(beat.narration);
         for (const part of narrationParts) {
@@ -983,7 +1036,7 @@ function PortraitMode(props: PortraitModeProps) {
             segs.push({ type: "narration", text: beat.sceneTitle || "……" });
         }
         return segs;
-    }, [beat.id, beat.narration, beat.dialogue, beat.sceneTitle]);
+    }, [beat.id, beat.narration, beat.dialogue, beat.sceneTitle, dungeon.choiceHistory]);
 
     const [segmentIndex, setSegmentIndex] = useState(0);
     const isLastSegment = segmentIndex >= segments.length - 1;
@@ -1091,44 +1144,58 @@ function PortraitMode(props: PortraitModeProps) {
 
             {/* 底部紧凑剧情框 + 工具栏 */}
             <div className="raid-portrait-bottom-area">
-                {/* 角色名称标签（浮动在对话框左上角） */}
-                {currentSeg?.type === "dialogue" && currentSeg.speaker && (
-                    <div className="raid-portrait-name-tag">
-                        <span className="raid-portrait-name-tag-text">{currentSeg.speaker}</span>
-                        {currentSeg.emotion && (
-                            <span className="raid-portrait-emotion">（{currentSeg.emotion}）</span>
+                {/* 选项显示时隐藏剧情框和名称标签 */}
+                {!(isLastSegment && !isDead && !isCleared && (beat.choices.length > 0 || beat.atMaxFavor) && !loading) && (
+                    <>
+                        {/* 角色名称标签（浮动在对话框左上角） */}
+                        {currentSeg?.type === "dialogue" && currentSeg.speaker && (
+                            <div className="raid-portrait-name-tag">
+                                <span className="raid-portrait-name-tag-text">{currentSeg.speaker}</span>
+                                {currentSeg.emotion && (
+                                    <span className="raid-portrait-emotion">（{currentSeg.emotion}）</span>
+                                )}
+                                {hasVoice && speakerNpc && (
+                                    <button
+                                        className="raid-portrait-voice-btn raid-portrait-voice-btn--inline"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            isVoicePlaying ? onStopVoice() : onPlayVoice(speakerNpc.id, currentSeg.text, lineKey);
+                                        }}
+                                        title={isVoicePlaying ? "停止语音" : "播放语音"}
+                                    >
+                                        {isVoicePlaying ? (
+                                            <span className="raid-portrait-voice-bars">
+                                                <span></span><span></span><span></span>
+                                            </span>
+                                        ) : "🔊"}
+                                    </button>
+                                )}
+                            </div>
                         )}
-                        {hasVoice && speakerNpc && (
-                            <button
-                                className="raid-portrait-voice-btn raid-portrait-voice-btn--inline"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    isVoicePlaying ? onStopVoice() : onPlayVoice(speakerNpc.id, currentSeg.text, lineKey);
-                                }}
-                                title={isVoicePlaying ? "停止语音" : "播放语音"}
-                            >
-                                {isVoicePlaying ? (
-                                    <span className="raid-portrait-voice-bars">
-                                        <span></span><span></span><span></span>
-                                    </span>
-                                ) : "🔊"}
-                            </button>
-                        )}
-                    </div>
-                )}
 
-                {/* 当前剧情段落 */}
-                <div
-                    className="raid-portrait-dialogue-box"
-                    onClick={() => canGoForward && setSegmentIndex(i => Math.min(segments.length - 1, i + 1))}
-                    style={{ cursor: canGoForward ? "pointer" : "default" }}
-                >
-                    {currentSeg?.type === "dialogue" ? (
-                        <p className="raid-portrait-dialogue-text">{currentSeg.text}</p>
-                    ) : (
-                        <p className="raid-portrait-narration-text">{currentSeg?.text}</p>
-                    )}
-                </div>
+                        {/* 当前剧情段落 — 对话用半透明白底框，旁白无框纯文字，选择用玩家气泡 */}
+                        <div
+                            className={`raid-portrait-dialogue-box ${
+                                currentSeg?.type === "narration" ? "raid-portrait-dialogue-box--narration" :
+                                currentSeg?.type === "choice" ? "raid-portrait-dialogue-box--choice" : ""
+                            }`}
+                            onClick={() => canGoForward && setSegmentIndex(i => Math.min(segments.length - 1, i + 1))}
+                            style={{ cursor: canGoForward ? "pointer" : "default" }}
+                        >
+                            {currentSeg?.type === "dialogue" ? (
+                                <p className="raid-portrait-dialogue-text">{currentSeg.text}</p>
+                            ) : currentSeg?.type === "choice" ? (
+                                <p className="raid-portrait-choice-text">
+                                    <span className="raid-portrait-choice-icon">❥</span>
+                                    <span className="raid-portrait-choice-label">你的选择</span>
+                                    <span className="raid-portrait-choice-content">{currentSeg.text}</span>
+                                </p>
+                            ) : (
+                                <p className="raid-portrait-narration-text">{currentSeg?.text}</p>
+                            )}
+                        </div>
+                    </>
+                )}
 
                 {/* 选项区：只在最后一段时显示 */}
                 {!isDead && !isCleared && isLastSegment && (
@@ -1298,7 +1365,7 @@ type PanelProps = {
     onClose: () => void;
 };
 
-// ── 属性面板头像：兼容字符串 / {url} 对象，加载失败回退到场景图，再回退到首字母 ──
+// ── 属性面板头像：优先使用角色选择界面的头像，兼容字符串 / {url} 对象，加载失败回退到场景图，再回退到首字母 ──
 function AttrAvatar({ npc, fallbackSceneImage }: { npc: DungeonNpc; fallbackSceneImage?: string }) {
     // 从 portraits / referenceImages 中提取可显示的 URL（兼容纯字符串与 {url|dataUrl|src|imageUrl} 对象）
     const directUrl = useMemo(() => {
@@ -1311,8 +1378,14 @@ function AttrAvatar({ npc, fallbackSceneImage }: { npc: DungeonNpc; fallbackScen
             }
             return null;
         };
-        return toUrl(npc.portraits?.[0]) ?? toUrl(npc.referenceImages?.[0]) ?? null;
-    }, [npc.portraits, npc.referenceImages]);
+        // 优先级：角色选择界面的头像 > NPC portraits > NPC referenceImages
+        let charAvatar: string | null = null;
+        if (npc.characterId) {
+            const char = loadCharacters().find((c) => c.id === npc.characterId);
+            if (char?.avatar) charAvatar = char.avatar;
+        }
+        return charAvatar ?? toUrl(npc.portraits?.[0]) ?? toUrl(npc.referenceImages?.[0]) ?? null;
+    }, [npc.characterId, npc.portraits, npc.referenceImages]);
 
     const [stage, setStage] = useState<"direct" | "scene" | "none">(
         directUrl ? "direct" : fallbackSceneImage ? "scene" : "none",
@@ -1401,7 +1474,7 @@ function StoryLogPanel({ dungeon, onClose }: PanelProps) {
     const allSegments = useMemo(() => {
         const result: Array<{
             beatIdx: number;
-            type: "narration" | "dialogue";
+            type: "narration" | "dialogue" | "choice";
             text: string;
             speaker?: string;
             emotion?: string;
@@ -1409,16 +1482,25 @@ function StoryLogPanel({ dungeon, onClose }: PanelProps) {
             sceneTitle: string;
         }> = [];
         dungeon.storyBeats.forEach((beat, beatIdx) => {
+            // 章节标题
+            result.push({ beatIdx, type: "narration", text: `— 第 ${beat.chapter} 章 · ${beat.sceneTitle} —`, chapter: beat.chapter, sceneTitle: beat.sceneTitle });
+            // 用户选择（在 beat 内容之前显示）
+            const choiceRecord = dungeon.choiceHistory?.find((h) => h.beatId === beat.id);
+            if (choiceRecord) {
+                result.push({ beatIdx, type: "choice", text: choiceRecord.choiceText, chapter: beat.chapter, sceneTitle: beat.sceneTitle });
+            }
+            // 旁白
             const narrationParts = splitSentences(beat.narration);
             narrationParts.forEach((text) => {
                 result.push({ beatIdx, type: "narration", text, chapter: beat.chapter, sceneTitle: beat.sceneTitle });
             });
+            // 对话
             beat.dialogue.forEach((line) => {
                 result.push({ beatIdx, type: "dialogue", text: line.text, speaker: line.speaker, emotion: line.emotion, chapter: beat.chapter, sceneTitle: beat.sceneTitle });
             });
         });
         return result;
-    }, [dungeon.storyBeats]);
+    }, [dungeon.storyBeats, dungeon.choiceHistory]);
 
     return (
         <div className="raid-portrait-overlay-panel">
@@ -1435,6 +1517,12 @@ function StoryLogPanel({ dungeon, onClose }: PanelProps) {
                                 <span className="raid-portrait-speaker-diamond">◆</span>
                                 <span className="raid-portrait-log-speaker">{seg.speaker}</span>
                                 <span className="raid-portrait-log-text">{seg.text}</span>
+                            </p>
+                        ) : seg.type === "choice" ? (
+                            <p className="raid-portrait-log-choice">
+                                <span className="raid-portrait-log-choice-icon">❥</span>
+                                <span className="raid-portrait-log-choice-label">你的选择：</span>
+                                <span className="raid-portrait-log-choice-text">{seg.text}</span>
                             </p>
                         ) : (
                             <p className="raid-portrait-log-narration">{seg.text}</p>
@@ -1477,7 +1565,7 @@ function VolumePanel({ bgmVolume, voiceVolume, onBgmVolumeChange, onVoiceVolumeC
                 <div className="raid-portrait-volume-row">
                     <span className="raid-portrait-volume-label">角色语音</span>
                     <input
-                        type="range" min={0} max={1} step={0.01}
+                        type="range" min={0} max={2} step={0.01}
                         value={voiceVolume}
                         onChange={(e) => onVoiceVolumeChange(parseFloat(e.target.value))}
                         className="raid-portrait-volume-slider"
@@ -1511,11 +1599,13 @@ type DeathScreenProps = {
     beat: StoryBeat;
     deathCount: number;
     chapter: number;
+    revivalCount: number;
     onRestart: () => void;
+    onRevive: () => void;
     onBack: () => void;
 };
 
-function DeathScreen({ beat, deathCount, chapter, onRestart, onBack }: DeathScreenProps) {
+function DeathScreen({ beat, deathCount, chapter, revivalCount, onRestart, onRevive, onBack }: DeathScreenProps) {
     const emoji = useMemo(() => DEATH_EMOJIS[Math.floor(Math.random() * DEATH_EMOJIS.length)], []);
     const subtitle = useMemo(() => DEATH_SUBTITLES[Math.floor(Math.random() * DEATH_SUBTITLES.length)], []);
 
@@ -1547,12 +1637,15 @@ function DeathScreen({ beat, deathCount, chapter, onRestart, onBack }: DeathScre
             )}
 
             <p className="raid-death-screen-count">
-                第 {chapter} 章 · 累计死亡 {deathCount} 次
+                第 {chapter} 章 · 累计死亡 {deathCount} 次{revivalCount > 0 ? ` · 已复活 ${revivalCount} 次` : ""}
             </p>
 
             <div className="raid-death-actions">
-                <button className="raid-btn raid-btn--primary" onClick={onRestart}>
-                    重新开始
+                <button className="raid-btn raid-btn--primary" onClick={onRevive}>
+                    直接复活{revivalCount > 0 ? `（难度+${revivalCount}）` : ""}
+                </button>
+                <button className="raid-btn raid-btn--ghost" onClick={onRestart}>
+                    重头再来
                 </button>
                 <button className="raid-btn raid-btn--ghost" onClick={onBack}>
                     返回
