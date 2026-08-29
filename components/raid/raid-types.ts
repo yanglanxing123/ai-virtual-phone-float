@@ -65,6 +65,8 @@ export type StoryBeat = {
     sceneImageUrl?: string;
     /** 立绘模式用的「人物+背景」融合图 dataUrl（一个章节只生成一次） */
     portraitSceneImage?: string;
+    /** 好感度已满（≥100），用户可选择是否触发结局 */
+    atMaxFavor?: boolean;
 };
 
 /** 存档槽 */

@@ -195,11 +195,11 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
         const chapterBeats = dungeon.storyBeats.filter(b => b.chapter === currentBeat.chapter);
         const existingImage = chapterBeats.find(b => b.portraitSceneImage)?.portraitSceneImage;
         if (existingImage) {
-            // 复用同章节的融合图
+            // 复用同章节的融合图，并同步封面
             const beats = dungeon.storyBeats.map((b) =>
                 b.id === currentBeat.id ? { ...b, portraitSceneImage: existingImage } : b,
             );
-            updateDungeon(dungeon.id, { storyBeats: beats });
+            updateDungeon(dungeon.id, { storyBeats: beats, coverImage: existingImage });
             const fresh = findDungeon(dungeon.id);
             if (fresh) setDungeon(fresh);
             return;
@@ -222,7 +222,8 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                     const beats = dungeon.storyBeats.map((b) =>
                         b.id === currentBeat.id ? { ...b, portraitSceneImage: url } : b,
                     );
-                    updateDungeon(dungeon.id, { storyBeats: beats });
+                    // 同步封面图：每章节生成的图片自动更新为剧本封面
+                    updateDungeon(dungeon.id, { storyBeats: beats, coverImage: url });
                     const fresh = findDungeon(dungeon.id);
                     if (fresh) setDungeon(fresh);
                 }
@@ -264,6 +265,33 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
             abortRef.current = null;
             setGuidance("");
             setEditingChoiceId(null);
+        }
+    }
+
+    async function handleTriggerClimax() {
+        if (loading || isDead || isCleared) return;
+        setLoading(true);
+        const controller = new AbortController();
+        abortRef.current = controller;
+        try {
+            const beat = await generateStoryBeat({
+                dungeon,
+                choiceText: "触发圆满结局",
+                playerGuidance: undefined,
+                signal: controller.signal,
+                forceClimax: true,
+            });
+            const updated = appendStoryBeat(dungeon.id, beat);
+            if (updated) {
+                setDungeon(findDungeon(dungeon.id) || updated);
+                onUpdate();
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            onNotice?.(`生成结局失败：${msg}`);
+        } finally {
+            setLoading(false);
+            abortRef.current = null;
         }
     }
 
@@ -500,6 +528,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                     onCancelEdit={() => setEditingChoiceId(null)}
                     isDead={isDead}
                     isCleared={isCleared}
+                    onTriggerClimax={handleTriggerClimax}
                     onPlayVoice={handlePlayVoice}
                     onStopVoice={handleStopVoice}
                     voicePlayingNpcId={voicePlayingNpcId}
@@ -559,6 +588,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                             }}
                             onCancelEdit={() => setEditingChoiceId(null)}
                             onChoice={(text) => handleChoice(text, guidance)}
+                            onTriggerClimax={handleTriggerClimax}
                         />
                     )}
                 </>
@@ -762,13 +792,14 @@ type ChoicePanelProps = {
     onConfirmEdit: () => void;
     onCancelEdit: () => void;
     onChoice: (text: string) => void;
+    onTriggerClimax: () => void;
 };
 
 function ChoicePanel(props: ChoicePanelProps) {
     const {
         beat, loading, guidance, onGuidanceChange, onAiFill, fillingGuidance,
         showEditPanel, onToggleEditPanel, editingChoiceId, onEditChoice,
-        editingChoiceText, onEditingChoiceTextChange, onConfirmEdit, onCancelEdit, onChoice,
+        editingChoiceText, onEditingChoiceTextChange, onConfirmEdit, onCancelEdit, onChoice, onTriggerClimax,
     } = props;
 
     return (
@@ -779,6 +810,24 @@ function ChoicePanel(props: ChoicePanelProps) {
                     <div className="raid-choices-loading">
                         <div className="raid-loading raid-loading-sm" />
                         <span>生成中……</span>
+                    </div>
+                ) : beat.atMaxFavor ? (
+                    <div className="raid-choice-item raid-max-favor-choice">
+                        <p className="raid-max-favor-hint">好感度已满，是否触发圆满结局？</p>
+                        <div className="raid-max-favor-buttons">
+                            <button
+                                className="raid-choice-btn raid-choice-btn--compact raid-choice-btn--safe"
+                                onClick={() => onChoice("继续推进剧情")}
+                            >
+                                继续攻略
+                            </button>
+                            <button
+                                className="raid-choice-btn raid-choice-btn--compact raid-choice-btn--safe raid-choice-btn--climax"
+                                onClick={onTriggerClimax}
+                            >
+                                圆满结局
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     beat.choices.map((choice) => (
@@ -882,6 +931,7 @@ type PortraitModeProps = {
     onCancelEdit: () => void;
     isDead: boolean;
     isCleared: boolean;
+    onTriggerClimax: () => void;
     onPlayVoice: (npcId: string, lineText?: string, lineKey?: string) => void;
     onStopVoice: () => void;
     voicePlayingNpcId: string | null;
@@ -898,7 +948,7 @@ function PortraitMode(props: PortraitModeProps) {
         guidance, onGuidanceChange, onAiFill, fillingGuidance,
         showEditPanel, onToggleEditPanel, editingChoiceId, onEditChoice,
         onEditingChoiceTextChange, onConfirmEdit, onCancelEdit,
-        isDead, isCleared,
+        isDead, isCleared, onTriggerClimax,
         onPlayVoice, onStopVoice, voicePlayingNpcId, voicePlayingLineKey,
         bgmVolume, voiceVolume, onBgmVolumeChange, onVoiceVolumeChange,
     } = props;
@@ -1087,6 +1137,25 @@ function PortraitMode(props: PortraitModeProps) {
                             <div className="raid-choices-loading">
                                 <div className="raid-loading raid-loading-sm" />
                                 <span>生成中……</span>
+                            </div>
+                        ) : beat.atMaxFavor ? (
+                            /* 满好感度：用户选择继续或触发结局 */
+                            <div className="raid-portrait-max-favor-choice">
+                                <p className="raid-portrait-max-favor-hint">好感度已满，是否触发圆满结局？</p>
+                                <div className="raid-portrait-max-favor-buttons">
+                                    <button
+                                        className="raid-portrait-choice-btn raid-portrait-choice-btn--compact raid-portrait-choice-btn--continue"
+                                        onClick={() => onChoice("继续推进剧情", guidance)}
+                                    >
+                                        继续攻略
+                                    </button>
+                                    <button
+                                        className="raid-portrait-choice-btn raid-portrait-choice-btn--compact raid-portrait-choice-btn--climax"
+                                        onClick={onTriggerClimax}
+                                    >
+                                        圆满结局
+                                    </button>
+                                </div>
                             </div>
                         ) : (
                             beat.choices.map((choice) => (

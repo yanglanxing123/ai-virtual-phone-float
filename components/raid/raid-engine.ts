@@ -355,6 +355,8 @@ export interface GenerateStoryBeatParams {
     playerGuidance?: string;
     /** 取消信号 */
     signal?: AbortSignal;
+    /** 用户主动触发圆满结局（满好感度后选择） */
+    forceClimax?: boolean;
 }
 
 /** 取最近一个剧情节点，拼成前情摘要写入 prompt。 */
@@ -463,6 +465,7 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
 
     const isDeathTriggered = minFavor <= deathThreshold;
     const canClimax = maxFavor >= 80;
+    const atMaxFavor = maxFavor >= 100;
 
     const lastSummary = summarizeLastBeat(dungeon);
 
@@ -505,8 +508,10 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
         ];
         const deathStyle = deathStyles[Math.floor(Math.random() * deathStyles.length)];
         rule5 = `5. 【重要】当前已有目标好感度（${minFavor}）低于死亡线 ${deathThreshold}，本次必须生成死亡结局：isDeath=true。要求写一段荒诞、沙雕、令人哭笑不得的失败收尾，风格参考：${deathStyle}\n  narration 要写得生动有趣、有画面感、有反转，让玩家被逗笑而不是沮丧（150-300字）。\n  dialogue 要写得有梗有笑点，NPC的反应也要搞笑（2-4句）。\n  choices 留空数组 []。\n  sceneTitle 要取一个有梗的搞笑标题。`;
-    } else if (canClimax) {
+    } else if (params.forceClimax || (canClimax && !atMaxFavor)) {
         rule5 = `5. 当前目标好感度已达 ${maxFavor}（≥80），可以生成高潮圆满结局：isClimax=true，写一段高潮收尾，choices 留空数组 []；若你认为剧情仍有发展空间，也可继续推进（isClimax=false）并给出选项。`;
+    } else if (atMaxFavor && !params.forceClimax) {
+        rule5 = `5. 当前目标好感度已达满分 ${maxFavor}（≥100），但用户选择继续攻略，请继续推进剧情：isDeath=false、isClimax=false，正常给出 2-4 个选项，让故事继续发展。`;
     } else {
         // 正常推进：根据当前章节 beat 数量决定是否推进到下一章
         const shouldAdvanceChapter = currentChapterBeatCount >= 4 + Math.floor(Math.random() * 5); // 4-8 次
@@ -549,7 +554,7 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
             ? `【玩家对剧情方向的指导（请参考但不必完全遵从）】\n${playerGuidance.trim()}`
             : "",
         "生成要求：",
-        "1. 根据玩家选择推进剧情：narration 写 100-300 字第三人称旁白（场景、心理、氛围）；dialogue 写 2-6 句对话，每句含 speaker（NPC 名）与 text，可带 emotion。",
+        "1. 根据玩家选择推进剧情：narration 写 800-1500 字第三人称旁白（场景、心理、氛围、细节描写，要求有画面感和沉浸感）；dialogue 写 4-10 句对话，每句含 speaker（NPC 名）与 text，可带 emotion。narration 和 dialogue 合计必须超过 2000 个中文字符，确保剧情充分展开后再给出选项。",
         `2. choices 生成 2-4 个选项，每个含 text（选项内容）、hint（后果提示，如"勇气+5"或"风险：可能激怒对方"）、riskLevel、favorDelta（选择该选项预估的好感度变化，正负整数）。风险分布：${riskGuide}`,
         `3. favorChanges 是本次剧情/玩家选择带来的好感度变化，键为 NPC 的 id（见上方阵容表），值为整数。重要限制：每个章节好感度正向增益总和最多 20 点，当前本章剩余可加 ${favorGainRemaining} 点，请勿超出。负数不受限制。开局第一章且玩家无选择时，favorChanges 可为空对象 {}。`,
         `4. 好感度变化会被难度系数 ${favorMod} 调整（正向收益 ×${favorMod}，负向不变）。`,
@@ -583,7 +588,7 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
             { role: "system", content: systemPrompt },
             { role: "user", content: `请生成第 ${dungeon.currentChapter} 章的下一个剧情节点。` },
         ],
-        { temperature: 0.9, max_tokens: 4000, signal: params.signal },
+        { temperature: 0.9, max_tokens: 8000, signal: params.signal },
     );
 
     if (result.error) throw new Error(`AI 调用失败：${result.error}`);
@@ -597,7 +602,7 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
         throw new Error("AI 返回的剧情数据格式不正确，请重试。");
     }
 
-    return buildStoryBeat(parsed, dungeon, isDeathTriggered, favorMod, playerGuidance);
+    return buildStoryBeat(parsed, dungeon, isDeathTriggered, favorMod, playerGuidance, atMaxFavor, params.forceClimax);
 }
 
 /** 把 AI 返回的原始剧情对象归一化为 StoryBeat，并强制死亡/高潮判定与选项兜底。 */
@@ -607,6 +612,8 @@ function buildStoryBeat(
     isDeathTriggered: boolean,
     favorMod: number,
     playerGuidance?: string,
+    atMaxFavor?: boolean,
+    forceClimax?: boolean,
 ): StoryBeat {
     const beatId = genId("beat");
     const now = new Date().toISOString();
@@ -644,13 +651,26 @@ function buildStoryBeat(
 
     // 死亡 / 高潮：代码层强制判定，避免 AI 误判
     const isDeath = parsed.isDeath === true || isDeathTriggered;
-    const isClimax = !isDeath && parsed.isClimax === true;
+    // forceClimax: 用户主动选择触发结局 → 强制高潮
+    const isClimax = !isDeath && (forceClimax || parsed.isClimax === true);
 
     // 死亡 / 高潮结局无选项；正常推进时构建选项并兜底至 2 个
     let choices: StoryChoice[] = [];
     if (!isDeath && !isClimax) {
         choices = buildChoices(parsed.choices, beatId);
-        if (choices.length < 2) {
+        // 强制 2000 字符门槛：如果 narration + dialogue 合计不足 2000 个中文字符，
+        // 则用单一"继续"选项替代，引导 AI 生成更多剧情
+        const dialogueText = dialogue.map(d => d.text).join("");
+        const totalChars = narration.length + dialogueText.length;
+        if (totalChars < 2000) {
+            choices = [{
+                id: `${beatId}_continue`,
+                text: "继续",
+                hint: "剧情继续展开",
+                riskLevel: "safe",
+                favorDelta: 0,
+            }];
+        } else if (choices.length < 2) {
             const fallbacks: StoryChoice[] = [
                 { id: `${beatId}_safe`, text: "谨慎应对", hint: "稳妥推进", riskLevel: "safe", favorDelta: 5 },
                 { id: `${beatId}_risky`, text: "主动出击", hint: "可能改变局势", riskLevel: "risky", favorDelta: -3 },
@@ -678,6 +698,7 @@ function buildStoryBeat(
         createdAt: now,
         playerGuidance: playerGuidance?.trim() || undefined,
         scenePrompt,
+        atMaxFavor: atMaxFavor && !isClimax && !isDeath,
     };
 }
 
