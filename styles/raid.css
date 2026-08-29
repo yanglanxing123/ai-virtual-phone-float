@@ -369,13 +369,17 @@
   flex-direction: row;
   flex-wrap: nowrap;
   gap: 12px;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: flex-start;
   padding: 28px 18px 12px;
   overflow-x: auto;
   overflow-y: visible;
   scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
 }
+.raid-char-cards::-webkit-scrollbar { display: none; }
 .raid-char-card {
   position: relative;
   flex: 0 0 auto;
@@ -2877,6 +2881,57 @@
 .raid-portrait-choice-btn--compact:active {
   transform: scale(0.98) translateY(0);
   box-shadow: 0 0 8px rgba(212, 175, 55, 0.1);
+}
+/* 选项按钮内文字和提示 */
+.raid-portrait-choice-btn-text {
+  flex: 1;
+}
+.raid-portrait-choice-btn-hint {
+  font-size: 10px;
+  color: rgba(212, 175, 55, 0.6);
+  font-weight: 400;
+  white-space: nowrap;
+}
+/* 继续按钮特殊样式 */
+.raid-portrait-choice-btn--continue {
+  border-color: rgba(212, 175, 55, 0.4) !important;
+  background: linear-gradient(180deg, rgba(30, 26, 12, 0.6) 0%, rgba(20, 16, 8, 0.5) 100%) !important;
+  color: rgba(212, 175, 55, 0.95) !important;
+  font-weight: 600;
+}
+/* 指导输入行 */
+.raid-portrait-guidance-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  align-items: center;
+}
+.raid-portrait-guidance-input {
+  flex: 1;
+  min-height: 32px;
+  max-height: 60px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(18, 18, 28, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #f0f0f0;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+}
+.raid-portrait-guidance-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+.raid-portrait-guidance-input:focus {
+  border-color: rgba(212, 175, 55, 0.4);
+}
+.raid-portrait-ai-fill-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* 满好感度选择 */
