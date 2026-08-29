@@ -18,7 +18,7 @@ import {
     DEFAULT_READING_INTERACTION_CONFIG,
 } from "@/lib/reading-storage";
 import { generateAnnotationBatch, generateReadingChat, parseReadingDiscussResponse, type ReadingDiscussAction, type ReadingDiscussContext } from "@/lib/reading-engine";
-import { loadChatMessages, pushChatMessage, deleteChatMessage, editChatMessage, loadChatContacts, loadChatSessions, isReadingDiscussMessage } from "@/lib/chat-storage";
+import { loadChatMessages, pushChatMessage, deleteChatMessage, editChatMessage, loadChatContacts, loadChatSessions, CHAT_MESSAGE_PUSHED_EVENT, CHAT_MESSAGES_DELETED_EVENT } from "@/lib/chat-storage";
 import type { ChatMessage, ChatSession } from "@/lib/chat-storage";
 import { loadCharacters } from "@/lib/character-storage";
 import { parseAIResponse } from "@/lib/rich-message-parser";
@@ -553,17 +553,27 @@ export function ReadingViewer({ book, onBack }: Props) {
         })();
     }, [book.id, chapterIndex, chapters, isPdf]);
 
-    // Load reading-discuss chat messages
+    // Load all chat messages from the session (real-time sync with chat app)
     const refreshChatMessages = useCallback(() => {
         const session = getSession();
         if (!session) { setChatMessages([]); return; }
         const msgs = loadChatMessages(session.id)
-            .filter(isReadingDiscussMessage)
-            .slice(-30);
+            .slice(-50);
         setChatMessages(msgs);
     }, [getSession]);
 
     useEffect(() => { refreshChatMessages(); }, [refreshChatMessages, companionId]);
+
+    // Real-time sync: listen for chat message events from the chat app
+    useEffect(() => {
+        const handler = () => { refreshChatMessages(); };
+        window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, handler);
+        window.addEventListener(CHAT_MESSAGES_DELETED_EVENT, handler);
+        return () => {
+            window.removeEventListener(CHAT_MESSAGE_PUSHED_EVENT, handler);
+            window.removeEventListener(CHAT_MESSAGES_DELETED_EVENT, handler);
+        };
+    }, [refreshChatMessages]);
 
     const [annotationError, setAnnotationError] = useState<string | null>(null);
     const loadExistingAnnotationsForItems = useCallback(async (items: ParagraphRef[]) => {
