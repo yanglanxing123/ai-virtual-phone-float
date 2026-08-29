@@ -372,10 +372,10 @@ export function getTtsVolume(): number {
 }
 
 export function setTtsVolume(volume: number): void {
-    _ttsVolume = Math.min(1, Math.max(0, volume));
+    _ttsVolume = Math.min(2, Math.max(0, volume));
     try { window.localStorage.setItem(TTS_VOLUME_KEY, String(_ttsVolume)); } catch { /* ignore */ }
     if (_activeGain) { try { _activeGain.gain.value = _ttsVolume; } catch { /* ignore */ } }
-    if (_sharedAudio) { try { _sharedAudio.volume = _ttsVolume; } catch { /* ignore */ } }
+    if (_sharedAudio) { try { _sharedAudio.volume = Math.min(1, _ttsVolume); } catch { /* ignore */ } }
 }
 
 function getAudioContext(): AudioContext | null {
@@ -493,7 +493,7 @@ function playAudioBlobElement(blob: Blob): { promise: Promise<void>; abort: () =
     const url = URL.createObjectURL(blob);
     const audio = getSharedAudio();
     audio.muted = false;
-    audio.volume = _ttsVolume;
+    audio.volume = Math.min(1, _ttsVolume);
     audio.src = url;
 
     let settled = false;
