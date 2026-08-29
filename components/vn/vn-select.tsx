@@ -146,6 +146,7 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
         /* ── Character Strip Container ── */
         .vns-strips {
           flex: 1;
+          min-height: 300px;
           display: flex;
           align-items: flex-end;
           justify-content: flex-start;
@@ -155,6 +156,7 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
           overflow-y: hidden;
           scroll-snap-type: x mandatory;
           -webkit-overflow-scrolling: touch;
+          touch-action: pan-x;
           scrollbar-width: none;
         }
         .vns-strips::-webkit-scrollbar { display: none; }
@@ -173,17 +175,17 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
           scroll-snap-align: center;
           border: 1px solid var(--vn-ui-border);
         }
-        /* 交错高度模式：高→中→最高→低→高 */
-        .vns-strip:nth-child(5n+1) { height: 52%; }
-        .vns-strip:nth-child(5n+2) { height: 42%; }
-        .vns-strip:nth-child(5n+3) { height: 62%; }
-        .vns-strip:nth-child(5n+4) { height: 38%; }
-        .vns-strip:nth-child(5n+5) { height: 52%; }
+        /* 交错高度模式：用固定高度避免百分比在flex容器中失效 */
+        .vns-strip:nth-child(5n+1) { height: 260px; }
+        .vns-strip:nth-child(5n+2) { height: 210px; }
+        .vns-strip:nth-child(5n+3) { height: 310px; }
+        .vns-strip:nth-child(5n+4) { height: 190px; }
+        .vns-strip:nth-child(5n+5) { height: 260px; }
         /* 激活态：放大变宽 */
         .vns-strip[data-active="true"] {
           width: min(200px, 48vw);
           max-width: 200px;
-          height: 68%;
+          height: 340px;
           border-color: var(--vn-ui-accent-dim);
           box-shadow: 0 0 24px var(--vn-ui-accent-bg), 0 4px 20px rgba(0,0,0,0.4);
           z-index: 2;
