@@ -37,47 +37,58 @@ import { splitBilingualText } from "@/lib/bilingual-text";
  * 此函数在保存时和渲染时都会调用，确保已存储的旧消息也能被清理。
  */
 function filterSystemContent(text: string): string {
-    if (!text) return "";
-    let cleaned = text;
-    // 移除所有 XML/HTML 风格的标签及其内容（系统级标签）
-    // 使用非贪婪匹配，避免误删过多内容
-    const systemTags = [
-        "action_result", "action", "system", "instruction",
-        "tool_call", "function_call", "tool_result", "memory_write",
-        "tool_use", "memory_request", "function_result",
-    ];
-    for (const tag of systemTags) {
-        // 移除 <tag>...</tag> 格式（含属性）
-        const openRe = new RegExp(`<${tag}[^>]*>`, "gi");
-        const closeRe = new RegExp(`</${tag}>`, "gi");
-        const pairRe = new RegExp(`<${tag}[^>]*>[\\s\\S]*?</${tag}>`, "gi");
-        cleaned = cleaned.replace(pairRe, "");
-        // 清理残留的未配对标签
-        cleaned = cleaned.replace(openRe, "");
-        cleaned = cleaned.replace(closeRe, "");
+    if (!text || typeof text !== "string") return "";
+    try {
+        let cleaned = text;
+        // 移除所有 XML/HTML 风格的标签及其内容（系统级标签）
+        const systemTags = [
+            "action_result", "action", "system", "instruction",
+            "tool_call", "function_call", "tool_result", "memory_write",
+            "tool_use", "memory_request", "function_result",
+        ];
+        for (const tag of systemTags) {
+            try {
+                const pairRe = new RegExp(`<${tag}[^>]*>[\\s\\S]*?</${tag}>`, "gi");
+                cleaned = cleaned.replace(pairRe, "");
+                const openRe = new RegExp(`<${tag}[^>]*>`, "gi");
+                cleaned = cleaned.replace(openRe, "");
+                const closeRe = new RegExp(`</${tag}>`, "gi");
+                cleaned = cleaned.replace(closeRe, "");
+            } catch { /* 跳过单个标签的错误 */ }
+        }
+        // 移除其他常见的系统标签对
+        const otherSystemTags = ["result", "response", "output", "error", "status"];
+        for (const tag of otherSystemTags) {
+            try {
+                const pairRe = new RegExp(`<(${tag})[^>]*>[\\s\\S]*?</\\1>`, "gi");
+                cleaned = cleaned.replace(pairRe, "");
+                const standaloneRe = new RegExp(`</?${tag}[^>]*>`, "gi");
+                cleaned = cleaned.replace(standaloneRe, "");
+            } catch { /* 跳过 */ }
+        }
+        // 移除残留的系统标签
+        try {
+            cleaned = cleaned.replace(/<\/?(?:action_result|action|system|instruction|tool_call|function_call|tool_result|memory_write|tool_use|memory_request|function_result|result|response|output|error|status)[^>]*\/?>/gi, "");
+        } catch { /* 跳过 */ }
+        // 移除系统提示语
+        try {
+            cleaned = cleaned.replace(/以下是系统处理结果[：:].*?(?=\n|$)/gs, "");
+            cleaned = cleaned.replace(/请基于以上结果[，,].*?(?:角色身份|继续|回复)[^。]*。/gs, "");
+            cleaned = cleaned.replace(/不要重复你之前已经[说做]过[^。]*。/g, "");
+            cleaned = cleaned.replace(/不要再次执行相同的动作[^。]*。/g, "");
+            cleaned = cleaned.replace(/请以.*?角色.*?身份.*?(?:回复|继续)[^。]*。/gs, "");
+            cleaned = cleaned.replace(/系统提示[：:].*?(?=\n\n|\n(?=[^\s])|$)/gs, "");
+            cleaned = cleaned.replace(/\[系统\].*?(?=\n\n|\n(?=[^\s])|$)/g, "");
+        } catch { /* 跳过 */ }
+        // 清理多余空行
+        try {
+            cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
+        } catch { /* 跳过 */ }
+        return cleaned;
+    } catch {
+        // 如果整个过滤过程出错，返回原始文本（不崩溃组件）
+        return text || "";
     }
-    // 移除其他常见的系统标签对（使用捕获组确保配对匹配）
-    const otherSystemTags = ["result", "response", "output", "error", "status"];
-    for (const tag of otherSystemTags) {
-        const pairRe = new RegExp(`<(${tag})[^>]*>[\\s\\S]*?</\\1>`, "gi");
-        cleaned = cleaned.replace(pairRe, "");
-        const standaloneRe = new RegExp(`</?${tag}[^>]*>`, "gi");
-        cleaned = cleaned.replace(standaloneRe, "");
-    }
-    // 移除残留的自闭合或未闭合系统标签
-    cleaned = cleaned.replace(/<\/?(?:action_result|action|system|instruction|tool_call|function_call|tool_result|memory_write|tool_use|memory_request|function_result|result|response|output|error|status)[^>]*\/?>/gi, "");
-    // 移除系统提示语（更全面匹配）
-    cleaned = cleaned.replace(/以下是系统处理结果[：:].*?(?=\n|$)/gs, "");
-    cleaned = cleaned.replace(/请基于以上结果[，,].*?(?:角色身份|继续|回复)[^。]*。/gs, "");
-    cleaned = cleaned.replace(/不要重复你之前已经[说做]过[^。]*。/g, "");
-    cleaned = cleaned.replace(/不要再次执行相同的动作[^。]*。/g, "");
-    // 移除其他常见系统指令模式
-    cleaned = cleaned.replace(/请以.*?角色.*?身份.*?(?:回复|继续)[^。]*。/gs, "");
-    cleaned = cleaned.replace(/系统提示[：:].*?(?=\n\n|\n(?=[^\s])|$)/gs, "");
-    cleaned = cleaned.replace(/\[系统\].*?(?=\n\n|\n(?=[^\s])|$)/g, "");
-    // 清理多余空行和前后空白
-    cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
-    return cleaned;
 }
 
 type TxtPageItem =
