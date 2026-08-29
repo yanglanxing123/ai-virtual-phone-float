@@ -1343,8 +1343,40 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     }, [selectStoredMessageWindow]);
 
     const syncMessagesFromStorage = useCallback(() => {
-        applyStoredMessageWindow(loadChatMessages(session.id));
-    }, [applyStoredMessageWindow, session.id]);
+        // 加载当前会话的消息
+        let allMsgs = loadChatMessages(session.id);
+
+        // 同时合并来自其他会话（如阅读APP创建的会话）的消息
+        // 只要 contactId 相同，就视为同一联系人的消息，确保双向同步
+        if (session.contactId && !session.isGroup) {
+            try {
+                const sessions = loadChatSessions();
+                const otherSessions = sessions.filter(s =>
+                    s.id !== session.id &&
+                    !s.isGroup &&
+                    s.contactId === session.contactId
+                );
+                for (const otherSession of otherSessions) {
+                    const otherMsgs = loadChatMessages(otherSession.id);
+                    allMsgs = [...allMsgs, ...otherMsgs];
+                }
+                // 去重并按时间排序
+                if (otherSessions.length > 0) {
+                    const seen = new Set<string>();
+                    allMsgs = allMsgs.filter(m => {
+                        if (seen.has(m.id)) return false;
+                        seen.add(m.id);
+                        return true;
+                    });
+                    allMsgs.sort((a, b) => compareChatMessages(a, b));
+                }
+            } catch {
+                // 静默处理
+            }
+        }
+
+        applyStoredMessageWindow(allMsgs);
+    }, [applyStoredMessageWindow, session.id, session.contactId, session.isGroup]);
 
     const closeContextMenu = () => {
         setActiveMessageId(null);
@@ -1424,8 +1456,18 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             try {
                 const detail = (e as CustomEvent<{ message?: ChatMessage }>).detail;
                 if (!detail?.message) return;
+                // 如果消息属于当前会话，直接刷新
                 if (detail.message.sessionId === session.id) {
                     syncMessagesFromStorage();
+                }
+                // 如果消息来自阅读APP且当前会话的contactId匹配，也刷新
+                // 这确保即使session ID不同（如阅读APP新建了会话），也能同步
+                if (detail.message.origin === "reading_discuss") {
+                    const sessions = loadChatSessions();
+                    const msgSession = sessions.find(s => s.id === detail.message!.sessionId);
+                    if (msgSession && msgSession.contactId === session.contactId) {
+                        syncMessagesFromStorage();
+                    }
                 }
             } catch {
                 // 静默处理，避免事件监听器崩溃导致整个应用崩溃
@@ -1433,7 +1475,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         };
         window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, onMessagePushed);
         return () => window.removeEventListener(CHAT_MESSAGE_PUSHED_EVENT, onMessagePushed);
-    }, [session.id, syncMessagesFromStorage]);
+    }, [session.id, session.contactId, syncMessagesFromStorage]);
 
     // --- Follow-up: listen for background service events ---
     useEffect(() => {
@@ -4778,10 +4820,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
     // ── Voice call message grouping ──────────────────
     // Deduplicate messages (staggered timeouts + concurrent reloads can cause duplicates)
+    // 注意：不再过滤掉阅读APP的消息（isReadingDiscussMessage），它们需要在聊天APP中可见
     const dedupedMessages = useMemo(() => {
         const seen = new Set<string>();
         return displayMessages.filter(m => {
-            if (isReadingDiscussMessage(m)) return false;
             if (seen.has(m.id)) return false;
             seen.add(m.id);
             return true;
