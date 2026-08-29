@@ -7802,7 +7802,7 @@
 
 /* 大头像时增加头部高度，避免遮挡消息 */
 .chat-room-wrapper:has(.lt-status-bar-permanent) {
-  --page-header-content-height: 108px;
+  --page-header-content-height: 84px;
 }
 
 .lt-status-bar-permanent {
@@ -7826,11 +7826,11 @@
   min-width: 0;
 }
 
-/* 单个头像（放大三倍：34px → 96px） */
+/* 单个头像（与圆形组件收起尺寸一致：72px） */
 .lt-header-avatar {
   flex-shrink: 0;
-  width: 96px;
-  height: 96px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   overflow: hidden;
   border: 3px solid rgba(255, 107, 138, 0.4);
@@ -7851,7 +7851,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 600;
   color: #fff;
   background: linear-gradient(135deg, #FF6B8A 0%, #FF8FA8 100%);
