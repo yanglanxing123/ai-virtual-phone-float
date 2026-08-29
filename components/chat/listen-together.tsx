@@ -257,8 +257,8 @@ const ECGHeartbeat = memo(function ECGHeartbeat({ beating = true }: { beating?: 
     return (
         <div className={`lt-heartbeat-wrap ${beating ? "lt-heartbeat-active" : "lt-heartbeat-idle"}`}>
             <svg
-                width="80"
-                height="44"
+                width="56"
+                height="32"
                 viewBox="0 0 56 32"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -275,7 +275,7 @@ const ECGHeartbeat = memo(function ECGHeartbeat({ beating = true }: { beating?: 
                 />
             </svg>
             <Heart
-                size={32}
+                size={20}
                 fill="var(--lt-heart-color, #FF6B8A)"
                 color="var(--lt-heart-color, #FF6B8A)"
                 className="lt-heart-pulse"
@@ -317,12 +317,15 @@ export const ListenTogetherStatusBar = memo(function ListenTogetherStatusBar({
     return (
         <div className="lt-status-bar lt-status-bar-permanent">
             <div className="lt-header-avatars">
-                <div className="lt-header-avatar lt-header-avatar-user">
-                    {userAvatar ? (
-                        <img src={userAvatar} alt={userNickname} className="lt-header-avatar-img" />
-                    ) : (
-                        <span className="lt-header-avatar-fallback">{userNickname[0] || "?"}</span>
-                    )}
+                <div className="lt-header-avatar-block">
+                    <div className="lt-header-avatar lt-header-avatar-user">
+                        {userAvatar ? (
+                            <img src={userAvatar} alt={userNickname} className="lt-header-avatar-img" />
+                        ) : (
+                            <span className="lt-header-avatar-fallback">{userNickname[0] || "?"}</span>
+                        )}
+                    </div>
+                    <span className="lt-header-avatar-name">{userNickname}</span>
                 </div>
                 <div className="lt-header-center">
                     <ECGHeartbeat beating={isPlaying} />
@@ -330,12 +333,15 @@ export const ListenTogetherStatusBar = memo(function ListenTogetherStatusBar({
                         <span className="lt-header-timer">{timeStr}</span>
                     )}
                 </div>
-                <div className="lt-header-avatar lt-header-avatar-char">
-                    {charAvatar ? (
-                        <img src={charAvatar} alt={charName} className="lt-header-avatar-img" />
-                    ) : (
-                        <span className="lt-header-avatar-fallback">{charName[0] || "?"}</span>
-                    )}
+                <div className="lt-header-avatar-block">
+                    <div className="lt-header-avatar lt-header-avatar-char">
+                        {charAvatar ? (
+                            <img src={charAvatar} alt={charName} className="lt-header-avatar-img" />
+                        ) : (
+                            <span className="lt-header-avatar-fallback">{charName[0] || "?"}</span>
+                        )}
+                    </div>
+                    <span className="lt-header-avatar-name">{charName}</span>
                 </div>
             </div>
         </div>
