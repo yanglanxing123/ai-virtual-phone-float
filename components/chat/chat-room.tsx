@@ -78,7 +78,6 @@ import {
     isMusicSystemMessage,
     useListenTogetherTimer,
     pushMusicSystemMessage,
-    initialListenTogetherState,
     type ListenTogetherTrack,
 } from "./listen-together";
 import {
@@ -1123,6 +1122,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const ltPrevTrackRef = useRef<ListenTogetherTrack | null>(null);
     const ltElapsed = useListenTogetherTimer(ltActive, ltIsPlaying, ltStartTime, ltPausedDuration);
 
+    // syncMessagesFromStorage 在后面才声明，用 ref 在回调中安全引用
+    const syncMessagesRef = useRef<() => void>(() => {});
+
     // 一起听：启动
     const startListenTogether = useCallback(() => {
         const bridge = getMusicControlBridge();
@@ -1135,14 +1137,14 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         let currentTrack: ListenTogetherTrack | null = null;
         let isPlaying = false;
         try {
-            const state = bridge.getCurrentState?.() || bridge.getState?.();
+            const state = bridge.getState();
             if (state?.currentTrack) {
                 const t = state.currentTrack;
                 currentTrack = {
-                    title: t.title || t.name || "未知歌曲",
-                    artist: t.artist || t.artists,
-                    coverUrl: t.coverUrl || t.cover,
-                    source: t.source || "网易云导入",
+                    title: t.title || "未知歌曲",
+                    artist: t.artist,
+                    coverUrl: t.coverUrl,
+                    source: "网易云导入",
                 };
                 isPlaying = !!state.isPlaying;
             }
@@ -1164,8 +1166,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
         // 插入"播放歌曲"系统消息
         pushMusicSystemMessage(session.id, "play", character?.name || "对方", currentTrack);
-        syncMessagesFromStorage();
-    }, [session.id, character?.name, syncMessagesFromStorage]);
+        syncMessagesRef.current();
+    }, [session.id, character?.name]);
 
     // 一起听：关闭
     const closeListenTogether = useCallback(() => {
@@ -1186,15 +1188,15 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         // 轮询检查播放状态（本地模拟，不需要真实联机API）
         const pollInterval = setInterval(() => {
             try {
-                const state = bridge.getCurrentState?.() || bridge.getState?.();
+                const state = bridge.getState();
                 if (!state) return;
 
                 const t = state.currentTrack;
                 const newTrack: ListenTogetherTrack | null = t ? {
-                    title: t.title || t.name || "未知歌曲",
-                    artist: t.artist || t.artists,
-                    coverUrl: t.coverUrl || t.cover,
-                    source: t.source || "网易云导入",
+                    title: t.title || "未知歌曲",
+                    artist: t.artist,
+                    coverUrl: t.coverUrl,
+                    source: "网易云导入",
                 } : null;
 
                 const newIsPlaying = !!state.isPlaying;
@@ -1202,7 +1204,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 // 检测切歌
                 if (newTrack && ltPrevTrackRef.current && newTrack.title !== ltPrevTrackRef.current.title) {
                     pushMusicSystemMessage(session.id, "play", character?.name || "对方", newTrack);
-                    syncMessagesFromStorage();
+                    syncMessagesRef.current();
                     ltPrevTrackRef.current = newTrack;
                 } else if (newTrack && !ltPrevTrackRef.current) {
                     ltPrevTrackRef.current = newTrack;
@@ -1214,7 +1216,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     if (newIsPlaying && ltCurrentTrack) {
                         // 从暂停恢复
                         pushMusicSystemMessage(session.id, "resume", character?.name || "对方", ltCurrentTrack);
-                        syncMessagesFromStorage();
+                        syncMessagesRef.current();
                     }
                 }
 
@@ -1232,7 +1234,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         }, 2000);
 
         return () => clearInterval(pollInterval);
-    }, [ltActive, ltIsPlaying, ltCurrentTrack, session.id, character?.name, syncMessagesFromStorage, closeListenTogether]);
+    }, [ltActive, ltIsPlaying, ltCurrentTrack, session.id, character?.name, closeListenTogether]);
 
     // Rich media input modals
     const [richModal, setRichModal] = useState<RichModalKind | null>(null);
@@ -1524,6 +1526,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
         applyStoredMessageWindow(allMsgs);
     }, [applyStoredMessageWindow, session.id, session.contactId, session.isGroup]);
+
+    // 更新 ref，让 listen-together 回调能安全引用此函数
+    useEffect(() => {
+        syncMessagesRef.current = syncMessagesFromStorage;
+    }, [syncMessagesFromStorage]);
 
     const closeContextMenu = () => {
         setActiveMessageId(null);
@@ -5370,7 +5377,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 <ListenTogetherStatusBar
                     userNickname={userIdentity?.name || "我"}
                     charName={character?.name || "对方"}
-                    charAvatar={character?.avatarUrl}
+                    charAvatar={character?.avatar || undefined}
                     elapsedSeconds={ltElapsed}
                     currentTrack={ltCurrentTrack}
                     isPlaying={ltIsPlaying}
