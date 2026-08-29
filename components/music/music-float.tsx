@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { useMusicControlsOptional } from "@/lib/music-context";
+import { getMusicControlBridge } from "@/lib/music-control-bridge";
 
 const DRAG_START_THRESHOLD = 6;
 const SWIPE_DISMISS_EDGE_X = 4;
@@ -107,7 +108,7 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
         if (!player) return;
         // 立即获取一次
         try {
-            const bridge = (window as any).__musicControlBridge;
+            const bridge = getMusicControlBridge();
             if (bridge?.getState) {
                 const s = bridge.getState();
                 if (s?.currentTime != null) {
@@ -118,7 +119,7 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
 
         const interval = setInterval(() => {
             try {
-                const bridge = (window as any).__musicControlBridge;
+                const bridge = getMusicControlBridge();
                 if (bridge?.getState) {
                     const s = bridge.getState();
                     if (s?.currentTime != null) {
