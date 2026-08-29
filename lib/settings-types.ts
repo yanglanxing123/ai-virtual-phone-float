@@ -223,6 +223,7 @@ export const CONTENT_APP_LABELS: Record<ContentAppId, string> = {
     group_chat: "群聊",
     vn: "漫卷",
     adventure: "冒险",
+    raid: "攻略",
 };
 
 // Binding slot — config selections for a given scope
