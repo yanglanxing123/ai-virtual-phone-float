@@ -7800,6 +7800,11 @@
    聊天顶部常驻双头像状态栏（新设计）
    ═══════════════════════════════════════ */
 
+/* 大头像时增加头部高度，避免遮挡消息 */
+.chat-room-wrapper:has(.lt-status-bar-permanent) {
+  --page-header-content-height: 108px;
+}
+
 .lt-status-bar-permanent {
   flex: 1;
   display: flex;
@@ -7807,27 +7812,29 @@
   justify-content: center;
   gap: 6px;
   min-width: 0;
-  padding: 0 4px;
+  padding: 4px 4px;
+  background: transparent !important;
+  border-bottom: none !important;
 }
 
 /* 头像行 */
 .lt-header-avatars {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex-shrink: 1;
   min-width: 0;
 }
 
-/* 单个头像 */
+/* 单个头像（放大三倍：34px → 96px） */
 .lt-header-avatar {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   overflow: hidden;
-  border: 2px solid rgba(255, 107, 138, 0.4);
-  box-shadow: 0 2px 8px rgba(255, 107, 138, 0.15);
+  border: 3px solid rgba(255, 107, 138, 0.4);
+  box-shadow: 0 4px 16px rgba(255, 107, 138, 0.2);
 }
 
 .lt-header-avatar-img {
@@ -7844,7 +7851,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 36px;
   font-weight: 600;
   color: #fff;
   background: linear-gradient(135deg, #FF6B8A 0%, #FF8FA8 100%);
@@ -7856,40 +7863,19 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0px;
+  gap: 2px;
   min-width: 0;
-  padding: 0 2px;
+  padding: 0 4px;
 }
 
 .lt-header-timer {
-  font-size: calc(10px * var(--app-text-scale, 1));
+  font-size: calc(13px * var(--app-text-scale, 1));
   color: #FF6B8A;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 120px;
-  margin-top: -2px;
-  text-shadow: 0 0 4px rgba(255, 107, 138, 0.2);
-}
-
-/* 关闭按钮 */
-.lt-status-bar-permanent .lt-close-btn {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--c-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.lt-status-bar-permanent .lt-close-btn:active {
-  background: rgba(255, 107, 138, 0.3);
+  max-width: 140px;
+  text-shadow: 0 0 6px rgba(255, 107, 138, 0.25);
 }
 
