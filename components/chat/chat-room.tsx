@@ -1421,10 +1421,14 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     // --- Listen for messages pushed from other apps (e.g. Reading app) ---
     useEffect(() => {
         const onMessagePushed = (e: Event) => {
-            const detail = (e as CustomEvent<{ message?: ChatMessage }>).detail;
-            if (!detail?.message) return;
-            if (detail.message.sessionId === session.id) {
-                syncMessagesFromStorage();
+            try {
+                const detail = (e as CustomEvent<{ message?: ChatMessage }>).detail;
+                if (!detail?.message) return;
+                if (detail.message.sessionId === session.id) {
+                    syncMessagesFromStorage();
+                }
+            } catch {
+                // 静默处理，避免事件监听器崩溃导致整个应用崩溃
             }
         };
         window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, onMessagePushed);
