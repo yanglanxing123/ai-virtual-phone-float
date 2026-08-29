@@ -38,13 +38,13 @@ type RaidStoryProps = {
 
 export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate }: RaidStoryProps) {
     const [dungeon, setDungeon] = useState<RaidDungeon>(initialDungeon);
-    // 获取用户昵称作为女主名字
-    const playerName = useMemo(() => {
+    // 获取用户昵称作为女主名字 — 使用 useState + useEffect 避免 SSR 水合不匹配
+    const [playerName, setPlayerName] = useState("主角");
+    useEffect(() => {
         try {
             const identity = resolveUserIdentity(undefined, "raid");
-            if (identity?.name) return identity.name;
+            if (identity?.name) setPlayerName(identity.name);
         } catch { /* 静默 */ }
-        return "主角";
     }, []);
     const [loading, setLoading] = useState(false);
     const [showSaves, setShowSaves] = useState(false);
