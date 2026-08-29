@@ -7868,13 +7868,15 @@
 
 /* 头像下方名字 */
 .lt-header-avatar-name {
-  font-size: calc(10px * var(--app-text-scale, 1));
-  color: var(--c-text-secondary, rgba(255, 255, 255, 0.65));
+  font-size: calc(11px * var(--app-text-scale, 1));
+  color: var(--c-text, #333);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 60px;
+  max-width: 70px;
   text-align: center;
+  font-weight: 500;
+  opacity: 0.75;
 }
 
 /* 中间区域：爱心 + 计时器 */
