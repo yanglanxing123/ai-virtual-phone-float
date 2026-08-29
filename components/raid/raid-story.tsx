@@ -555,6 +555,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                     dungeon={dungeon}
                     loading={loading}
                     portraitLoading={portraitLoading}
+                    playerName={playerName}
                     onChoice={handleChoice}
                     onBack={onBack}
                     guidance={guidance}
@@ -751,6 +752,7 @@ function NovelChatLog({
     return (
         <div className="raid-chat-log">
             {dungeon.storyBeats.map((beat, idx) => {
+                const prevBeat = idx > 0 ? dungeon.storyBeats[idx - 1] : null;
                 // 从选择历史中查找当前 beat 对应的用户选择
                 const choiceRecord = dungeon.choiceHistory?.find((h) => h.beatId === beat.id);
                 const playerChoice = choiceRecord?.choiceText || undefined;
@@ -974,6 +976,7 @@ type PortraitModeProps = {
     dungeon: RaidDungeon;
     loading: boolean;
     portraitLoading: boolean;
+    playerName: string;
     onChoice: (text: string, guidance?: string) => void;
     onBack: () => void;
     guidance: string;
@@ -1002,7 +1005,7 @@ type PortraitModeProps = {
 
 function PortraitMode(props: PortraitModeProps) {
     const {
-        beat, dungeon, loading, portraitLoading, onChoice, onBack,
+        beat, dungeon, loading, portraitLoading, playerName, onChoice, onBack,
         guidance, onGuidanceChange, onAiFill, fillingGuidance,
         showEditPanel, onToggleEditPanel, editingChoiceId, onEditChoice,
         onEditingChoiceTextChange, onConfirmEdit, onCancelEdit,
@@ -1350,7 +1353,7 @@ function PortraitMode(props: PortraitModeProps) {
 
             {/* 剧情回顾面板 */}
             {bottomPanel === "log" && (
-                <StoryLogPanel dungeon={dungeon} onClose={() => setBottomPanel("none")} />
+                <StoryLogPanel dungeon={dungeon} playerName={playerName} onClose={() => setBottomPanel("none")} />
             )}
 
             {/* 音量面板 */}
@@ -1373,6 +1376,7 @@ function PortraitMode(props: PortraitModeProps) {
 
 type PanelProps = {
     dungeon: RaidDungeon;
+    playerName?: string;
     onClose: () => void;
 };
 
@@ -1481,7 +1485,7 @@ function AttributesPanel({ dungeon, onClose }: PanelProps) {
 
 // ── 剧情回顾面板（参考图2） ──
 
-function StoryLogPanel({ dungeon, onClose }: PanelProps) {
+function StoryLogPanel({ dungeon, playerName, onClose }: PanelProps) {
     const allSegments = useMemo(() => {
         const result: Array<{
             beatIdx: number;
@@ -1532,7 +1536,7 @@ function StoryLogPanel({ dungeon, onClose }: PanelProps) {
                         ) : seg.type === "choice" ? (
                             <p className="raid-portrait-log-choice">
                                 <span className="raid-portrait-log-choice-icon">❥</span>
-                                <span className="raid-portrait-log-choice-label">{playerName}的选择：</span>
+                                <span className="raid-portrait-log-choice-label">{playerName || "主角"}的选择：</span>
                                 <span className="raid-portrait-log-choice-text">{seg.text}</span>
                             </p>
                         ) : (
