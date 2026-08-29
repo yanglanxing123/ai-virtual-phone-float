@@ -216,6 +216,12 @@
 .minimal-list-item.chat-pinned {
   background: color-mix(in srgb, var(--c-action-blue, #246bfd) 4.5%, var(--c-page-body-bg));
 }
+.minimal-list-item.chat-special {
+  background: color-mix(in srgb, #f0a020 6%, var(--c-page-body-bg));
+}
+.minimal-list-item.chat-special.chat-pinned {
+  background: color-mix(in srgb, #f0a020 6%, color-mix(in srgb, var(--c-action-blue, #246bfd) 4.5%, var(--c-page-body-bg)));
+}
 .minimal-list-item:active {
   background: color-mix(in srgb, var(--c-icon) 8%, transparent);
   transform: scale(0.98);
@@ -595,6 +601,33 @@
 
 .chat-tab-active {
   color: var(--c-icon-active);
+}
+
+/* ── Tab badge (unread count on Messages tab) ── */
+.chat-tab-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-tab-badge {
+  position: absolute;
+  top: -7px;
+  right: -14px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: calc(9px*var(--app-text-scale,1));
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  border: 1px solid rgba(255,255,255,0.85);
 }
 
 /* ── Typing indicator (below header title) ── */
@@ -2596,7 +2629,7 @@
 .chat-input-textarea {
   border: none;
   outline: none;
-  font-size: calc(14.4px*var(--app-text-scale,1));
+  font-size: calc(16px*var(--app-text-scale,1));
   background: transparent;
   resize: none;
   line-height: 1.4;

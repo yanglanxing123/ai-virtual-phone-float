@@ -1086,6 +1086,7 @@
   :root {
     --phone-screen-width: 100vw;
     --phone-screen-height: 100lvh;
+    --phone-screen-height: 100dvh;
   }
 
   html,
@@ -1093,12 +1094,14 @@
     overflow: hidden;
     width: 100%;
     height: 100lvh;
+    height: 100dvh;
     background: var(--c-page-body-bg);
   }
 
   .app-root {
     width: 100vw;
     height: 100lvh;
+    height: 100dvh;
     padding: 0;
     display: flex;
     justify-content: flex-start;
