@@ -509,10 +509,10 @@ export function ReadingViewer({ book, onBack }: Props) {
             id: `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             contactId: companionId,
             isGroup: false,
-            createdAt: Date.now(),
-            lastMessageAt: Date.now(),
+            updatedAt: new Date().toISOString(),
+            isPinned: false,
             unreadCount: 0,
-            title: contact?.name || "阅读讨论",
+            alias: contact?.nickname || "阅读讨论",
         };
         saveChatSessions([...sessions, newSession]);
         return newSession;
@@ -656,8 +656,8 @@ export function ReadingViewer({ book, onBack }: Props) {
                         return true;
                     });
                     msgs.sort((a, b) => {
-                        const ta = a.createdAt || 0;
-                        const tb = b.createdAt || 0;
+                        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
                         if (ta !== tb) return ta - tb;
                         return a.id.localeCompare(b.id);
                     });
