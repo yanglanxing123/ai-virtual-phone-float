@@ -7,6 +7,7 @@ import { getAudioBlob, markTrackPlayed } from "./music-storage";
 import { findPlayableMatch, getNeteaseLyrics, getNeteasePlayUrl, getNeteasePlayInfo, getNeteaseSongDetail } from "./music-service";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { registerMusicControlBridge } from "./music-control-bridge";
+import { setBridgeCallFlag } from "@/components/chat/listen-together";
 
 // ── Types ──
 
@@ -430,8 +431,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
                 queue,
                 volume,
             }),
-            playTrack: playResolvedTrack,
-            playByQuery,
+            playTrack: (track) => { setBridgeCallFlag(); return playResolvedTrack(track); },
+            playByQuery: (query, artist) => { setBridgeCallFlag(); return playByQuery(query, artist); },
             addToQueue,
             pause,
             resume,
