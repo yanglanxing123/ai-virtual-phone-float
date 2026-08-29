@@ -7429,3 +7429,176 @@
   padding-top: 4px;
 }
 
+/* ── 全局一起听浮窗（跨App持久显示） ── */
+
+.lt-overlay {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 500px;
+  z-index: 9999;
+  pointer-events: auto;
+  background: var(--c-page-body-bg, #fff);
+  box-shadow: 0 -2px 20px rgba(0,0,0,0.12);
+  border-radius: 16px 16px 0 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.lt-overlay-expanded {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.lt-overlay-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  position: relative;
+}
+
+.lt-overlay-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--c-chat-bg, #f5f5f5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lt-overlay-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lt-overlay-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lt-overlay-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lt-overlay-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-text, #000);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lt-overlay-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--c-text-2nd, #999);
+}
+
+.lt-overlay-artist {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.lt-overlay-timer {
+  color: #FF6B8A;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.lt-overlay-status {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.lt-overlay-status.playing {
+  color: #34c759;
+}
+
+.lt-overlay-status.paused {
+  color: var(--c-text-3rd, #ccc);
+}
+
+.lt-overlay-lyric-current {
+  font-size: 13px;
+  color: var(--c-text, #000);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.lt-overlay-lyric-next {
+  font-size: 12px;
+  color: var(--c-text-3rd, #ccc);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lt-overlay-close,
+.lt-overlay-expand {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--c-text-2nd, #999);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.lt-overlay-close:hover,
+.lt-overlay-expand:hover {
+  background: var(--c-chat-bg, #f0f0f0);
+}
+
+.lt-overlay-lyrics-full {
+  padding: 8px 16px 16px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.lt-overlay-lyric-line {
+  font-size: 13px;
+  color: var(--c-text-3rd, #ccc);
+  padding: 4px 0;
+  text-align: center;
+  transition: all 0.3s;
+}
+
+.lt-overlay-lyric-line.active {
+  color: #FF6B8A;
+  font-size: 15px;
+  font-weight: 600;
+  transform: scale(1.05);
+}
+
+.lt-floating-card-duration {
+  color: #FF6B8A;
+  font-weight: 500;
+}
+
