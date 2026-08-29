@@ -42,9 +42,10 @@ import { getStatusRegionConfig, saveStatusRegionConfig, presetSupportsStatusRegi
 import { downloadFile } from "@/lib/download-utils";
 import { getSchemes, saveScheme, deleteScheme, type CSSScheme } from "@/lib/css-scheme-storage";
 import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, Star, BellOff, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, Save, FolderOpen, type LucideIcon } from "lucide-react";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, Star, BellOff, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, Save, FolderOpen, Bell, type LucideIcon } from "lucide-react";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
+import { ChatSoundSettings } from "@/components/chat/chat-sound-settings";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { CHAT_SESSION_CSS_EXAMPLE } from "@/lib/css-examples";
 import { Toggle, Input } from "@/components/ui/form";
@@ -1083,6 +1084,18 @@ export function ChatSettingsPanel({
                             </div>
                         </button>
                     </>
+                </div>
+
+                {/* 提示音设置：音量调节 + 本地提示音绑定 */}
+                <div className="menu-group">
+                    <div className="menu-item" style={{ borderBottom: "none", paddingBottom: 0 }}>
+                        <ChatInfoIcon icon={Bell} color="#007aff" />
+                        <div className="menu-label-group">
+                            <span className="menu-label">提示音设置</span>
+                            <span className="menu-desc">调节音量、绑定本地提示音，区分普通与特别关心</span>
+                        </div>
+                    </div>
+                    <ChatSoundSettings />
                 </div>
 
                 {/* Backgrounds & UI */}
