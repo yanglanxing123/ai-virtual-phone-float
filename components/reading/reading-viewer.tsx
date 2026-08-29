@@ -566,7 +566,9 @@ export function ReadingViewer({ book, onBack }: Props) {
 
     // Real-time sync: listen for chat message events from the chat app
     useEffect(() => {
-        const handler = () => { refreshChatMessages(); };
+        const handler = () => {
+            try { refreshChatMessages(); } catch { /* 静默处理 */ }
+        };
         window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, handler);
         window.addEventListener(CHAT_MESSAGES_DELETED_EVENT, handler);
         return () => {
