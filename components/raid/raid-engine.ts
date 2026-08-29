@@ -556,8 +556,8 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
             ? `【玩家对剧情方向的指导（请参考但不必完全遵从）】\n${playerGuidance.trim()}`
             : "",
         "生成要求：",
-        "1. 根据玩家选择推进剧情：narration 写 800-1500 字第三人称旁白（场景、心理、氛围、细节描写，要求有画面感和沉浸感）；dialogue 写 4-10 句对话，每句含 speaker（NPC 名）与 text，可带 emotion。narration 和 dialogue 合计必须超过 2000 个中文字符，确保剧情充分展开后再给出选项。",
-        `2. choices 生成 2-4 个选项，每个含 text（选项内容）、hint（后果提示，如"勇气+5"或"风险：可能激怒对方"）、riskLevel、favorDelta（选择该选项预估的好感度变化，正负整数）。风险分布：${riskGuide}`,
+        "1. 根据玩家选择推进剧情：narration 写 1000-2000 字第三人称旁白（场景、心理、氛围、细节描写，要求有画面感和沉浸感）；dialogue 写 6-12 句对话，每句含 speaker（NPC 名）与 text，可带 emotion。narration 和 dialogue 合计必须超过 2000 个中文字符，确保剧情充分展开后再给出选项。这是硬性要求，低于2000字将导致剧情体验不完整。",
+        `2. choices 必须生成 3 个选项，每个含 text（选项内容15字以内）、hint（后果提示，如"勇气+5"或"风险：可能激怒对方"）、riskLevel、favorDelta（选择该选项预估的好感度变化，正负整数）。风险分布：${riskGuide}`,
         `3. favorChanges 是本次剧情/玩家选择带来的好感度变化，键为 NPC 的 id（见上方阵容表），值为整数。重要限制：每个章节好感度正向增益总和最多 20 点，当前本章剩余可加 ${favorGainRemaining} 点，请勿超出。负数不受限制。开局第一章且玩家无选择时，favorChanges 可为空对象 {}。`,
         `4. 好感度变化会被难度系数 ${favorMod} 调整（正向收益 ×${favorMod}，负向不变）。`,
         rule5,
@@ -656,32 +656,20 @@ function buildStoryBeat(
     // forceClimax: 用户主动选择触发结局 → 强制高潮
     const isClimax = !isDeath && (forceClimax || parsed.isClimax === true);
 
-    // 死亡 / 高潮结局无选项；正常推进时构建选项并兜底至 2 个
+    // 死亡 / 高潮结局无选项；正常推进时构建选项并兜底至 3 个
     let choices: StoryChoice[] = [];
     if (!isDeath && !isClimax) {
         choices = buildChoices(parsed.choices, beatId);
-        // 强制 2000 字符门槛：如果 narration + dialogue 合计不足 2000 个中文字符，
-        // 则用单一"继续"选项替代，引导 AI 生成更多剧情
-        const dialogueText = dialogue.map(d => d.text).join("");
-        const totalChars = narration.length + dialogueText.length;
-        if (totalChars < 2000) {
-            choices = [{
-                id: `${beatId}_continue`,
-                text: "继续",
-                hint: "剧情继续展开",
-                riskLevel: "safe",
-                favorDelta: 0,
-            }];
-        } else if (choices.length < 2) {
-            const fallbacks: StoryChoice[] = [
-                { id: `${beatId}_safe`, text: "谨慎应对", hint: "稳妥推进", riskLevel: "safe", favorDelta: 5 },
-                { id: `${beatId}_risky`, text: "主动出击", hint: "可能改变局势", riskLevel: "risky", favorDelta: -3 },
-            ];
-            let fi = 0;
-            while (choices.length < 2 && fi < fallbacks.length) {
-                choices.push(fallbacks[fi]);
-                fi++;
-            }
+        // 兜底：如果 AI 没返回足够选项，用预设选项补齐至 3 个
+        const fallbacks: StoryChoice[] = [
+            { id: `${beatId}_safe`, text: "谨慎应对，以退为进", hint: "稳妥推进，风险较低", riskLevel: "safe", favorDelta: 5 },
+            { id: `${beatId}_risky`, text: "主动出击，把握机会", hint: "可能改变局势", riskLevel: "risky", favorDelta: -3 },
+            { id: `${beatId}_bold`, text: "大胆表白心迹", hint: "高风险高回报", riskLevel: "deadly", favorDelta: 10 },
+        ];
+        let fi = 0;
+        while (choices.length < 3 && fi < fallbacks.length) {
+            choices.push(fallbacks[fi]);
+            fi++;
         }
     }
 

@@ -1197,7 +1197,7 @@ function PortraitMode(props: PortraitModeProps) {
                     </>
                 )}
 
-                {/* 选项区：只在最后一段时显示 */}
+                {/* 选项区：只在最后一段时显示 — 选项 + 指导输入 + 继续按钮 */}
                 {!isDead && !isCleared && isLastSegment && (
                     <div className="raid-portrait-choices">
                         {loading ? (
@@ -1225,15 +1225,44 @@ function PortraitMode(props: PortraitModeProps) {
                                 </div>
                             </div>
                         ) : (
-                            beat.choices.map((choice) => (
+                            <>
+                                {/* 剧情选项 */}
+                                {beat.choices.map((choice) => (
+                                    <button
+                                        key={choice.id}
+                                        className="raid-portrait-choice-btn raid-portrait-choice-btn--compact"
+                                        onClick={() => onChoice(choice.text, guidance)}
+                                    >
+                                        <span className="raid-portrait-choice-btn-text">{choice.text}</span>
+                                        {choice.hint && (
+                                            <span className="raid-portrait-choice-btn-hint">{choice.hint}</span>
+                                        )}
+                                    </button>
+                                ))}
+                                {/* 指导输入 + 继续按钮 */}
+                                <div className="raid-portrait-guidance-row">
+                                    <textarea
+                                        placeholder="剧情方向指导（选填）"
+                                        value={guidance}
+                                        onChange={(e) => onGuidanceChange(e.target.value)}
+                                        rows={1}
+                                        className="raid-portrait-guidance-input"
+                                    />
+                                    <button
+                                        className="raid-btn raid-btn--ghost raid-btn-sm raid-portrait-ai-fill-btn"
+                                        onClick={onAiFill}
+                                        disabled={fillingGuidance}
+                                    >
+                                        {fillingGuidance ? "填充中…" : "AI 填入"}
+                                    </button>
+                                </div>
                                 <button
-                                    key={choice.id}
-                                    className="raid-portrait-choice-btn raid-portrait-choice-btn--compact"
-                                    onClick={() => onChoice(choice.text, guidance)}
+                                    className="raid-portrait-choice-btn raid-portrait-choice-btn--compact raid-portrait-choice-btn--continue"
+                                    onClick={() => onChoice("继续推进剧情", guidance)}
                                 >
-                                    {choice.text}
+                                    继续
                                 </button>
-                            ))
+                            </>
                         )}
                     </div>
                 )}
@@ -1328,32 +1357,7 @@ function PortraitMode(props: PortraitModeProps) {
                 />
             )}
 
-            {/* 编辑面板（浮动，不影响布局） */}
-            {!isDead && !isCleared && isLastSegment && showEditPanel && (
-                <div className="raid-portrait-edit-panel raid-portrait-edit-panel--floating">
-                    <textarea
-                        placeholder="剧情方向指导（选填）"
-                        value={guidance}
-                        onChange={(e) => onGuidanceChange(e.target.value)}
-                        rows={1}
-                    />
-                    <div className="raid-portrait-edit-actions">
-                        <button
-                            className="raid-btn raid-btn--ghost raid-btn-sm"
-                            onClick={onAiFill}
-                            disabled={fillingGuidance}
-                        >
-                            {fillingGuidance ? "填充中…" : "AI 填入"}
-                        </button>
-                        <button
-                            className="raid-btn raid-btn--ghost raid-btn-sm"
-                            onClick={onToggleEditPanel}
-                        >
-                            关闭
-                        </button>
-                    </div>
-                </div>
-            )}
+            {/* 编辑面板已集成到选项区，不再单独显示 */}
         </div>
     );
 }
