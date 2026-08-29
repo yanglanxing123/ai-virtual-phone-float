@@ -72,6 +72,16 @@ import { scrollElementWithinContainer } from "@/lib/dom-scroll";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
 import { ChatScreenEffectOverlay, type ActiveScreenEffect } from "./chat-screen-effect";
 import {
+    ListenTogetherStatusBar,
+    ListenTogetherFloatingCard,
+    MusicSystemMessage,
+    isMusicSystemMessage,
+    useListenTogetherTimer,
+    pushMusicSystemMessage,
+    initialListenTogetherState,
+    type ListenTogetherTrack,
+} from "./listen-together";
+import {
     formatChatDiceResultMessage,
     isDiceOnlyMessage,
     matchChatScreenEffectRule,
@@ -618,6 +628,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     onOpenCustomPlusAction: (action: RegisteredCustomAppChatPlusAction) => void;
     onStartVideoCall: () => void;
     onStartVoiceCall: () => void;
+    onStartListenTogether: () => void;
     onSendText: (text: string) => boolean;
     onStopGeneration: () => void;
     onTriggerAIResponse: () => void;
@@ -649,6 +660,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     onOpenCustomPlusAction,
     onStartVideoCall,
     onStartVoiceCall,
+    onStartListenTogether,
     onSendText,
     onStopGeneration,
     onTriggerAIResponse,
@@ -730,6 +742,20 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
             label: action.label,
             onClick: () => onOpenCustomPlusAction(action),
         })),
+        // 一起听按钮：耳机+音符风格图标
+        {
+            icon: (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 14v-2a9 9 0 0 1 18 0v2" />
+                    <path d="M21 16v2a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2z" />
+                    <path d="M3 16v2a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z" />
+                    <path d="M9 13v5" />
+                    <circle cx="9" cy="18" r="1.5" />
+                </svg>
+            ),
+            label: "一起听",
+            onClick: onStartListenTogether,
+        },
     ];
 
     return (
@@ -1086,6 +1112,127 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [callInitiatorName, setCallInitiatorName] = useState<string>("");
     const [userIdentity, setUserIdentity] = useState<UserIdentity | null>(null);
     const [enterToSendEnabled, setEnterToSendEnabled] = useState(() => loadChatAppSettings().enterToSendEnabled === true);
+
+    // ── 一起听功能状态 ──
+    const [ltActive, setLtActive] = useState(false);
+    const [ltStartTime, setLtStartTime] = useState<number | null>(null);
+    const [ltPausedDuration, setLtPausedDuration] = useState(0);
+    const [ltCurrentTrack, setLtCurrentTrack] = useState<ListenTogetherTrack | null>(null);
+    const [ltIsPlaying, setLtIsPlaying] = useState(false);
+    const [ltToast, setLtToast] = useState<string | null>(null);
+    const ltPrevTrackRef = useRef<ListenTogetherTrack | null>(null);
+    const ltElapsed = useListenTogetherTimer(ltActive, ltIsPlaying, ltStartTime, ltPausedDuration);
+
+    // 一起听：启动
+    const startListenTogether = useCallback(() => {
+        const bridge = getMusicControlBridge();
+        if (!bridge) {
+            setLtToast("请先去音乐App播放音乐，再开启一起听");
+            setTimeout(() => setLtToast(null), 3000);
+            return;
+        }
+        // 尝试获取当前播放状态
+        let currentTrack: ListenTogetherTrack | null = null;
+        let isPlaying = false;
+        try {
+            const state = bridge.getCurrentState?.() || bridge.getState?.();
+            if (state?.currentTrack) {
+                const t = state.currentTrack;
+                currentTrack = {
+                    title: t.title || t.name || "未知歌曲",
+                    artist: t.artist || t.artists,
+                    coverUrl: t.coverUrl || t.cover,
+                    source: t.source || "网易云导入",
+                };
+                isPlaying = !!state.isPlaying;
+            }
+        } catch { /* 静默 */ }
+
+        if (!currentTrack) {
+            setLtToast("请先去音乐App播放音乐，再开启一起听");
+            setTimeout(() => setLtToast(null), 3000);
+            return;
+        }
+
+        setLtActive(true);
+        setLtStartTime(Date.now());
+        setLtPausedDuration(0);
+        setLtCurrentTrack(currentTrack);
+        setLtIsPlaying(isPlaying);
+        ltPrevTrackRef.current = currentTrack;
+        setShowPlusMenu(false);
+
+        // 插入"播放歌曲"系统消息
+        pushMusicSystemMessage(session.id, "play", character?.name || "对方", currentTrack);
+        syncMessagesFromStorage();
+    }, [session.id, character?.name, syncMessagesFromStorage]);
+
+    // 一起听：关闭
+    const closeListenTogether = useCallback(() => {
+        setLtActive(false);
+        setLtStartTime(null);
+        setLtPausedDuration(0);
+        setLtCurrentTrack(null);
+        setLtIsPlaying(false);
+        ltPrevTrackRef.current = null;
+    }, []);
+
+    // 一起听：监听音乐APP的播放状态变化
+    useEffect(() => {
+        if (!ltActive) return;
+        const bridge = getMusicControlBridge();
+        if (!bridge) return;
+
+        // 轮询检查播放状态（本地模拟，不需要真实联机API）
+        const pollInterval = setInterval(() => {
+            try {
+                const state = bridge.getCurrentState?.() || bridge.getState?.();
+                if (!state) return;
+
+                const t = state.currentTrack;
+                const newTrack: ListenTogetherTrack | null = t ? {
+                    title: t.title || t.name || "未知歌曲",
+                    artist: t.artist || t.artists,
+                    coverUrl: t.coverUrl || t.cover,
+                    source: t.source || "网易云导入",
+                } : null;
+
+                const newIsPlaying = !!state.isPlaying;
+
+                // 检测切歌
+                if (newTrack && ltPrevTrackRef.current && newTrack.title !== ltPrevTrackRef.current.title) {
+                    pushMusicSystemMessage(session.id, "play", character?.name || "对方", newTrack);
+                    syncMessagesFromStorage();
+                    ltPrevTrackRef.current = newTrack;
+                } else if (newTrack && !ltPrevTrackRef.current) {
+                    ltPrevTrackRef.current = newTrack;
+                }
+
+                // 检测暂停/恢复
+                if (newIsPlaying !== ltIsPlaying) {
+                    setLtIsPlaying(newIsPlaying);
+                    if (newIsPlaying && ltCurrentTrack) {
+                        // 从暂停恢复
+                        pushMusicSystemMessage(session.id, "resume", character?.name || "对方", ltCurrentTrack);
+                        syncMessagesFromStorage();
+                    }
+                }
+
+                // 检测停止播放 → 自动退出一起听
+                if (!newTrack && !newIsPlaying) {
+                    closeListenTogether();
+                    return;
+                }
+
+                // 更新当前曲目
+                if (newTrack) {
+                    setLtCurrentTrack(newTrack);
+                }
+            } catch { /* 静默 */ }
+        }, 2000);
+
+        return () => clearInterval(pollInterval);
+    }, [ltActive, ltIsPlaying, ltCurrentTrack, session.id, character?.name, syncMessagesFromStorage, closeListenTogether]);
 
     // Rich media input modals
     const [richModal, setRichModal] = useState<RichModalKind | null>(null);
@@ -5218,6 +5365,23 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 className="chat-plugin-header chat-room-main-pane"
             />
 
+            {/* 一起听状态栏：仅在激活一起听模式时显示 */}
+            {ltActive && (
+                <ListenTogetherStatusBar
+                    userNickname={userIdentity?.name || "我"}
+                    charName={character?.name || "对方"}
+                    charAvatar={character?.avatarUrl}
+                    elapsedSeconds={ltElapsed}
+                    currentTrack={ltCurrentTrack}
+                    isPlaying={ltIsPlaying}
+                    onClose={closeListenTogether}
+                />
+            )}
+            {/* 一起听提示Toast */}
+            {ltToast && (
+                <div className="lt-toast">{ltToast}</div>
+            )}
+
             {/* Message List */}
             <div
                 ref={scrollRef}
@@ -5642,6 +5806,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                                 onApprove={handleApproveMemoryWrite}
                                                 onIgnore={handleIgnoreMemoryWrite}
                                             />
+                                        ) : isMusicSystemMessage(msg) ? (
+                                            <MusicSystemMessage msg={msg} />
                                         ) : (
                                             <>
                                                 {msg.mediaType === "poke"
@@ -5871,6 +6037,16 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 })}
                 {/* Scroll anchor: browser keeps this in view when content above changes height */}
                 <div style={{ overflowAnchor: 'auto', height: 1 }} />
+                {/* 一起听悬浮播放预览卡片 */}
+                {ltActive && ltCurrentTrack && (
+                    <div className="lt-floating-wrap">
+                        <ListenTogetherFloatingCard
+                            track={ltCurrentTrack}
+                            isPlaying={ltIsPlaying}
+                            charName={character?.name || "对方"}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Input Bar — absolute at bottom, same layer as header */}
@@ -5947,6 +6123,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 onOpenCustomPlusAction={handleOpenCustomPlusAction}
                 onStartVideoCall={() => { cancelFollowUp(session.id); setShowPlusMenu(false); setCallInitiator("user"); setShowVideoCall(true); }}
                 onStartVoiceCall={() => { cancelFollowUp(session.id); setShowPlusMenu(false); setCallInitiator("user"); setShowVoiceCall(true); }}
+                onStartListenTogether={startListenTogether}
                 onSendText={handleSendText}
                 onStopGeneration={clearStuckGeneration}
                 onTriggerAIResponse={triggerAIResponse}
