@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useSyncExternalStore } from "react";
-import { ChevronLeft } from "lucide-react";
-import { loadChatSessions, loadChatContacts, ChatSession, createOrGetSession, createGroupSession, pushChatMessage, addChatContact, loadChatMessages, getLastVisibleSessionMessage, getChatMessagePreview } from "@/lib/chat-storage";
+import { ChevronLeft, Star } from "lucide-react";
+import { loadChatSessions, loadChatContacts, ChatSession, createOrGetSession, createGroupSession, pushChatMessage, addChatContact, loadChatMessages, getLastVisibleSessionMessage, getChatMessagePreview, CHAT_UNREAD_UPDATED_EVENT } from "@/lib/chat-storage";
 import { loadCharacters } from "@/lib/character-storage";
 import { Character } from "@/lib/character-types";
 import { resolveUserIdentity } from "@/lib/settings-storage";
@@ -106,9 +106,11 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
         const refreshSessions = () => setSessions(loadChatSessions());
         window.addEventListener("weixin-messages-updated", refreshSessions);
         window.addEventListener("chat-messages-updated", refreshSessions);
+        window.addEventListener(CHAT_UNREAD_UPDATED_EVENT, refreshSessions);
         return () => {
             window.removeEventListener("weixin-messages-updated", refreshSessions);
             window.removeEventListener("chat-messages-updated", refreshSessions);
+            window.removeEventListener(CHAT_UNREAD_UPDATED_EVENT, refreshSessions);
         };
     }, []);
 
@@ -231,6 +233,9 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                                 return name.toLowerCase().includes(keyword);
                             })
                             .sort((a, b) => {
+                                // 特别关心 > 置顶 > 时间
+                                if (a.isSpecial && !b.isSpecial) return -1;
+                                if (!a.isSpecial && b.isSpecial) return 1;
                                 if (a.isPinned && !b.isPinned) return -1;
                                 if (!a.isPinned && b.isPinned) return 1;
                                 const aTime = getLastVisibleSessionMessage(a.id)?.createdAt || a.updatedAt;
@@ -239,7 +244,7 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                             })
                             .map(s => (
                                 <div key={s.id}>
-                                    <SessionItem session={s} onSelect={() => onSelectSession(s)} isPinned={!!s.isPinned} />
+                                    <SessionItem session={s} onSelect={() => onSelectSession(s)} isPinned={!!s.isPinned} isSpecial={!!s.isSpecial} unreadCount={s.unreadCount || 0} />
                                 </div>
                             ));
                             if (!showMascot && regularItems.length === 0) {
@@ -631,7 +636,7 @@ function ContactPicker({ onClose, onSelect }: { onClose: () => void; onSelect: (
     );
 }
 
-function SessionItem({ session, onSelect, isPinned }: { session: ChatSession, onSelect: () => void, isPinned?: boolean }) {
+function SessionItem({ session, onSelect, isPinned, isSpecial, unreadCount }: { session: ChatSession, onSelect: () => void, isPinned?: boolean, isSpecial?: boolean, unreadCount?: number }) {
     const chars = loadCharacters();
     const character = chars.find(c => c.id === session.contactId);
     const lastVisibleMessage = getLastVisibleSessionMessage(session.id);
@@ -653,7 +658,7 @@ function SessionItem({ session, onSelect, isPinned }: { session: ChatSession, on
 
     return (
         <div
-            className={`minimal-list-item${isPinned ? ' chat-pinned' : ''}`}
+            className={`minimal-list-item${isPinned ? ' chat-pinned' : ''}${isSpecial ? ' chat-special' : ''}`}
             onClick={onSelect}
         >
             {isGroup ? (
@@ -683,12 +688,24 @@ function SessionItem({ session, onSelect, isPinned }: { session: ChatSession, on
             )}
             <div className="flex-1 overflow-hidden h-[48px] flex flex-col justify-center gap-1">
                 <div className="flex justify-between items-center">
-                    <span className="ts-16 font-medium text-[var(--c-text-title)] truncate">
-                        {isGroup ? (session.groupName || "群聊") : (session.alias || character?.name || `User_${session.contactId.slice(-4)}`)}
-                    </span>
-                    <span className="ts-12 text-[var(--c-icon)] font-medium">
-                        {formatChatUiTime(displayTime)}
-                    </span>
+                    <div className="flex items-center gap-1 min-w-0">
+                        {isSpecial && (
+                            <Star size={14} fill="#f0a020" stroke="#f0a020" className="shrink-0" />
+                        )}
+                        <span className="ts-16 font-medium text-[var(--c-text-title)] truncate">
+                            {isGroup ? (session.groupName || "群聊") : (session.alias || character?.name || `User_${session.contactId.slice(-4)}`)}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {unreadCount > 0 && (
+                            <span className="minimal-unread-count">
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                            </span>
+                        )}
+                        <span className="ts-12 text-[var(--c-icon)] font-medium">
+                            {formatChatUiTime(displayTime)}
+                        </span>
+                    </div>
                 </div>
                 <div className="flex justify-between items-center gap-2">
                     <span className="ts-13 text-[var(--c-text)] opacity-80 truncate font-normal">

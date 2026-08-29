@@ -8,7 +8,7 @@ import { ChatRoom } from "./chat-room";
 import { MascotChatRoom } from "./mascot-chat-room";
 import { UserProfilePanel } from "./user-profile-panel";
 import { MessageCircle, Users, Aperture, UserRound } from "lucide-react";
-import { ChatSession, loadChatSessions, pushChatMessage, hydrateChatStorage } from "@/lib/chat-storage";
+import { ChatSession, loadChatSessions, pushChatMessage, hydrateChatStorage, setActiveChatSessionId, getTotalUnreadCount, CHAT_UNREAD_UPDATED_EVENT } from "@/lib/chat-storage";
 import { notifyMascotPageContext } from "@/lib/mascot-events";
 import { loadCharacters } from "@/lib/character-storage";
 import { SessionCustomCSS } from "@/components/ui/session-custom-css";
@@ -39,6 +39,7 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
     const [visitedSessions, setVisitedSessions] = useState<Map<string, ChatSession>>(new Map());
     const [dbReady, setDbReady] = useState(false);
     const [hideTabBar, setHideTabBar] = useState(false);
+    const [totalUnread, setTotalUnread] = useState(0);
 
     // Hydrate IndexedDB → in-memory caches on mount
     useEffect(() => {
@@ -133,6 +134,11 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
         }
     }, [activeSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // 跟踪当前活跃会话，用于未读计数控制
+    useEffect(() => {
+        setActiveChatSessionId(activeMascot ? "mascot" : (activeSession?.id ?? null));
+    }, [activeSession, activeMascot]);
+
     useEffect(() => {
         if (!activeMascot) return;
         onSessionChange?.(null);
@@ -211,6 +217,19 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
         return () => window.removeEventListener("chat-hide-tabbar", onHide);
     }, []);
 
+    // 未读消息总数：监听变化更新角标
+    useEffect(() => {
+        if (!dbReady) return;
+        setTotalUnread(getTotalUnreadCount());
+        const handler = () => setTotalUnread(getTotalUnreadCount());
+        window.addEventListener(CHAT_UNREAD_UPDATED_EVENT, handler);
+        window.addEventListener("chat-messages-updated", handler);
+        return () => {
+            window.removeEventListener(CHAT_UNREAD_UPDATED_EVENT, handler);
+            window.removeEventListener("chat-messages-updated", handler);
+        };
+    }, [dbReady]);
+
     // Wait for IndexedDB hydration before rendering
     if (!dbReady) return null;
 
@@ -253,7 +272,12 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
                     className={`chat-tab ${activeTab === "messages" ? "chat-tab-active" : ""}`}
                     onClick={() => setActiveTab("messages")}
                 >
-                    <MessageCircleIcon active={activeTab === "messages"} />
+                    <div className="chat-tab-icon-wrap">
+                        <MessageCircleIcon active={activeTab === "messages"} />
+                        {totalUnread > 0 && (
+                            <span className="chat-tab-badge">{totalUnread > 99 ? "99+" : totalUnread}</span>
+                        )}
+                    </div>
                     <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: activeTab === "messages" ? undefined : "var(--c-text)" }}>消息</span>
                 </button>
                 <button
