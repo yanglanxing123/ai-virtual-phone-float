@@ -128,6 +128,8 @@ import { generateChatCompletion, flattenCompletionResult } from "@/lib/chat-engi
 import { parseAIResponse } from "@/lib/rich-message-parser";
 import { requestBackgroundChatReply, scheduleFollowUp } from "@/lib/follow-up-service";
 import { CHAT_MESSAGE_NOTICE_EVENT, CHAT_OPEN_SESSION_EVENT, type ChatMessageNoticeDetail } from "@/lib/chat-notification-events";
+import { playChatMessageSound, unlockChatSound } from "@/lib/chat-sound";
+import { getTotalUnreadCount, CHAT_UNREAD_UPDATED_EVENT } from "@/lib/chat-storage";
 import { startIncomingCallVibration } from "@/lib/call-vibration";
 import { setMascotContext } from "@/lib/mascot-context";
 import { DESKTOP_WIDGETS_CHANGED_EVENT } from "@/lib/mascot-events";
@@ -1077,6 +1079,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const customAppUpdateCheckingRef = useRef<Set<string>>(new Set());
   const activeAppRef = useRef<DesktopIconId | null>(null);
   const [customAppBadges, setCustomAppBadges] = useState<Record<string, number>>({});
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [customAppBackgroundRuns, setCustomAppBackgroundRuns] = useState<CustomAppBackgroundEventRun[]>([]);
   const [customAppBackgroundToolRuns, setCustomAppBackgroundToolRuns] = useState<CustomAppBackgroundToolRun[]>([]);
   const backgroundRunSeqRef = useRef(0);
@@ -2413,6 +2416,11 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       const isCurrentMiniChat = showMiniChat && miniSessionRef.current?.id === detail.sessionId;
       if (isCurrentMainChat || isCurrentMiniChat) return;
 
+      // 仿QQ提示音：静音会话不响，特别关心使用专属提示音
+      if (!detail.isMuted) {
+        playChatMessageSound(detail.isSpecial);
+      }
+
       const sessions = loadChatSessions();
       const session = sessions.find(s => s.id === detail.sessionId);
       if (!session) return;
@@ -2452,6 +2460,29 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       if (chatMessageNoticeTimerRef.current !== null) {
         window.clearTimeout(chatMessageNoticeTimerRef.current);
       }
+    };
+  }, []);
+
+  // ── 聊天未读消息角标：监听未读计数变化 ──
+  useEffect(() => {
+    setChatUnreadCount(getTotalUnreadCount());
+    const handler = () => setChatUnreadCount(getTotalUnreadCount());
+    window.addEventListener(CHAT_UNREAD_UPDATED_EVENT, handler);
+    window.addEventListener("chat-messages-updated", handler);
+    return () => {
+      window.removeEventListener(CHAT_UNREAD_UPDATED_EVENT, handler);
+      window.removeEventListener("chat-messages-updated", handler);
+    };
+  }, []);
+
+  // ── 用户首次交互后解锁 AudioContext（浏览器策略要求） ──
+  useEffect(() => {
+    const unlock = () => unlockChatSound();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
     };
   }, []);
 
@@ -4458,7 +4489,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                                 : null;
                               const iconImageUrl = iconSkinUrl || customIconUrl;
                               const hasImageIcon = Boolean(iconImageUrl);
-                              const badgeCount = customApp ? customAppBadges[customApp.id] ?? 0 : 0;
+                              const badgeCount = customApp ? customAppBadges[customApp.id] ?? 0 : (builtinIconId === "chat" ? chatUnreadCount : 0);
                               return (
                                 <button
                                   key={iconId}
@@ -4598,6 +4629,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                     const iconImageUrl = iconSkinUrl || customIconUrl;
                     const hasImageIcon = Boolean(iconImageUrl);
                     const isDragging = dragItem?.type === "icon" && dragItem.id === iconId;
+                    const dockBadgeCount = customApp ? customAppBadges[customApp.id] ?? 0 : (builtinIconId === "chat" ? chatUnreadCount : 0);
                     return (
                       <button
                         key={iconId}
@@ -4635,6 +4667,11 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                           ) : customIconUrl ? null : (
                             <CustomAppGlyph seed={customApp?.name || icon.label} className="icon-glyph" />
                           )}
+                          {dockBadgeCount > 0 ? (
+                            <span className="desktop-icon-badge" aria-label={`${dockBadgeCount} 条未读`}>
+                              {dockBadgeCount > 99 ? "99+" : dockBadgeCount}
+                            </span>
+                          ) : null}
                         </span>
                         <span className="icon-label">{icon.label}</span>
                       </button>
