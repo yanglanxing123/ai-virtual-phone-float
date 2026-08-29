@@ -7797,7 +7797,7 @@
 }
 
 /* ═══════════════════════════════════════
-   聊天顶部常驻双头像状态栏
+   聊天顶部常驻双头像状态栏（新设计）
    ═══════════════════════════════════════ */
 
 .lt-status-bar-permanent {
@@ -7805,23 +7805,75 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   padding: 0 4px;
 }
 
-.lt-status-bar-permanent .lt-avatars-inline {
-  flex-shrink: 0;
+/* 头像行 */
+.lt-header-avatars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
-.lt-status-bar-permanent .lt-timer-inline {
-  font-size: calc(11px * var(--app-text-scale, 1));
-  color: var(--c-text-secondary, rgba(255, 255, 255, 0.7));
+/* 单个头像 */
+.lt-header-avatar {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(255, 107, 138, 0.4);
+  box-shadow: 0 2px 8px rgba(255, 107, 138, 0.15);
+}
+
+.lt-header-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.lt-header-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #FF6B8A 0%, #FF8FA8 100%);
+}
+
+/* 中间区域：爱心 + 计时器 */
+.lt-header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.lt-header-timer {
+  font-size: calc(10px * var(--app-text-scale, 1));
+  color: #FF6B8A;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 120px;
+  margin-top: -2px;
+  text-shadow: 0 0 4px rgba(255, 107, 138, 0.2);
 }
 
+/* 关闭按钮 */
 .lt-status-bar-permanent .lt-close-btn {
   flex-shrink: 0;
   width: 24px;
