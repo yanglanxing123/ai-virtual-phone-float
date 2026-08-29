@@ -98,11 +98,24 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
         } else {
             setLyrics([]);
         }
-    }, [player?.currentTrack?.lyrics]);
+        // 切歌时重置进度
+        setProgressTime(0);
+    }, [player?.currentTrack?.id, player?.currentTrack?.lyrics]);
 
-    // 轮询播放进度
+    // 轮询播放进度（始终轮询，不仅限于播放中）
     useEffect(() => {
-        if (!player || !player.isPlaying) return;
+        if (!player) return;
+        // 立即获取一次
+        try {
+            const bridge = (window as any).__musicControlBridge;
+            if (bridge?.getState) {
+                const s = bridge.getState();
+                if (s?.currentTime != null) {
+                    setProgressTime(s.currentTime);
+                }
+            }
+        } catch { /* 静默 */ }
+
         const interval = setInterval(() => {
             try {
                 const bridge = (window as any).__musicControlBridge;
@@ -113,9 +126,9 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
                     }
                 }
             } catch { /* 静默 */ }
-        }, 500);
+        }, 300);
         return () => clearInterval(interval);
-    }, [player, player?.isPlaying]);
+    }, [player, player?.currentTrack?.id]);
 
     const clampPos = useCallback((x: number, y: number) => {
         const el = floatRef.current;
@@ -244,6 +257,8 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
 
     const track = player.currentTrack;
     const { current: currentLyric } = findCurrentLyric(lyrics, progressTime);
+    // 如果没有匹配到当前行，回退显示第一行歌词
+    const displayLyric = currentLyric?.text || (lyrics.length > 0 ? lyrics[0].text : "") || "♪";
 
     return (
         <div
@@ -319,7 +334,7 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
             {lyrics.length > 0 && (
                 <div className="music-float-lyric-box" key={currentLyric?.time ?? "none"}>
                     <span className="music-float-lyric-box-text">
-                        {currentLyric?.text || "♪"}
+                        {displayLyric}
                     </span>
                 </div>
             )}
