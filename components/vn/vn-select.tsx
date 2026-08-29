@@ -147,53 +147,46 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
         .vns-strips {
           flex: 1;
           display: flex;
-          align-items: center;
+          align-items: flex-end;
           justify-content: flex-start;
-          gap: 4px;
-          padding: 80px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
+          gap: 6px;
+          padding: 60px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
           overflow-x: auto;
           overflow-y: hidden;
-          scroll-snap-type: x proximity;
+          scroll-snap-type: x mandatory;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
         }
         .vns-strips::-webkit-scrollbar { display: none; }
-        /* Flexbox centering trick: allows scroll to both sides when content overflows */
-        .vns-strips::before,
-        .vns-strips::after {
-          content: "";
-          margin: auto;
-          flex: 0 0 0px;
-          min-width: 0;
-        }
 
-        /* ── Character Strip ── */
+        /* ── Character Strip — 参考图5的交错高度卡片 ── */
         .vns-strip {
           flex: 0 0 auto;
-          width: 72px;
-          height: 55%;
-          border-radius: 0;
+          width: 22vw;
+          min-width: 70px;
+          max-width: 100px;
+          border-radius: 10px;
           overflow: hidden;
           position: relative;
           cursor: pointer;
-          transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), height 0.4s ease, opacity 0.3s;
+          transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), height 0.35s ease, opacity 0.3s, box-shadow 0.3s;
           scroll-snap-align: center;
           border: 1px solid var(--vn-ui-border);
         }
-        .vns-strip:nth-child(odd) {
-          margin-top: -8%;
-        }
-        .vns-strip:nth-child(even) {
-          margin-top: 8%;
-        }
-        .vns-strip:nth-child(3n) {
-          margin-top: -4%;
-        }
+        /* 交错高度模式：高→中→最高→低→高 */
+        .vns-strip:nth-child(5n+1) { height: 52%; }
+        .vns-strip:nth-child(5n+2) { height: 42%; }
+        .vns-strip:nth-child(5n+3) { height: 62%; }
+        .vns-strip:nth-child(5n+4) { height: 38%; }
+        .vns-strip:nth-child(5n+5) { height: 52%; }
+        /* 激活态：放大变宽 */
         .vns-strip[data-active="true"] {
-          width: min(220px, 50vw);
-          height: 62%;
+          width: min(200px, 48vw);
+          max-width: 200px;
+          height: 68%;
           border-color: var(--vn-ui-accent-dim);
-          box-shadow: 0 0 20px var(--vn-ui-accent-bg);
+          box-shadow: 0 0 24px var(--vn-ui-accent-bg), 0 4px 20px rgba(0,0,0,0.4);
+          z-index: 2;
         }
         .vns-strip-bg {
           position: absolute;
@@ -233,15 +226,8 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
           transition: opacity 0.3s;
         }
         .vns-strip:not([data-active="true"]) .vns-strip-info {
-          writing-mode: vertical-rl;
-          text-orientation: mixed;
-          bottom: auto;
-          top: 50%;
-          left: 50%;
-          right: auto;
-          transform: translate(-50%, -50%);
-          padding: 0;
-          align-items: center;
+          padding: 8px 6px;
+          align-items: flex-start;
         }
         .vns-strip-name {
           font-size: calc(16px*var(--app-text-scale,1));
@@ -251,8 +237,8 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
           transition: font-size 0.3s;
         }
         .vns-strip:not([data-active="true"]) .vns-strip-name {
-          font-size: calc(14px*var(--app-text-scale,1));
-          color: rgba(255,255,255,0.6);
+          font-size: calc(12px*var(--app-text-scale,1));
+          color: rgba(255,255,255,0.65);
         }
         .vns-strip-sub {
           font-size: calc(11px*var(--app-text-scale,1));
