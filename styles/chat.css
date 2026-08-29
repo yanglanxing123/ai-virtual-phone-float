@@ -7728,3 +7728,116 @@
   text-shadow: 0 0 6px var(--c-music-accent-dim, rgba(224, 64, 251, 0.3));
 }
 
+/* ═══════════════════════════════════════
+   全局圆形浮窗 wrapper + 下方歌词框
+   ═══════════════════════════════════════ */
+
+.music-float-wrapper {
+  position: absolute;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.25s ease-out, opacity 0.25s ease-out;
+  animation: music-float-in 0.5s var(--ease-out);
+}
+
+.music-float-wrapper > .music-float {
+  position: relative;
+  left: auto;
+  top: auto;
+  z-index: auto;
+  animation: none;
+  transition: width 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+              height 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 歌词框 — 圆形组件下方 */
+.music-float-lyric-box {
+  margin-top: 6px;
+  max-width: 220px;
+  min-width: 72px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--c-music-surface, rgba(30, 30, 40, 0.85));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--c-music-surface, rgba(255, 255, 255, 0.08));
+  text-align: center;
+  overflow: hidden;
+  pointer-events: none;
+  animation: music-float-lyric-box-fade 0.4s ease-out;
+}
+
+.music-float-lyric-box-text {
+  display: inline-block;
+  font-size: calc(11px * var(--app-text-scale, 1));
+  line-height: 1.4;
+  color: var(--c-music-accent, #e040fb);
+  text-shadow: 0 0 6px var(--c-music-accent-dim, rgba(224, 64, 251, 0.3));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+@keyframes music-float-lyric-box-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ═══════════════════════════════════════
+   聊天顶部常驻双头像状态栏
+   ═══════════════════════════════════════ */
+
+.lt-status-bar-permanent {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.lt-status-bar-permanent .lt-avatars-inline {
+  flex-shrink: 0;
+}
+
+.lt-status-bar-permanent .lt-timer-inline {
+  font-size: calc(11px * var(--app-text-scale, 1));
+  color: var(--c-text-secondary, rgba(255, 255, 255, 0.7));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lt-status-bar-permanent .lt-close-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--c-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.lt-status-bar-permanent .lt-close-btn:active {
+  background: rgba(255, 107, 138, 0.3);
+}
+
