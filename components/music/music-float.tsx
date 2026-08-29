@@ -248,68 +248,81 @@ export default function MusicFloat({ hidden }: { hidden?: boolean }) {
     return (
         <div
             ref={floatRef}
-            className="music-float"
-            {...(expanded ? { "data-expanded": "" } : {})}
-            {...(dismissing ? { "data-dismissing": "" } : {})}
+            className="music-float-wrapper"
             style={{ left: pos.x, top: pos.y }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
         >
-            <div className="music-float-inner">
-                {/* Cover art */}
-                <div className="music-float-cover-wrap" {...(player.isPlaying ? { "data-playing": "" } : {})}>
-                    <div className="music-float-vinyl-groove music-float-vinyl-groove-1" />
-                    <div className="music-float-vinyl-groove music-float-vinyl-groove-2" />
-                    <div className="music-float-vinyl-center">
-                        {track.coverUrl ? (
-                            <img src={track.coverUrl} alt="" className="music-float-cover-img" draggable={false} />
-                        ) : (
-                            <div className="music-float-cover-placeholder">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                    <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+            <div
+                className="music-float"
+                {...(expanded ? { "data-expanded": "" } : {})}
+                {...(dismissing ? { "data-dismissing": "" } : {})}
+            >
+                <div className="music-float-inner">
+                    {/* Cover art */}
+                    <div className="music-float-cover-wrap" {...(player.isPlaying ? { "data-playing": "" } : {})}>
+                        <div className="music-float-vinyl-groove music-float-vinyl-groove-1" />
+                        <div className="music-float-vinyl-groove music-float-vinyl-groove-2" />
+                        <div className="music-float-vinyl-center">
+                            {track.coverUrl ? (
+                                <img src={track.coverUrl} alt="" className="music-float-cover-img" draggable={false} />
+                            ) : (
+                                <div className="music-float-cover-placeholder">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                        <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+                                    </svg>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Track Info + Lyrics */}
+                    <div className="music-float-info">
+                        <div className="music-float-title">{track.title}</div>
+                        <div className="music-float-artist">{track.artist}</div>
+                        {/* 歌词单行（展开时内部显示） */}
+                        <div className="music-float-lyric" key={currentLyric?.time ?? "none"}>
+                            <LyricLineView text={currentLyric?.text || ""} />
+                        </div>
+                    </div>
+
+                    {/* Compact Controls */}
+                    <div className="music-float-controls">
+                        <button className="music-float-btn" onClick={(e) => { e.stopPropagation(); player.prev(); }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                            </svg>
+                        </button>
+                        <button className="music-float-btn music-float-btn-play" onClick={(e) => { e.stopPropagation(); player.togglePlay(); }}>
+                            {player.isPlaying ? (
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
                                 </svg>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Track Info + Lyrics */}
-                <div className="music-float-info">
-                    <div className="music-float-title">{track.title}</div>
-                    <div className="music-float-artist">{track.artist}</div>
-                    {/* 歌词单行 */}
-                    <div className="music-float-lyric" key={currentLyric?.time ?? "none"}>
-                        <LyricLineView text={currentLyric?.text || ""} />
-                    </div>
-                </div>
-
-                {/* Compact Controls */}
-                <div className="music-float-controls">
-                    <button className="music-float-btn" onClick={(e) => { e.stopPropagation(); player.prev(); }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-                        </svg>
-                    </button>
-                    <button className="music-float-btn music-float-btn-play" onClick={(e) => { e.stopPropagation(); player.togglePlay(); }}>
-                        {player.isPlaying ? (
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
+                            ) : (
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5v14l11-7z" />
+                                </svg>
+                            )}
+                        </button>
+                        <button className="music-float-btn" onClick={(e) => { e.stopPropagation(); player.next(); }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 18l8.5-6L6 6v12zm8.5 0h2V6h-2v12z" />
                             </svg>
-                        ) : (
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8 5v14l11-7z" />
-                            </svg>
-                        )}
-                    </button>
-                    <button className="music-float-btn" onClick={(e) => { e.stopPropagation(); player.next(); }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M6 18l8.5-6L6 6v12zm8.5 0h2V6h-2v12z" />
-                        </svg>
-                    </button>
+                        </button>
+                    </div>
                 </div>
             </div>
+
+            {/* 歌词框 — 圆形组件下方常驻显示 */}
+            {lyrics.length > 0 && (
+                <div className="music-float-lyric-box" key={currentLyric?.time ?? "none"}>
+                    <span className="music-float-lyric-box-text">
+                        {currentLyric?.text || "♪"}
+                    </span>
+                </div>
+            )}
         </div>
     );
 }
