@@ -4,7 +4,7 @@
 // 再在代码层做归一化、兜底与难度校验。
 
 import { simpleLLMCall } from "@/lib/api-helpers";
-import { loadApiConfigs, loadBindingConfig, resolveBinding } from "@/lib/settings-storage";
+import { loadApiConfigs, loadBindingConfig, resolveBinding, resolveUserIdentity } from "@/lib/settings-storage";
 import type { ApiConfig } from "@/lib/settings-types";
 import { generateImageFromConfiguredApi } from "@/lib/image-generation-service";
 import type {
@@ -28,6 +28,17 @@ import {
 } from "./raid-types";
 
 // ── 工具函数 ──────────────────────────────────────────────
+
+/** 获取当前用户的昵称，用于作为女主（主角）的名字。 */
+function getPlayerName(): string {
+    try {
+        const identity = resolveUserIdentity(undefined, "raid");
+        if (identity?.name) return identity.name;
+    } catch {
+        // 静默处理
+    }
+    return "主角";
+}
 
 /** 获取当前激活的 API 配置（与聊天等应用一致，走绑定系统），没有则抛错。 */
 function getApiConfig(): ApiConfig {
@@ -181,6 +192,7 @@ export async function generateNpcs(params: GenerateNpcsParams): Promise<DungeonN
                   .join("\n\n")
             : "（未指定目标角色，请自创一位男主作为玩家的攻略目标，isTarget=true。）";
 
+    const playerName = getPlayerName();
     const systemPrompt = [
         "你是番茄小说顶级作者，擅长写爆款攻略文，人设塑造功力深厚。",
         "现在要根据世界观与小说类型，为一款「攻略副本」文字游戏生成全套 NPC。",
@@ -192,6 +204,7 @@ export async function generateNpcs(params: GenerateNpcsParams): Promise<DungeonN
         `【小说类型】${novelLabel}`,
         `【画风】${themeLabel}`,
         `【难度】${diffLabel}（NPC 初始好感区间 ${favMin}-${favMax}）`,
+        `【主角（玩家/女主）名字】${playerName}`,
         "",
         "【需攻略的目标角色】",
         targetInfo,
@@ -201,7 +214,7 @@ export async function generateNpcs(params: GenerateNpcsParams): Promise<DungeonN
         `2. 额外生成 ${extraCount} 个 NPC，必须满足：至少 1 个 role="male_second"（男二，与男主形成对照/竞争/暗线），至少 1 个 role="female_support"（女配，推动剧情冲突与误会），其余可为 role="female_second"（女二）或 role="npc"。`,
         "3. 男二、女配、女二的人设要与目标角色形成戏剧张力（情敌/旧爱/挑拨者/助攻等），不可与目标角色同质化，也不得重名。",
         `4. 每个 NPC 的 initialFavor 取 ${favMin}-${favMax} 之间的整数；目标角色（男主）取该区间偏上限，配角取偏下限。`,
-        "5. persona 写 150-400 字：身份背景、性格内核、与主角的关系、隐藏动机、说话风格。",
+        `5. persona 写 150-400 字：身份背景、性格内核、与主角（${playerName}）的关系、隐藏动机、说话风格。`,
         "6. appearance 写 60-200 字：具有辨识度的外貌描写，符合画风与小说类型。",
         "7. 名字要契合世界观与小说类型。",
         "",
@@ -524,6 +537,7 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
         }
     }
 
+    const playerName = getPlayerName();
     const systemPrompt = [
         "你是番茄小说顶级作者，擅长写爆款攻略文，深谙爽点与虐点的节奏掌控。",
         "现在你为一款「攻略副本」文字游戏执笔下一个剧情节点，要像写爆款小说一样推进剧情：有悬念、有反转、有情绪拉扯。",
@@ -533,6 +547,7 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
         `小说类型：${novelLabel}`,
         `画风：${THEME_LABELS[dungeon.theme]}`,
         `难度：${diffLabel}（死亡线：目标好感度 ≤ ${deathThreshold} 即死；好感度 ≥ 80 可触发高潮结局）${revivalCount > 0 ? `\n复活加成：已复活 ${revivalCount} 次，难度提升（死亡线+${revivalCount * 5}，好感增益降低 ${Math.round(revivalCount * 0.1 * 100)}%）` : ""}`,
+        `主角（玩家/女主）名字：${playerName}`,
         "世界观：",
         dungeon.worldview || "（未提供）",
         "",
@@ -549,14 +564,14 @@ export async function generateStoryBeat(params: GenerateStoryBeatParams): Promis
         "【上次剧情摘要】",
         lastSummary,
         "",
-        "【玩家本次选择】",
+        `【${playerName}本次选择】`,
         choiceText && choiceText.trim() ? choiceText.trim() : "（无，这是开局第一章）",
         "",
         playerGuidance && playerGuidance.trim()
             ? `【玩家对剧情方向的指导（请参考但不必完全遵从）】\n${playerGuidance.trim()}`
             : "",
         "生成要求：",
-        "1. 根据玩家选择推进剧情：narration 写 1000-2000 字第三人称旁白（场景、心理、氛围、细节描写，要求有画面感和沉浸感）；dialogue 写 6-12 句对话，每句含 speaker（NPC 名）与 text，可带 emotion。narration 和 dialogue 合计必须超过 2000 个中文字符，确保剧情充分展开后再给出选项。这是硬性要求，低于2000字将导致剧情体验不完整。",
+        `1. 根据玩家选择推进剧情：narration 写 1000-2000 字第三人称旁白（场景、心理、氛围、细节描写，要求有画面感和沉浸感）；dialogue 写 6-12 句对话，每句含 speaker（NPC 名）与 text，可带 emotion。narration 和 dialogue 合计必须超过 2000 个中文字符，确保剧情充分展开后再给出选项。这是硬性要求，低于2000字将导致剧情体验不完整。注意：主角（女主）名字为「${playerName}」，在旁白和对话中涉及主角时请使用此名字，不要用"你"或"玩家"代称。`,
         `2. choices 必须生成 3 个选项，每个含 text（选项方向，10-15字以内，口语化，如"主动靠近ta"、"沉默不语"、"直接表白"）、riskLevel、favorDelta（AI根据剧情判定该选择预估的好感度变化，正负整数）。不要在选项中给出提示文字或后果说明，只给简略方向即可。风险分布：${riskGuide}`,
         `3. favorChanges 是本次剧情/玩家选择带来的好感度变化，键为 NPC 的 id（见上方阵容表），值为整数。重要限制：每个章节好感度正向增益总和最多 20 点，当前本章剩余可加 ${favorGainRemaining} 点，请勿超出。负数不受限制。开局第一章且玩家无选择时，favorChanges 可为空对象 {}。`,
         `4. 好感度变化会被难度系数 ${favorMod} 调整（正向收益 ×${favorMod}，负向不变）。`,

@@ -24,6 +24,7 @@ import {
 } from "./raid-engine";
 import { resolveVoiceConfig, synthesizeSpeech, playAudioBlob, setTtsVolume, getTtsVolume } from "@/lib/tts-service";
 import { loadCharacters } from "@/lib/character-storage";
+import { resolveUserIdentity } from "@/lib/settings-storage";
 import type { ContentAppId } from "@/lib/settings-types";
 
 const RAID_APP_ID = "raid" as ContentAppId;
@@ -37,6 +38,14 @@ type RaidStoryProps = {
 
 export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate }: RaidStoryProps) {
     const [dungeon, setDungeon] = useState<RaidDungeon>(initialDungeon);
+    // 获取用户昵称作为女主名字
+    const playerName = useMemo(() => {
+        try {
+            const identity = resolveUserIdentity(undefined, "raid");
+            if (identity?.name) return identity.name;
+        } catch { /* 静默 */ }
+        return "主角";
+    }, []);
     const [loading, setLoading] = useState(false);
     const [showSaves, setShowSaves] = useState(false);
     const [saveSlotName, setSaveSlotName] = useState("");
@@ -650,6 +659,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
                     onRestart={handleRestart}
                     onRevive={handleRevive}
                     onBack={onBack}
+                    playerName={playerName}
                 />
             )}
 
@@ -657,7 +667,7 @@ export function RaidStory({ dungeon: initialDungeon, onBack, onNotice, onUpdate 
             {isCleared && (
                 <div className="raid-clear-screen">
                     <h2 className="raid-clear-title">攻略成功</h2>
-                    <p className="raid-clear-desc">你征服了这个世界的所有挑战</p>
+                    <p className="raid-clear-desc">{playerName}征服了这个世界的所有挑战</p>
                     <div className="raid-clear-stats">
                         <span>耗时 {dungeon.storyBeats.length} 个场景</span>
                         <span>死亡 {dungeon.deathCount} 次</span>
@@ -1187,7 +1197,7 @@ function PortraitMode(props: PortraitModeProps) {
                             ) : currentSeg?.type === "choice" ? (
                                 <p className="raid-portrait-choice-text">
                                     <span className="raid-portrait-choice-icon">❥</span>
-                                    <span className="raid-portrait-choice-label">你的选择</span>
+                                    <span className="raid-portrait-choice-label">{playerName}的选择</span>
                                     <span className="raid-portrait-choice-content">{currentSeg.text}</span>
                                 </p>
                             ) : (
@@ -1522,7 +1532,7 @@ function StoryLogPanel({ dungeon, onClose }: PanelProps) {
                         ) : seg.type === "choice" ? (
                             <p className="raid-portrait-log-choice">
                                 <span className="raid-portrait-log-choice-icon">❥</span>
-                                <span className="raid-portrait-log-choice-label">你的选择：</span>
+                                <span className="raid-portrait-log-choice-label">{playerName}的选择：</span>
                                 <span className="raid-portrait-log-choice-text">{seg.text}</span>
                             </p>
                         ) : (
@@ -1582,18 +1592,18 @@ function VolumePanel({ bgmVolume, voiceVolume, onBgmVolumeChange, onVoiceVolumeC
 
 const DEATH_EMOJIS = ["💀", "👻", "🤡", "🤦", "💀", "😵", "🤪", "😭", "🫠", "🩲", "🦆", "🍌"];
 const DEATH_SUBTITLES = [
-    "你在这个世界的故事……以一种离谱的方式终结了",
+    "{name}在这个世界的故事……以一种离谱的方式终结了",
     "这大概是最社死的结局了",
-    "连编剧都没想到你会这样收场",
+    "连编剧都没想到{name}会这样收场",
     "这不是他们想要的结局，但确实很好笑",
-    "你的攻略之路，止步于此（笑）",
+    "{name}的攻略之路，止步于此（笑）",
     "也许换个活法会更好……大概吧",
     "这一幕将成为传说……被人嘲笑的那种",
-    "至少你走得很……有画面感",
+    "至少{name}走得很……有画面感",
     "史书上不会记载这一天，但表情包会",
-    "如果尴尬能致死，那你已经死了三次",
+    "如果尴尬能致死，那{name}已经死了三次",
     "这一刻，空气都凝固了……然后炸了",
-    "攻略失败，但你的社死成功了",
+    "攻略失败，但{name}的社死成功了",
 ];
 
 type DeathScreenProps = {
@@ -1604,11 +1614,15 @@ type DeathScreenProps = {
     onRestart: () => void;
     onRevive: () => void;
     onBack: () => void;
+    playerName: string;
 };
 
-function DeathScreen({ beat, deathCount, chapter, revivalCount, onRestart, onRevive, onBack }: DeathScreenProps) {
+function DeathScreen({ beat, deathCount, chapter, revivalCount, onRestart, onRevive, onBack, playerName }: DeathScreenProps) {
     const emoji = useMemo(() => DEATH_EMOJIS[Math.floor(Math.random() * DEATH_EMOJIS.length)], []);
-    const subtitle = useMemo(() => DEATH_SUBTITLES[Math.floor(Math.random() * DEATH_SUBTITLES.length)], []);
+    const subtitle = useMemo(() => {
+        const raw = DEATH_SUBTITLES[Math.floor(Math.random() * DEATH_SUBTITLES.length)];
+        return raw.replace(/{name}/g, playerName);
+    }, [playerName]);
 
     return (
         <div className="raid-death-screen">
