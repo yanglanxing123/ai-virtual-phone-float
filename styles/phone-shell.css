@@ -1087,6 +1087,8 @@
     --phone-screen-width: 100vw;
     --phone-screen-height: 100lvh;
     --phone-screen-height: 100dvh;
+    /* --vvh 由 KeyboardViewportHandler 组件动态设置，优先使用 */
+    --vvh: 100dvh;
   }
 
   html,
@@ -1095,6 +1097,7 @@
     width: 100%;
     height: 100lvh;
     height: 100dvh;
+    height: var(--vvh, 100dvh);
     background: var(--c-page-body-bg);
   }
 
@@ -1102,6 +1105,7 @@
     width: 100vw;
     height: 100lvh;
     height: 100dvh;
+    height: var(--vvh, 100dvh);
     padding: 0;
     display: flex;
     justify-content: flex-start;
