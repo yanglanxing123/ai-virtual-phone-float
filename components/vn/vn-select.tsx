@@ -148,7 +148,7 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
           flex: 1;
           display: flex;
           align-items: center;
-          justify-content: safe center;
+          justify-content: flex-start;
           gap: 4px;
           padding: 80px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
           overflow-x: auto;
@@ -158,6 +158,14 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
           scrollbar-width: none;
         }
         .vns-strips::-webkit-scrollbar { display: none; }
+        /* Flexbox centering trick: allows scroll to both sides when content overflows */
+        .vns-strips::before,
+        .vns-strips::after {
+          content: "";
+          margin: auto;
+          flex: 0 0 0px;
+          min-width: 0;
+        }
 
         /* ── Character Strip ── */
         .vns-strip {
