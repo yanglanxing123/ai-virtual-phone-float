@@ -73,7 +73,6 @@ import { ChatFallbackAvatar } from "./chat-fallback-avatar";
 import { ChatScreenEffectOverlay, type ActiveScreenEffect } from "./chat-screen-effect";
 import {
     ListenTogetherStatusBar,
-    ListenTogetherFloatingCard,
     MusicSystemMessage,
     isMusicSystemMessage,
     useListenTogetherTimer,
@@ -1127,6 +1126,20 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const ltPrevTrackRef = useRef<ListenTogetherTrack | null>(null);
     const ltElapsed = useListenTogetherTimer(ltActive, ltIsPlaying, ltStartTime, ltPausedDuration);
 
+    // ── 全局音乐播放状态（用于常驻爱心跳动） ──
+    const [globalMusicPlaying, setGlobalMusicPlaying] = useState(false);
+    useEffect(() => {
+        const pollInterval = setInterval(() => {
+            try {
+                const bridge = getMusicControlBridge();
+                if (!bridge) { setGlobalMusicPlaying(false); return; }
+                const state = bridge.getState();
+                setGlobalMusicPlaying(!!state?.isPlaying);
+            } catch { /* 静默 */ }
+        }, 1000);
+        return () => clearInterval(pollInterval);
+    }, []);
+
     // 持久化一起听状态，使其跨页面刷新保持
     const persistLtState = useCallback(() => {
         try {
@@ -1268,8 +1281,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             }).catch(() => {});
         }
 
-        // 插入"播放歌曲"系统消息
-        pushMusicSystemMessage(session.id, "play", character?.name || "对方", currentTrack);
+        // 插入"播放歌曲"系统消息 — 判断是谁发起的播放
+        const isAiInitiated = consumeBridgeCallFlag();
+        const initActor = isAiInitiated ? (character?.name || "对方") : (userIdentity?.name || "我");
+        pushMusicSystemMessage(session.id, "play", initActor, currentTrack);
         syncMessagesRef.current();
     }, [session.id, character?.name, userIdentity?.name, userIdentity?.avatarUrl, character?.avatar]);
 
@@ -1314,7 +1329,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 if (newTrack && ltPrevTrackRef.current && newTrack.title !== ltPrevTrackRef.current.title) {
                     // 判断是谁切的歌
                     const isAiSwitch = consumeBridgeCallFlag();
-                    const actor = isAiSwitch ? (character?.name || "对方") : "我";
+                    const actor = isAiSwitch ? (character?.name || "对方") : (userIdentity?.name || "我");
                     const actionType = isAiSwitch ? "switch" : "switch";
                     pushMusicSystemMessage(session.id, actionType, actor, newTrack);
                     syncMessagesRef.current();
@@ -1341,7 +1356,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 if (newIsPlaying !== ltIsPlaying) {
                     setLtIsPlaying(newIsPlaying);
                     if (newIsPlaying && ltCurrentTrack) {
-                        pushMusicSystemMessage(session.id, "resume", character?.name || "对方", ltCurrentTrack);
+                        const resumeActor = consumeBridgeCallFlag() ? (character?.name || "对方") : (userIdentity?.name || "我");
+                        pushMusicSystemMessage(session.id, "resume", resumeActor, ltCurrentTrack);
                         syncMessagesRef.current();
                     }
                 }
@@ -5488,17 +5504,18 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     <button className="page-back-btn" type="button" onClick={onBack} aria-label="返回">
                         <ChevronLeft size={24} strokeWidth={1.5} />
                     </button>
-                    <span className="page-title" style={{ position: 'relative' }}>
-                        {offlineMode ? "线下 · " : ""}
-                        {session.isGroup
-                            ? `${session.groupName || "群聊"}(${(session.participantIds?.length || 0) + (session.isSpectator ? 0 : 1)})`
-                            : (session.alias || character?.name || `User_${session.contactId.slice(-4)}`)}
-                        {(isGenerating || isOfflineGenerating) && (
-                            <span className="chat-typing-indicator">
-                                {offlineMode ? "线下生成中" : "对方正在输入"}<span className="chat-typing-dots"><i/><i/><i/></span>
-                            </span>
-                        )}
-                    </span>
+                    <ListenTogetherStatusBar
+                        userAvatar={userIdentity?.avatarUrl || undefined}
+                        userNickname={userIdentity?.name || "我"}
+                        charName={character?.name || "对方"}
+                        charAvatar={character?.avatar || undefined}
+                        elapsedSeconds={ltActive ? ltElapsed : 0}
+                        currentTrack={ltCurrentTrack}
+                        isPlaying={ltActive ? ltIsPlaying : globalMusicPlaying}
+                        showTimer={ltActive}
+                        showClose={ltActive}
+                        onClose={ltActive ? closeListenTogether : undefined}
+                    />
                     <span className="page-header-right">
                         <button className="page-back-btn" type="button" onClick={() => setShowSettings(true)} aria-label="更多">
                             <MoreHorizontal size={22} strokeWidth={1.5} />
@@ -5512,19 +5529,6 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 className="chat-plugin-header chat-room-main-pane"
             />
 
-            {/* 一起听状态栏：仅在激活一起听模式时显示 */}
-            {ltActive && (
-                <ListenTogetherStatusBar
-                    userAvatar={userIdentity?.avatarUrl || undefined}
-                    userNickname={userIdentity?.name || "我"}
-                    charName={character?.name || "对方"}
-                    charAvatar={character?.avatar || undefined}
-                    elapsedSeconds={ltElapsed}
-                    currentTrack={ltCurrentTrack}
-                    isPlaying={ltIsPlaying}
-                    onClose={closeListenTogether}
-                />
-            )}
             {/* 一起听提示Toast */}
             {ltToast && (
                 <div className="lt-toast">{ltToast}</div>
@@ -6185,17 +6189,6 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 })}
                 {/* Scroll anchor: browser keeps this in view when content above changes height */}
                 <div style={{ overflowAnchor: 'auto', height: 1 }} />
-                {/* 一起听悬浮播放预览卡片 */}
-                {ltActive && ltCurrentTrack && (
-                    <div className="lt-floating-wrap">
-                        <ListenTogetherFloatingCard
-                            track={ltCurrentTrack}
-                            isPlaying={ltIsPlaying}
-                            charName={character?.name || "对方"}
-                            elapsedSeconds={ltElapsed}
-                        />
-                    </div>
-                )}
             </div>
 
             {/* Input Bar — absolute at bottom, same layer as header */}

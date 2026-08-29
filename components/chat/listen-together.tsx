@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
-import { X, Headphones, Heart, Pause, Music, ChevronUp, ChevronDown } from "lucide-react";
+import { X, Heart, Pause, Music, ChevronUp, ChevronDown } from "lucide-react";
 import type { ChatMessage } from "@/lib/chat-storage";
 import { pushChatMessage } from "@/lib/chat-storage";
 import { kvGet, kvSet, kvRemove } from "@/lib/kv-db";
@@ -39,19 +39,24 @@ export const initialListenTogetherState: ListenTogetherState = {
 };
 
 // ── 全局切歌来源追踪 ──────────────────────────────────────
-// bridge 调用标记：当 AI 通过 bridge 切歌时设为 true
-let _bridgeCallFlag = false;
+// bridge 调用时间戳：记录 AI 通过 bridge 切歌的时间
+let _bridgeCallTimestamp = 0;
 
-/** 标记此次音乐操作来自 AI（通过 bridge 调用） */
+/** 标记此次音乐操作来自 AI（通过 bridge 调用），记录时间戳 */
 export function setBridgeCallFlag(): void {
-    _bridgeCallFlag = true;
+    _bridgeCallTimestamp = Date.now();
 }
 
-/** 消费并重置 bridge 调用标记，返回 true 表示上次切歌来自 AI */
+/**
+ * 检查最近的切歌是否来自 AI（通过 bridge 调用）
+ * 如果 bridge 调用在 5 秒内，则认为是 AI 切歌
+ */
 export function consumeBridgeCallFlag(): boolean {
-    const flag = _bridgeCallFlag;
-    _bridgeCallFlag = false;
-    return flag;
+    if (_bridgeCallTimestamp === 0) return false;
+    const elapsed = Date.now() - _bridgeCallTimestamp;
+    _bridgeCallTimestamp = 0;
+    // 5 秒内的 bridge 调用认为是 AI 切歌
+    return elapsed < 5000;
 }
 
 // ── 全局一起听浮窗状态存储 ──────────────────────────────────
@@ -248,19 +253,19 @@ export function pushMusicSystemMessage(
 
 // ── 心电图跳动爱心动画 ─────────────────────────────────────
 
-const ECGHeartbeat = memo(function ECGHeartbeat() {
+const ECGHeartbeat = memo(function ECGHeartbeat({ beating = true }: { beating?: boolean }) {
     return (
-        <div className="lt-heartbeat-wrap">
+        <div className={`lt-heartbeat-wrap ${beating ? "lt-heartbeat-active" : "lt-heartbeat-idle"}`}>
             <svg
-                width="56"
-                height="32"
-                viewBox="0 0 56 32"
+                width="48"
+                height="28"
+                viewBox="0 0 48 28"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 className="lt-ecg-svg"
             >
                 <path
-                    d="M2 16 L14 16 L18 8 L22 24 L26 4 L30 28 L34 16 L54 16"
+                    d="M2 14 L12 14 L16 7 L20 21 L24 3 L28 25 L32 14 L46 14"
                     stroke="var(--lt-heart-color, #FF6B8A)"
                     strokeWidth="2"
                     strokeLinecap="round"
@@ -270,7 +275,7 @@ const ECGHeartbeat = memo(function ECGHeartbeat() {
                 />
             </svg>
             <Heart
-                size={20}
+                size={18}
                 fill="var(--lt-heart-color, #FF6B8A)"
                 color="var(--lt-heart-color, #FF6B8A)"
                 className="lt-heart-pulse"
@@ -279,17 +284,19 @@ const ECGHeartbeat = memo(function ECGHeartbeat() {
     );
 });
 
-// ── 顶部状态栏组件 ─────────────────────────────────────────
+// ── 顶部状态栏组件（常驻显示双头像+爱心） ─────────────────────
 
 interface ListenTogetherStatusBarProps {
     userAvatar?: string;
     userNickname: string;
     charAvatar?: string;
     charName: string;
-    elapsedSeconds: number;
-    currentTrack: ListenTogetherTrack | null;
+    elapsedSeconds?: number;
+    currentTrack?: ListenTogetherTrack | null;
     isPlaying: boolean;
-    onClose: () => void;
+    onClose?: () => void;
+    showTimer?: boolean;
+    showClose?: boolean;
 }
 
 export const ListenTogetherStatusBar = memo(function ListenTogetherStatusBar({
@@ -297,107 +304,48 @@ export const ListenTogetherStatusBar = memo(function ListenTogetherStatusBar({
     userNickname,
     charAvatar,
     charName,
-    elapsedSeconds,
-    currentTrack,
+    elapsedSeconds = 0,
     isPlaying,
     onClose,
+    showTimer = true,
+    showClose = true,
 }: ListenTogetherStatusBarProps) {
     const minutes = Math.floor(elapsedSeconds / 60);
     const seconds = elapsedSeconds % 60;
-    const timeStr = minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`;
+    const timeStr = minutes > 0 ? `一起听了 ${minutes}分${seconds}秒` : `一起听了 ${seconds}秒`;
 
     return (
-        <div className="lt-status-bar">
-            <div className="lt-avatars">
-                <div className="lt-avatar lt-avatar-user">
+        <div className="lt-status-bar lt-status-bar-inline lt-status-bar-permanent">
+            <div className="lt-avatars-inline">
+                <div className="lt-avatar-mini lt-avatar-user">
                     {userAvatar ? (
                         <img src={userAvatar} alt={userNickname} className="lt-avatar-img" />
                     ) : (
                         <span className="lt-avatar-fallback">{userNickname[0] || "?"}</span>
                     )}
-                    <span className="lt-avatar-name">{userNickname}</span>
                 </div>
-                <ECGHeartbeat />
-                <div className="lt-avatar lt-avatar-char">
+                <ECGHeartbeat beating={isPlaying} />
+                <div className="lt-avatar-mini lt-avatar-char">
                     {charAvatar ? (
                         <img src={charAvatar} alt={charName} className="lt-avatar-img" />
                     ) : (
                         <span className="lt-avatar-fallback">{charName[0] || "?"}</span>
                     )}
-                    <span className="lt-avatar-name">{charName}</span>
                 </div>
             </div>
-            <div className="lt-timer-info">
-                <span className="lt-timer-label">一起听了</span>
-                <span className="lt-timer-value">{timeStr}</span>
-            </div>
-            <button
-                className="lt-close-btn"
-                onClick={onClose}
-                aria-label="退出一起听"
-                title="退出一起听"
-            >
-                <X size={16} strokeWidth={2} />
-            </button>
-        </div>
-    );
-});
-
-// ── 悬浮播放预览卡片（聊天内嵌版） ─────────────────────────
-
-interface ListenTogetherFloatingCardProps {
-    track: ListenTogetherTrack | null;
-    isPlaying: boolean;
-    charName: string;
-    elapsedSeconds?: number;
-}
-
-export const ListenTogetherFloatingCard = memo(function ListenTogetherFloatingCard({
-    track,
-    isPlaying,
-    charName,
-    elapsedSeconds,
-}: ListenTogetherFloatingCardProps) {
-    if (!track) return null;
-    const mins = elapsedSeconds != null ? Math.floor(elapsedSeconds / 60) : 0;
-    const secs = elapsedSeconds != null ? elapsedSeconds % 60 : 0;
-    const timeStr = elapsedSeconds != null
-        ? (mins > 0 ? `一起听了 ${mins}分${secs}秒` : `一起听了 ${secs}秒`)
-        : null;
-
-    return (
-        <div className="lt-floating-card">
-            <div className="lt-floating-card-cover">
-                {track.coverUrl ? (
-                    <img src={track.coverUrl} alt="" className="lt-floating-card-cover-img" />
-                ) : (
-                    <Music size={20} strokeWidth={1.5} color="var(--c-text)" />
-                )}
-            </div>
-            <div className="lt-floating-card-info">
-                <div className="lt-floating-card-title">{track.title}</div>
-                <div className="lt-floating-card-artist">
-                    {track.artist || "未知歌手"}
-                </div>
-                <div className="lt-floating-card-source">
-                    <Headphones size={11} strokeWidth={1.5} />
-                    <span>{track.source || "网易云导入"}</span>
-                    {timeStr && <span className="lt-floating-card-duration">{timeStr}</span>}
-                    <span className="lt-floating-card-status">
-                        {isPlaying ? (
-                            <>
-                                <span className="lt-playing-dot" />
-                                正在播放
-                            </>
-                        ) : (
-                            <>
-                                <Pause size={10} strokeWidth={2} />
-                                已暂停
-                            </>
-                        )}
-                    </span>
-                </div>
-            </div>
+            {showTimer && elapsedSeconds > 0 && (
+                <span className="lt-timer-inline">{timeStr}</span>
+            )}
+            {showClose && onClose && (
+                <button
+                    className="lt-close-btn"
+                    onClick={onClose}
+                    aria-label="退出一起听"
+                    title="退出一起听"
+                >
+                    <X size={16} strokeWidth={2} />
+                </button>
+            )}
         </div>
     );
 });
@@ -456,7 +404,7 @@ export function ListenTogetherOverlay({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="lt-overlay-info">
                     <div className="lt-overlay-title-row">
-                        <ECGHeartbeat />
+                        <ECGHeartbeat beating={state.isPlaying} />
                         <span className="lt-overlay-title">{track.title}</span>
                     </div>
                     <div className="lt-overlay-meta">
@@ -472,16 +420,10 @@ export function ListenTogetherOverlay({ onClose }: { onClose: () => void }) {
                             )}
                         </span>
                     </div>
-                    {/* 歌词行 */}
-                    {currentLyric && (
-                        <div className="lt-overlay-lyric-current">{currentLyric.text}</div>
-                    )}
-                    {nextLyric && (
-                        <div className="lt-overlay-lyric-next">{nextLyric.text}</div>
-                    )}
-                    {!currentLyric && !nextLyric && track.lyrics && (
-                        <div className="lt-overlay-lyric-current">♪</div>
-                    )}
+                    {/* 单行歌词 */}
+                    <div className="lt-overlay-lyric-single">
+                        {currentLyric?.text || "♪"}
+                    </div>
                 </div>
                 <button
                     className="lt-overlay-close"
