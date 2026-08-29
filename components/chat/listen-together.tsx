@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
-import { X, Headphones, Heart, Play, Pause, Music } from "lucide-react";
+import { X, Headphones, Heart, Pause, Music } from "lucide-react";
 import type { ChatMessage } from "@/lib/chat-storage";
 import { pushChatMessage } from "@/lib/chat-storage";
 
@@ -234,6 +234,7 @@ export const MusicSystemMessage = memo(function MusicSystemMessage({ msg }: Musi
     const source = data.musicSource || "网易云导入";
     const action = data.musicAction || "play";
     const playlist = data.playlistName;
+    const content = msg.content || "";
 
     let actionText = "";
     switch (action) {
@@ -250,13 +251,20 @@ export const MusicSystemMessage = memo(function MusicSystemMessage({ msg }: Musi
             actionText = "播放了";
     }
 
+    // 从 content 中提取角色名（"播放了"、"收藏了"、"继续播放" 前面的部分）
+    let charName = "";
+    try {
+        const parts = content.split(/播放了|收藏了|继续播放/);
+        charName = parts[0]?.trim() || "";
+    } catch { /* 静默 */ }
+
     return (
         <div className="lt-music-system-msg">
             <div className="lt-music-system-icon">
                 <Music size={14} strokeWidth={1.5} />
             </div>
             <div className="lt-music-system-content">
-                <span className="lt-music-system-action">{msg.content.split("播放了")[0].split("收藏了")[0].split("继续播放")[0].trim()}</span>
+                {charName && <span className="lt-music-system-action">{charName}</span>}
                 <span className="lt-music-system-action-text">{actionText}</span>
                 <span className="lt-music-system-title">《{title}》</span>
                 {artist && <span className="lt-music-system-artist">—{artist}</span>}
