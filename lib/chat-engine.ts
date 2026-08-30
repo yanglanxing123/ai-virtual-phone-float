@@ -1863,6 +1863,7 @@ export async function buildChatPromptMessages(
     const scheduleSummary = buildCalendarScheduleMarker("character", character.id, getWeekStartIso(now));
     const currentSchedule = getCurrentCalendarScheduleForPrompt("character", character.id, now);
     const musicOnlineHint = isNeteaseConfigured() ? "- 你可以推荐任何歌曲，系统会在线搜索并播放。不局限于用户本地音乐库。\n" : "\n";
+    const listenTogetherHint = "- 你可以发起「一起听」邀请。在回复中添加 [一起听] 来邀请用户一起听当前正在播放的音乐；或添加 [一起听:歌曲名-歌手] 来播放指定歌曲并开启一起听。\n";
     const pluginPrompt = await runChatPluginTransform("prompt.system", {
         sessionId: session.id,
         isGroup: !!session.isGroup,
@@ -1870,7 +1871,7 @@ export async function buildChatPromptMessages(
         hint: buildChatPluginPromptFragments(session.id),
     });
     const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### 扩展插件\n${pluginPrompt.hint.trim()}\n` : "";
-    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt() + buildScreenEffectPromptHint() + pluginPromptHint;
+    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt() + buildScreenEffectPromptHint() + pluginPromptHint + listenTogetherHint;
     const toolsPrompt = toolsEnabled && !usesNativeActions ? formatToolsForPrompt(enabledTools) : "";
     const chatBilingualInstruction = !session.isGroup
         ? buildChatBilingualInstruction(session.bilingualTranslationEnabled !== false, "single", session.bilingualTranslationPrompt)
@@ -1884,6 +1885,22 @@ export async function buildChatPromptMessages(
             session.offlineBilingualTranslationPrompt,
         )
         : "";
+
+    // Read live reading context synced from the reading app
+    let readingBookTitle = "";
+    let readingChapterTitle = "";
+    let readingChapterContent = "";
+    try {
+        const rawCtx = kvGet("ai_phone_reading_context_v1");
+        if (rawCtx) {
+            const parsed = JSON.parse(rawCtx) as { bookTitle?: string; chapterTitle?: string; chapterContent?: string };
+            readingBookTitle = parsed.bookTitle ?? "";
+            readingChapterTitle = parsed.chapterTitle ?? "";
+            readingChapterContent = parsed.chapterContent ?? "";
+        }
+    } catch {
+        // Ignore parse errors — reading context is optional
+    }
 
     const llmMessages = assemblePromptPayload({
         character,
@@ -1913,6 +1930,7 @@ export async function buildChatPromptMessages(
         musicLocal,
         musicCloud,
         musicOnlineHint,
+        listenTogetherHint,
         timeContext: promptTimeContext,
         promptTimestampOptions,
         enableVision: config.enableImageRecognition,
@@ -1927,7 +1945,18 @@ export async function buildChatPromptMessages(
         offlineBilingualInstruction,
         offlineSummaryTag: preset?.story_summary_tag?.trim() || "summary",
         nativeToolHistory: usesNativeActions,
+        bookTitle: readingBookTitle,
+        chapterTitle: readingChapterTitle,
+        chapterContent: readingChapterContent,
     });
+    // Inject reading context as a system message so the character can see what the user is reading
+    // even if the preset template doesn't include {{bookTitle}}/{{chapterContent}} macros.
+    if (readingChapterContent) {
+        llmMessages.push({
+            role: "system",
+            content: `【用户当前阅读】\n书名：${readingBookTitle}\n章节：${readingChapterTitle}\n\n${readingChapterContent}`,
+        });
+    }
     if (promptProfile?.output === "plain_text") {
         llmMessages.push({
             role: "system",

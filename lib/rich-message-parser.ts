@@ -244,6 +244,21 @@ const RICH_PATTERNS: {
         },
     },
     {
+        // [一起听] or [一起听:歌名-歌手] — AI initiates listen-together
+        regex: new RegExp(`\\[一起听(?::${C}([^\\]]+))?\\]`),
+        build: (m) => {
+            const raw = (m[1] || "").trim();
+            const sep = raw.indexOf("-");
+            const title = sep > 0 ? raw.slice(0, sep).trim() : raw;
+            const artist = sep > 0 ? raw.slice(sep + 1).trim() : "";
+            return {
+                content: "",
+                mediaType: "listen_together" as const,
+                mediaData: { musicTitle: title || undefined, musicArtist: artist || undefined, label: raw || undefined },
+            };
+        },
+    },
+    {
         // [语音条:文字内容] — voice message
         regex: new RegExp(`\\[语音条${C}([^\\]]+)\\]`),
         build: (m) => ({

@@ -73,6 +73,7 @@ export interface AssemblerInput {
     musicLocal?: string;                   // local music titles for {{musicLocal}} macro
     musicCloud?: string;                   // netease playlist summary for {{musicCloud}} macro
     musicOnlineHint?: string;              // online search hint for {{musicOnlineHint}} macro
+    listenTogetherHint?: string;           // listen-together directive for {{listenTogetherHint}} macro
     timeContext?: CharacterTimeContext;     // precomputed system/character local time context
     promptTimestampOptions?: PromptTimestampOptions; // chat-history timestamp display options
     timeAware?: boolean;                   // when true, inject timestamps into chat history
@@ -667,6 +668,7 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
         engine.musicLocal = input.musicLocal ?? "";
         engine.musicCloud = input.musicCloud ?? "";
         engine.musicOnlineHint = input.musicOnlineHint ?? "";
+        engine.listenTogetherHint = input.listenTogetherHint ?? "";
         engine.currentSchedule = input.currentSchedule ?? "";
         engine.vnScenes = input.vnScenes ?? "";
         engine.vnSprites = input.vnSprites ?? "";
@@ -1578,6 +1580,7 @@ export interface GroupAssemblerInput {
     musicLocal?: string;
     musicCloud?: string;
     musicOnlineHint?: string;
+    listenTogetherHint?: string;
     currentSchedule?: string;
     enableVision?: boolean;
     timeContext?: CharacterTimeContext;
@@ -1839,6 +1842,7 @@ export function assembleGroupPromptPayload(input: GroupAssemblerInput): LLMMessa
         engine.musicLocal = input.musicLocal ?? "";
         engine.musicCloud = input.musicCloud ?? "";
         engine.musicOnlineHint = input.musicOnlineHint ?? "";
+        engine.listenTogetherHint = input.listenTogetherHint ?? "";
         engine.currentSchedule = m.currentSchedule ?? "";
         engine.tools = input.tools ?? "";
         engine.cocreateWriteActions = input.cocreateWriteActions ?? "";
@@ -1967,6 +1971,7 @@ export function assembleGroupPromptPayload(input: GroupAssemblerInput): LLMMessa
         groupEngine.musicLocal = input.musicLocal ?? "";
         groupEngine.musicCloud = input.musicCloud ?? "";
         groupEngine.musicOnlineHint = input.musicOnlineHint ?? "";
+        groupEngine.listenTogetherHint = input.listenTogetherHint ?? "";
         groupEngine.currentSchedule = input.currentSchedule ?? "";
         groupEngine.stateStr = members
             .map(m => `${m.character.name}: ${formatStateValuesForPrompt(m.currentStateValues)}`)
