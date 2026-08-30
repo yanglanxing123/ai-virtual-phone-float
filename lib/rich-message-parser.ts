@@ -245,7 +245,7 @@ const RICH_PATTERNS: {
     },
     {
         // [一起听] or [一起听:歌名-歌手] — AI initiates listen-together
-        regex: new RegExp(`\\[一起听(?::${C}([^\\]]+))?\\]`),
+        regex: new RegExp(`\\[一起听(?:${C}([^\\]]+))?\\]`),
         build: (m) => {
             const raw = (m[1] || "").trim();
             const sep = raw.indexOf("-");
