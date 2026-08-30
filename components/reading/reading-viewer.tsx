@@ -115,7 +115,7 @@ const DISCUSS_TARGET_CHARS = 1000;
 const DISCUSS_MIN_CHARS = 700;
 const DISCUSS_MAX_CHARS = 1600;
 const DISCUSS_MAX_PARAGRAPHS = 16;
-const PREVIOUS_CONTEXT_CHARS = 3000;
+const PREVIOUS_CONTEXT_CHARS = 800;
 
 function toCanvasFont(style: CSSStyleDeclaration): string {
     return [
@@ -1181,15 +1181,14 @@ export function ReadingViewer({ book, onBack }: Props) {
 
         const chapterContent = [
             `当前阅读页面：第${focusChapterIndex + 1}章 ${formatParagraphRangeLabel(focusStartParagraph, focusEndParagraph)}`,
-            previousRefs.length > 0
-                ? `前文回顾（约${previousChars}字，${previousRefs.length}段）`
-                : `前文回顾：无`,
-            "",
-            "【前文内容】",
-            prevContentLines,
             "",
             "【当前页面 — 用户手机屏幕正在显示的内容】",
             currentContentLines,
+            "",
+            previousRefs.length > 0
+                ? `【前文回顾（约${previousChars}字，${previousRefs.length}段）】`
+                : `【前文回顾：无】`,
+            prevContentLines,
         ].join("\n");
 
         return {
