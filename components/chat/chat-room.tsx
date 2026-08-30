@@ -1234,8 +1234,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     // syncMessagesFromStorage 在后面才声明，用 ref 在回调中安全引用
     const syncMessagesRef = useRef<() => void>(() => {});
 
-    // 一起听：启动
-    const startListenTogether = useCallback(() => {
+    // 一起听：启动（无音乐时自动从队列播放）
+    const startListenTogether = useCallback(async () => {
         const bridge = getMusicControlBridge();
         if (!bridge) {
             setLtToast("请先去音乐App播放音乐，再开启一起听");
@@ -1263,11 +1263,39 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 isPlaying = !!state.isPlaying;
                 currentTime = state.currentTime || 0;
                 duration = state.duration || 0;
+                // 如果暂停了，自动恢复播放
+                if (!isPlaying) {
+                    bridge.resume();
+                    isPlaying = true;
+                }
+            } else if (state?.queue && state.queue.length > 0) {
+                // 没有当前曲目但队列有歌 — 自动播放队列第一首
+                setLtToast("正在加载音乐...");
+                await bridge.playTrack(state.queue[0]);
+                await new Promise(r => setTimeout(r, 800));
+                // 重新读取状态
+                const newState = bridge.getState();
+                if (newState?.currentTrack) {
+                    const t = newState.currentTrack;
+                    currentTrack = {
+                        title: t.title || "未知歌曲",
+                        artist: t.artist,
+                        coverUrl: t.coverUrl,
+                        source: "网易云导入",
+                        songId: (t as any)?.id ? Number((t as any).id) : undefined,
+                        lyrics: t.lyrics,
+                        duration: t.duration,
+                    };
+                    isPlaying = !!newState.isPlaying;
+                    currentTime = newState.currentTime || 0;
+                    duration = newState.duration || 0;
+                }
+                setLtToast(null);
             }
         } catch { /* 静默 */ }
 
         if (!currentTrack) {
-            setLtToast("请先去音乐App播放音乐，再开启一起听");
+            setLtToast("请先去音乐App添加歌曲，再开启一起听");
             setTimeout(() => setLtToast(null), 3000);
             return;
         }
