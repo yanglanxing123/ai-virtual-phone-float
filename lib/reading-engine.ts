@@ -303,6 +303,14 @@ export async function generateAnnotationBatch(
 
     const { input, apiConfig, preset } = resolved;
     const llmMessages = assemblePromptPayload(input);
+    // Inject reading context as a system message so the character can see the current page + previous content
+    // even if the preset template doesn't include {{bookTitle}}/{{chapterContent}} macros.
+    if (input.chapterContent) {
+        llmMessages.push({
+            role: "system",
+            content: `【用户当前阅读】\n书名：${input.bookTitle}\n章节：${input.chapterTitle}\n\n${input.chapterContent}`,
+        });
+    }
     const responseText = await callReadingLLM(
         apiConfig!,
         preset,
@@ -421,6 +429,13 @@ export async function generateReadingChat(
 
     const { input, apiConfig, preset } = resolved;
     const llmMessages = assemblePromptPayload(input);
+    // Inject reading context as a system message so the character can see the current page + previous content
+    if (input.chapterContent) {
+        llmMessages.push({
+            role: "system",
+            content: `【用户当前阅读】\n书名：${input.bookTitle}\n章节：${input.chapterTitle}\n\n${input.chapterContent}`,
+        });
+    }
     const responseText = await callReadingLLM(
         apiConfig!,
         preset,
