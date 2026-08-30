@@ -1126,10 +1126,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [showLtExitConfirm, setShowLtExitConfirm] = useState(false);
     const ltPrevTrackRef = useRef<ListenTogetherTrack | null>(null);
     const ltActiveRef = useRef(false);
+    // Refs for polling — avoid stale closures and prevent ltElapsed from re-triggering the poll effect
+    const ltCurrentTrackRef = useRef<ListenTogetherTrack | null>(null);
+    const ltIsPlayingRef = useRef(false);
+    const ltStartTimeRef = useRef<number | null>(null);
+    const ltPausedDurationRef = useRef(0);
     const ltElapsed = useListenTogetherTimer(ltActive, ltIsPlaying, ltStartTime, ltPausedDuration);
 
-    // Keep ltActiveRef in sync for use in async callbacks
+    // Keep refs in sync for use in polling interval
     useEffect(() => { ltActiveRef.current = ltActive; }, [ltActive]);
+    useEffect(() => { ltCurrentTrackRef.current = ltCurrentTrack; }, [ltCurrentTrack]);
+    useEffect(() => { ltIsPlayingRef.current = ltIsPlaying; }, [ltIsPlaying]);
+    useEffect(() => { ltStartTimeRef.current = ltStartTime; }, [ltStartTime]);
+    useEffect(() => { ltPausedDurationRef.current = ltPausedDuration; }, [ltPausedDuration]);
 
     // ── 全局音乐播放状态（用于常驻爱心跳动） ──
     const [globalMusicPlaying, setGlobalMusicPlaying] = useState(false);
@@ -1364,16 +1373,28 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     }, [ltActive, startListenTogether]);
 
     // 一起听：监听音乐APP的播放状态变化
+    // 使用 ref 避免频繁重建 interval（ltElapsed 每秒变化会导致 effect 反复清除/重建）
     useEffect(() => {
         if (!ltActive) return;
-        const bridge = getMusicControlBridge();
-        if (!bridge) return;
 
         // 轮询检查播放状态（本地模拟，不需要真实联机API）
         const pollInterval = setInterval(() => {
             try {
+                // 每次轮询获取最新 bridge，避免音乐上下文重新注册后 bridge 过期
+                const bridge = getMusicControlBridge();
+                if (!bridge) return;
+
                 const state = bridge.getState();
                 if (!state) return;
+
+                // 从 ref 读取最新值，避免闭包过期
+                const curTrack = ltCurrentTrackRef.current;
+                const curIsPlaying = ltIsPlayingRef.current;
+                const startTime = ltStartTimeRef.current;
+                const pausedDur = ltPausedDurationRef.current;
+
+                // 实时计算 elapsed
+                const elapsed = startTime ? Math.max(0, Math.floor((Date.now() - startTime - pausedDur) / 1000)) : 0;
 
                 const t = state.currentTrack;
                 const newTrack: ListenTogetherTrack | null = t ? {
@@ -1382,7 +1403,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     coverUrl: t.coverUrl,
                     source: t.lyrics ? "网易云导入" : "网易云导入",
                     songId: (t as any)?.id ? Number((t as any).id) : undefined,
-                    lyrics: t.lyrics || ltCurrentTrack?.lyrics,
+                    lyrics: t.lyrics || curTrack?.lyrics,
                     duration: t.duration,
                 } : null;
 
@@ -1416,11 +1437,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 }
 
                 // 检测暂停/恢复
-                if (newIsPlaying !== ltIsPlaying) {
+                if (newIsPlaying !== curIsPlaying) {
                     setLtIsPlaying(newIsPlaying);
-                    if (newIsPlaying && ltCurrentTrack) {
+                    if (newIsPlaying && curTrack) {
                         const resumeActor = consumeBridgeCallFlag() ? (character?.name || "对方") : (userIdentity?.name || "我");
-                        pushMusicSystemMessage(session.id, "resume", resumeActor, ltCurrentTrack);
+                        pushMusicSystemMessage(session.id, "resume", resumeActor, curTrack);
                         syncMessagesRef.current();
                     }
                 }
@@ -1439,9 +1460,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 // 更新全局浮窗状态
                 setLtOverlayState({
                     active: true,
-                    track: newTrack || ltCurrentTrack,
+                    track: newTrack || curTrack,
                     isPlaying: newIsPlaying,
-                    elapsedSeconds: ltElapsed,
+                    elapsedSeconds: elapsed,
                     charName: character?.name || "对方",
                     characterId: character?.id || session.contactId || "",
                     userNickname: userIdentity?.name || "我",
@@ -1454,7 +1475,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         }, 2000);
 
         return () => clearInterval(pollInterval);
-    }, [ltActive, ltIsPlaying, ltCurrentTrack, session.id, character?.name, closeListenTogether, ltElapsed, userIdentity?.name, userIdentity?.avatarUrl, character?.avatar]);
+    }, [ltActive, session.id, character?.name, character?.id, character?.avatar, session.contactId, userIdentity?.name, userIdentity?.avatarUrl, closeListenTogether]);
 
     // Rich media input modals
     const [richModal, setRichModal] = useState<RichModalKind | null>(null);
