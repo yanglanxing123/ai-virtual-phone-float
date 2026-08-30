@@ -1949,12 +1949,14 @@ export async function buildChatPromptMessages(
         chapterTitle: readingChapterTitle,
         chapterContent: readingChapterContent,
     });
-    // Inject reading context as a system message so the character can see what the user is reading
-    // even if the preset template doesn't include {{bookTitle}}/{{chapterContent}} macros.
+    // Inject reading context as a system message BEFORE the chat history so the LLM
+    // processes it early. Clearly label what's on the user's phone screen vs. previous text.
     if (readingChapterContent) {
-        llmMessages.push({
+        const firstNonSystemIdx = llmMessages.findIndex(m => m.role !== "system");
+        const insertIdx = firstNonSystemIdx >= 0 ? firstNonSystemIdx : llmMessages.length;
+        llmMessages.splice(insertIdx, 0, {
             role: "system",
-            content: `【用户当前阅读】\n书名：${readingBookTitle}\n章节：${readingChapterTitle}\n\n${readingChapterContent}`,
+            content: `【用户正在使用阅读App，以下是其手机屏幕当前显示的阅读内容】\n书名：${readingBookTitle}\n${readingChapterTitle}\n\n${readingChapterContent}\n\n注意：【当前页面 — 用户手机屏幕正在显示的内容】部分是用户此刻手机屏幕上正在显示的文字，【前文内容】是用户刚刚翻过页看过的前文回顾。`,
         });
     }
     if (promptProfile?.output === "plain_text") {
