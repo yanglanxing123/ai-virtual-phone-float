@@ -1188,7 +1188,7 @@ export function ReadingViewer({ book, onBack }: Props) {
             "【前文内容】",
             prevContentLines,
             "",
-            "【当前页面】",
+            "【当前页面 — 用户手机屏幕正在显示的内容】",
             currentContentLines,
         ].join("\n");
 
