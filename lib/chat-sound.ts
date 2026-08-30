@@ -148,18 +148,21 @@ function playToneSequence(tones: ToneSpec[], volumePercent: number): void {
 }
 
 /**
- * 仿QQ经典提示音 "叮咚" — 两个音调，清脆悦耳
+ * 三全音 — 三个升调音符 C5-E5-G5，清脆明亮
+ * 灵感来自经典"三全音"提示音，使用类马林巴琴音色
  */
 function playDefaultMessageSound(volumePercent: number): void {
     playToneSequence([
-        { freq: 1046.5, duration: 0.12, delay: 0,    type: "sine", volume: 0.35 }, // C6
-        { freq: 1318.5, duration: 0.20, delay: 0.10, type: "sine", volume: 0.30 }, // E6
+        { freq: 523.25, duration: 0.18, delay: 0,    type: "triangle", volume: 0.35 }, // C5
+        { freq: 659.25, duration: 0.18, delay: 0.11, type: "triangle", volume: 0.35 }, // E5
+        { freq: 783.99, duration: 0.30, delay: 0.22, type: "triangle", volume: 0.35 }, // G5
     ], volumePercent);
 }
 
 /**
- * 仿QQ特别关心提示音 — "流水声"水滴音效
- * 使用频率快速下降模拟水滴入水，加上短促噪声模拟水花
+ * 甘露 — QQ特别关心提示音
+ * 基于钢琴简谱旋律 F-G-D-E-D-E，使用颤音琴音色
+ * 节拍 ♩=90，每个音符带有轻微频率下降模拟水滴质感
  */
 function playSpecialCareSound(volumePercent: number): void {
     const ctx = getAudioContext();
@@ -173,57 +176,50 @@ function playSpecialCareSound(volumePercent: number): void {
     masterGain.gain.value = 0.5 * volMultiplier;
     masterGain.connect(ctx.destination);
 
-    // 1. 水滴主音 — 高频快速下降（模拟水滴）
-    const dropOsc = ctx.createOscillator();
-    const dropGain = ctx.createGain();
-    dropOsc.type = "sine";
-    dropOsc.frequency.setValueAtTime(2200, now);
-    dropOsc.frequency.exponentialRampToValueAtTime(440, now + 0.15);
-    dropGain.gain.setValueAtTime(0, now);
-    dropGain.gain.linearRampToValueAtTime(0.4 * volMultiplier, now + 0.005);
-    dropGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-    dropOsc.connect(dropGain);
-    dropGain.connect(masterGain);
-    dropOsc.start(now);
-    dropOsc.stop(now + 0.17);
+    // 甘露旋律：F5 G5 D5 E5 D5 E5（简谱 4 5 2 3 2 3）
+    const notes = [
+        { freq: 698.46, delay: 0.00, dur: 0.20 },  // F5
+        { freq: 783.99, delay: 0.20, dur: 0.20 },  // G5
+        { freq: 587.33, delay: 0.40, dur: 0.20 },  // D5
+        { freq: 659.25, delay: 0.60, dur: 0.20 },  // E5
+        { freq: 587.33, delay: 0.80, dur: 0.20 },  // D5
+        { freq: 659.25, delay: 1.00, dur: 0.40 },  // E5（延长）
+    ];
 
-    // 2. 第二个水滴 — 稍微延迟，频率略低
-    const drop2Osc = ctx.createOscillator();
-    const drop2Gain = ctx.createGain();
-    drop2Osc.type = "sine";
-    drop2Osc.frequency.setValueAtTime(1800, now + 0.08);
-    drop2Osc.frequency.exponentialRampToValueAtTime(380, now + 0.08 + 0.12);
-    drop2Gain.gain.setValueAtTime(0, now + 0.08);
-    drop2Gain.gain.linearRampToValueAtTime(0.3 * volMultiplier, now + 0.08 + 0.005);
-    drop2Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08 + 0.12);
-    drop2Osc.connect(drop2Gain);
-    drop2Gain.connect(masterGain);
-    drop2Osc.start(now + 0.08);
-    drop2Osc.stop(now + 0.08 + 0.14);
+    for (const note of notes) {
+        // 主音 — 正弦波 + 轻微频率下降（水滴感）
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(note.freq, now + note.delay);
+        osc.frequency.exponentialRampToValueAtTime(note.freq * 0.985, now + note.delay + note.dur);
 
-    // 3. 水花噪声 — 短促的过滤噪声模拟水花溅起
-    try {
-        const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
-        const noiseData = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < noiseData.length; i++) {
-            noiseData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (noiseData.length * 0.3));
-        }
-        const noiseSource = ctx.createBufferSource();
-        noiseSource.buffer = noiseBuffer;
-        const noiseFilter = ctx.createBiquadFilter();
-        noiseFilter.type = "bandpass";
-        noiseFilter.frequency.value = 3000;
-        noiseFilter.Q.value = 2;
-        const noiseGain = ctx.createGain();
-        noiseGain.gain.setValueAtTime(0, now + 0.03);
-        noiseGain.gain.linearRampToValueAtTime(0.15 * volMultiplier, now + 0.04);
-        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-        noiseSource.connect(noiseFilter);
-        noiseFilter.connect(noiseGain);
-        noiseGain.connect(masterGain);
-        noiseSource.start(now + 0.03);
-        noiseSource.stop(now + 0.12);
-    } catch { /* 噪声创建失败不影响主音 */ }
+        const vol = 0.3 * volMultiplier;
+        const startAt = now + note.delay;
+        const endAt = startAt + note.dur;
+        gain.gain.setValueAtTime(0, startAt);
+        gain.gain.linearRampToValueAtTime(vol, startAt + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, endAt);
+
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(startAt);
+        osc.stop(endAt + 0.02);
+
+        // 八度泛音 — 增加颤音琴亮度
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(note.freq * 2, now + note.delay);
+        osc2.frequency.exponentialRampToValueAtTime(note.freq * 1.97, now + note.delay + note.dur);
+        gain2.gain.setValueAtTime(0, startAt);
+        gain2.gain.linearRampToValueAtTime(vol * 0.12, startAt + 0.005);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, endAt);
+        osc2.connect(gain2);
+        gain2.connect(masterGain);
+        osc2.start(startAt);
+        osc2.stop(endAt + 0.02);
+    }
 }
 
 // ── 自定义音频文件播放 ──────────────────────────────────────
