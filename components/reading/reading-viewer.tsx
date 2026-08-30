@@ -115,7 +115,6 @@ const DISCUSS_TARGET_CHARS = 1000;
 const DISCUSS_MIN_CHARS = 700;
 const DISCUSS_MAX_CHARS = 1600;
 const DISCUSS_MAX_PARAGRAPHS = 16;
-const PREVIOUS_CONTEXT_CHARS = 800;
 
 function toCanvasFont(style: CSSStyleDeclaration): string {
     return [
@@ -358,20 +357,23 @@ export function ReadingViewer({ book, onBack }: Props) {
         (chaptersLoaded && chapters.length > 0 && Boolean(currentChapter) && !txtPagesReadyForCurrentChapter)
     );
 
+    const readingContentRef = useRef<HTMLDivElement>(null);
+
     const renderTxtPage = (pageIndex: number) => {
         const pageItems = txtPages[pageIndex] || [];
         if (pageItems.length === 0) return null;
         return (
-            <div className="reading-page-content">
+            <div className="reading-page-content" ref={readingContentRef}>
                 {pageItems.map((item, i) => (
                     item.kind === "gap"
-                        ? <div key={i} className="reading-line-gap" />
+                        ? <div key={i} className="reading-line-gap" data-paragraph-index={item.paragraphIndex} />
                         : item.kind === "annotation"
                             ? (
                                 <div
                                     key={item.annotation.id}
                                     className="reading-annotation reading-annotation-interactive"
                                     data-no-nav="true"
+                                    data-paragraph-index={item.paragraphIndex}
                                     onPointerDown={() => {
                                         longPressTimer.current = setTimeout(() => {
                                             setActiveMessageId(null);
@@ -414,7 +416,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                     )}
                                 </div>
                             )
-                            : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`}>{item.text}</p>
+                            : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
                 ))}
             </div>
         );
@@ -424,13 +426,13 @@ export function ReadingViewer({ book, onBack }: Props) {
         <div className="reading-page-content">
             {items.map((item, i) =>
                 item.kind === "gap"
-                    ? <div key={i} className="reading-line-gap" />
+                    ? <div key={i} className="reading-line-gap" data-paragraph-index={item.paragraphIndex} />
                     : item.kind === "annotation"
-                        ? <div key={i} className="reading-annotation">
+                        ? <div key={i} className="reading-annotation" data-paragraph-index={item.paragraphIndex}>
                             <span className="reading-annotation-name">{item.annotation.characterName}</span>
                             <span className="reading-annotation-text">{item.annotation.content}</span>
                         </div>
-                        : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`}>{item.text}</p>
+                        : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
             )}
         </div>
     );
@@ -1137,58 +1139,59 @@ export function ReadingViewer({ book, onBack }: Props) {
 
         if (focusParagraphIndexes.length === 0) return null;
 
-        // Find the current page's paragraph refs in the global paragraphRefs
-        const currentPageRefs = sourceParagraphRefs.filter(
-            (item) => item.chapterIndex === focusChapterIndex && focusParagraphIndexes.includes(item.paragraphIndex) && item.text.trim(),
-        );
-        if (currentPageRefs.length === 0) return null;
+        // Get all paragraph refs in the current chapter
+        const chapterRefs = sourceParagraphRefs.filter((item) => item.chapterIndex === focusChapterIndex && item.text.trim());
+        if (chapterRefs.length === 0) return null;
 
-        // Get the absolute index range of the current page
-        const focusAbsoluteStart = currentPageRefs[0].absoluteIndex;
-        const focusAbsoluteEnd = currentPageRefs[currentPageRefs.length - 1].absoluteIndex;
+        // Find the current page's position within the chapter
+        const focusStartParagraph = focusParagraphIndexes[0];
+        const focusEndParagraph = focusParagraphIndexes[focusParagraphIndexes.length - 1];
+        let startPos = chapterRefs.findIndex((item) => item.paragraphIndex === focusStartParagraph);
+        let endPos = chapterRefs.findIndex((item) => item.paragraphIndex === focusEndParagraph);
+        if (startPos === -1 || endPos === -1) return null;
 
-        // Collect previous content (up to PREVIOUS_CONTEXT_CHARS characters before current page, across chapters)
-        const previousRefs: ParagraphRef[] = [];
-        let previousChars = 0;
-        for (let i = focusAbsoluteStart - 1; i >= 0 && previousChars < PREVIOUS_CONTEXT_CHARS; i -= 1) {
-            const ref = sourceParagraphRefs[i];
-            if (!ref || !ref.text.trim()) continue;
-            previousRefs.unshift(ref);
-            previousChars += getParagraphLength(ref.text);
+        // Expand context outward (both directions) until reaching target chars
+        let usedChars = chapterRefs.slice(startPos, endPos + 1).reduce((sum, item) => sum + getParagraphLength(item.text), 0);
+        while ((usedChars < DISCUSS_TARGET_CHARS || usedChars < DISCUSS_MIN_CHARS) && (startPos > 0 || endPos < chapterRefs.length - 1)) {
+            if (endPos - startPos + 1 >= DISCUSS_MAX_PARAGRAPHS) break;
+
+            const prevRef = startPos > 0 ? chapterRefs[startPos - 1] : null;
+            const nextRef = endPos < chapterRefs.length - 1 ? chapterRefs[endPos + 1] : null;
+            if (!prevRef && !nextRef) break;
+
+            const prevChars = prevRef ? getParagraphLength(prevRef.text) : Number.POSITIVE_INFINITY;
+            const nextChars = nextRef ? getParagraphLength(nextRef.text) : Number.POSITIVE_INFINITY;
+            const pickPrev = prevRef && (!nextRef || prevChars <= nextChars);
+            const candidate = pickPrev ? prevRef : nextRef;
+            if (!candidate) break;
+
+            const nextUsedChars = usedChars + getParagraphLength(candidate.text);
+            if (usedChars >= DISCUSS_TARGET_CHARS && usedChars >= DISCUSS_MIN_CHARS && nextUsedChars > DISCUSS_MAX_CHARS) break;
+
+            if (pickPrev) startPos -= 1;
+            else endPos += 1;
+            usedChars = nextUsedChars;
         }
 
-        // Combine: previous content + current page content
-        const contextRefs = [...previousRefs, ...currentPageRefs];
+        const contextRefs = chapterRefs.slice(startPos, endPos + 1);
         if (contextRefs.length === 0) return null;
 
-        // Collect annotations for the context range (across chapters)
-        const contextParagraphKeys = new Set(contextRefs.map((item) => `${item.chapterIndex}:${item.paragraphIndex}`));
+        const contextStartParagraph = contextRefs[0].paragraphIndex;
+        const contextEndParagraph = contextRefs[contextRefs.length - 1].paragraphIndex;
+        const paragraphSet = new Set(contextRefs.map((item) => item.paragraphIndex));
         const contextAnnotations = annotations.filter(
-            (annotation) => contextParagraphKeys.has(`${annotation.chapterIndex}:${annotation.paragraphIndex}`),
+            (annotation) => annotation.chapterIndex === focusChapterIndex && paragraphSet.has(annotation.paragraphIndex),
         );
 
         // Build chapter title
         const chapterTitleText = chapters[focusChapterIndex]?.title || currentChapter?.title || book.title;
 
-        // Format content with clear separation between previous context and current page
-        const focusStartParagraph = focusParagraphIndexes[0];
-        const focusEndParagraph = focusParagraphIndexes[focusParagraphIndexes.length - 1];
-
-        const prevContentLines = previousRefs.length > 0
-            ? previousRefs.map((item) => `[${item.chapterIndex + 1}章/${item.paragraphIndex + 1}段] ${item.text}`).join("\n\n")
-            : "（无前文）";
-        const currentContentLines = currentPageRefs.map((item) => `[${item.chapterIndex + 1}章/${item.paragraphIndex + 1}段] ${item.text}`).join("\n\n");
-
+        // Format content — contiguous block centered on current page
         const chapterContent = [
-            `当前阅读页面：第${focusChapterIndex + 1}章 ${formatParagraphRangeLabel(focusStartParagraph, focusEndParagraph)}`,
+            `当前阅读中心：${formatParagraphRangeLabel(focusStartParagraph, focusEndParagraph)}`,
+            `本次上下文范围：${formatParagraphRangeLabel(contextStartParagraph, contextEndParagraph)}`,
             "",
-            "【当前页面 — 用户手机屏幕正在显示的内容】",
-            currentContentLines,
-            "",
-            previousRefs.length > 0
-                ? `【前文回顾（约${previousChars}字，${previousRefs.length}段）】`
-                : `【前文回顾：无】`,
-            prevContentLines,
+            contextRefs.map((item) => `[${item.paragraphIndex + 1}] ${item.text}`).join("\n\n"),
         ].join("\n");
 
         return {
@@ -1642,10 +1645,42 @@ export function ReadingViewer({ book, onBack }: Props) {
         saveProgress(progress);
     }, [book.id, chapterIndex, chapters.length, companionId, isPdf, pdfCurrentPage, pdfTotalPages, txtPage, txtTotalPages]);
 
-    // Sync reading context to kv-db AND window.__readingScreenContext for real-time access.
-    // useLayoutEffect runs synchronously after DOM mutations, before browser paint —
-    // ensures the content is available before the user sees it on screen.
-    useLayoutEffect(() => {
+    // DOM-based screen capture: reads actual visible paragraph elements via getBoundingClientRect.
+    // Returns null if container or elements are not available.
+    const captureVisibleParagraphs = useCallback((): { paragraphIndex: number; text: string }[] | null => {
+        const container = readingContentRef.current;
+        if (!container) return null;
+        const containerRect = container.getBoundingClientRect();
+        if (containerRect.width === 0 || containerRect.height === 0) return null;
+
+        const elements = container.querySelectorAll('[data-paragraph-index]');
+        if (elements.length === 0) return null;
+
+        const visibleMap = new Map<number, string>();
+        elements.forEach((el) => {
+            const rect = (el as HTMLElement).getBoundingClientRect();
+            // Element is visible if it overlaps with the container viewport
+            const isVisible = rect.bottom > containerRect.top + 1 && rect.top < containerRect.bottom - 1;
+            if (!isVisible) return;
+
+            const idx = parseInt(el.getAttribute('data-paragraph-index') || '', 10);
+            if (!Number.isFinite(idx)) return;
+
+            const text = el.textContent?.trim() || '';
+            if (text && !visibleMap.has(idx)) {
+                visibleMap.set(idx, text);
+            }
+        });
+
+        if (visibleMap.size === 0) return null;
+        return Array.from(visibleMap.entries())
+            .sort(([a], [b]) => a - b)
+            .map(([paragraphIndex, text]) => ({ paragraphIndex, text }));
+    }, []);
+
+    // Sync reading context to window.__readingScreenContext.
+    // Layer 1: useMemo — writes state-based context synchronously during render (zero delay, before paint).
+    useMemo(() => {
         if (chapters.length === 0) return;
         const ctx = buildDiscussContext();
         if (!ctx) return;
@@ -1655,15 +1690,41 @@ export function ReadingViewer({ book, onBack }: Props) {
             chapterContent: ctx.chapterContent,
             updatedAt: Date.now(),
         };
-        // Real-time mirror on window — chat-engine reads this synchronously
         try { (window as any).__readingScreenContext = screenContext; } catch { /* 静默 */ }
-        // Also persist to kv-db as backup
-        try {
-            kvSet("ai_phone_reading_context_v1", JSON.stringify(screenContext));
-        } catch {
-            // Ignore kv-db write failures — reading discuss mode still works directly
-        }
+        try { kvSet("ai_phone_reading_context_v1", JSON.stringify(screenContext)); } catch { /* 静默 */ }
+        return screenContext;
     }, [book.title, buildDiscussContext, chapters.length]);
+
+    // Layer 2: useLayoutEffect — DOM-based screen capture via getBoundingClientRect.
+    // Reads actual visible paragraph elements and corrects any state-vs-DOM discrepancy before paint.
+    useLayoutEffect(() => {
+        if (chapters.length === 0) return;
+        const ctx = buildDiscussContext();
+        if (!ctx) return;
+
+        const visibleParagraphs = captureVisibleParagraphs();
+        if (visibleParagraphs && visibleParagraphs.length > 0) {
+            const visibleIndexes = visibleParagraphs.map(p => p.paragraphIndex);
+            const firstIdx = visibleIndexes[0];
+            const lastIdx = visibleIndexes[visibleIndexes.length - 1];
+            const visibleContentLines = visibleParagraphs.map(p => `[${p.paragraphIndex + 1}] ${p.text}`).join('\n\n');
+
+            const screenContext = {
+                bookTitle: book.title,
+                chapterTitle: ctx.chapterTitle,
+                chapterContent: [
+                    `当前阅读中心：段落${firstIdx + 1}-${lastIdx + 1}（DOM精确捕捉）`,
+                    `本次上下文范围：段落${firstIdx + 1}-${lastIdx + 1}`,
+                    '',
+                    visibleContentLines,
+                ].join('\n'),
+                updatedAt: Date.now(),
+            };
+            try { (window as any).__readingScreenContext = screenContext; } catch { /* 静默 */ }
+            try { kvSet("ai_phone_reading_context_v1", JSON.stringify(screenContext)); } catch { /* 静默 */ }
+        }
+        // If DOM capture fails, the useMemo layer already wrote the state-based context
+    }, [book.title, buildDiscussContext, chapters.length, captureVisibleParagraphs, txtPage, txtPages, isPdf, pdfCurrentPage]);
 
     useEffect(() => {
         setTxtPage((prev) => Math.min(prev, Math.max(0, txtTotalPages - 1)));
