@@ -1886,17 +1886,26 @@ export async function buildChatPromptMessages(
         )
         : "";
 
-    // Read live reading context synced from the reading app
+    // Read live reading context — try window.__readingScreenContext first (real-time, no delay),
+    // then fall back to kv-db. The window mirror is updated by useLayoutEffect in reading-viewer,
+    // which runs synchronously after DOM mutations, before the browser paints.
     let readingBookTitle = "";
     let readingChapterTitle = "";
     let readingChapterContent = "";
     try {
-        const rawCtx = kvGet("ai_phone_reading_context_v1");
-        if (rawCtx) {
-            const parsed = JSON.parse(rawCtx) as { bookTitle?: string; chapterTitle?: string; chapterContent?: string };
-            readingBookTitle = parsed.bookTitle ?? "";
-            readingChapterTitle = parsed.chapterTitle ?? "";
-            readingChapterContent = parsed.chapterContent ?? "";
+        const screenCtx = (window as any)?.__readingScreenContext;
+        if (screenCtx && screenCtx.chapterContent) {
+            readingBookTitle = screenCtx.bookTitle ?? "";
+            readingChapterTitle = screenCtx.chapterTitle ?? "";
+            readingChapterContent = screenCtx.chapterContent ?? "";
+        } else {
+            const rawCtx = kvGet("ai_phone_reading_context_v1");
+            if (rawCtx) {
+                const parsed = JSON.parse(rawCtx) as { bookTitle?: string; chapterTitle?: string; chapterContent?: string };
+                readingBookTitle = parsed.bookTitle ?? "";
+                readingChapterTitle = parsed.chapterTitle ?? "";
+                readingChapterContent = parsed.chapterContent ?? "";
+            }
         }
     } catch {
         // Ignore parse errors — reading context is optional
