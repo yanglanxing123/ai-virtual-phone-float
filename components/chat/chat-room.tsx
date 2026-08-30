@@ -1123,8 +1123,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [ltCurrentTrack, setLtCurrentTrack] = useState<ListenTogetherTrack | null>(null);
     const [ltIsPlaying, setLtIsPlaying] = useState(false);
     const [ltToast, setLtToast] = useState<string | null>(null);
+    const [showLtExitConfirm, setShowLtExitConfirm] = useState(false);
     const ltPrevTrackRef = useRef<ListenTogetherTrack | null>(null);
+    const ltActiveRef = useRef(false);
     const ltElapsed = useListenTogetherTimer(ltActive, ltIsPlaying, ltStartTime, ltPausedDuration);
+
+    // Keep ltActiveRef in sync for use in async callbacks
+    useEffect(() => { ltActiveRef.current = ltActive; }, [ltActive]);
 
     // ── 全局音乐播放状态（用于常驻爱心跳动） ──
     const [globalMusicPlaying, setGlobalMusicPlaying] = useState(false);
@@ -1149,9 +1154,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 pausedDuration: ltPausedDuration,
                 currentTrack: ltCurrentTrack,
                 isPlaying: ltIsPlaying,
+                characterId: character?.id || session.contactId || "",
             }));
         } catch { /* 静默 */ }
-    }, [ltActive, ltStartTime, ltPausedDuration, ltCurrentTrack, ltIsPlaying]);
+    }, [ltActive, ltStartTime, ltPausedDuration, ltCurrentTrack, ltIsPlaying, character?.id, session.contactId]);
 
     // 一起听：页面刷新后恢复状态（延迟检查音乐是否仍在播放）
     useEffect(() => {
@@ -1165,8 +1171,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 pausedDuration: number;
                 currentTrack: ListenTogetherTrack | null;
                 isPlaying: boolean;
+                characterId?: string;
             };
             if (!saved.active) return;
+            // 只恢复与当前角色匹配的一起听状态
+            const currentCharId = character?.id || session.contactId || "";
+            if (saved.characterId && saved.characterId !== currentCharId) return;
             // 延迟 1.5 秒等待音乐APP注册 bridge
             const restoreTimer = setTimeout(() => {
                 const bridge = getMusicControlBridge();
@@ -1191,6 +1201,21 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         setLtCurrentTrack(restoredTrack);
                         setLtIsPlaying(true);
                         ltPrevTrackRef.current = restoredTrack;
+                        // 恢复全局浮窗状态（含角色ID）
+                        setLtOverlayState({
+                            active: true,
+                            track: restoredTrack,
+                            isPlaying: true,
+                            elapsedSeconds: 0,
+                            charName: character?.name || "对方",
+                            characterId: character?.id || session.contactId || "",
+                            userNickname: userIdentity?.name || "我",
+                            userAvatar: userIdentity?.avatarUrl,
+                            charAvatar: character?.avatar || undefined,
+                            currentTime: state.currentTime || 0,
+                            duration: state.duration || 0,
+                            switchedBy: null,
+                        });
                     } else {
                         // 音乐已停止，清除持久化状态
                         try { kvRemove(LT_PERSIST_KEY); } catch { /* 静默 */ }
@@ -1262,6 +1287,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             isPlaying,
             elapsedSeconds: 0,
             charName: character?.name || "对方",
+            characterId: character?.id || session.contactId || "",
             userNickname: userIdentity?.name || "我",
             userAvatar: userIdentity?.avatarUrl,
             charAvatar: character?.avatar || undefined,
@@ -1299,6 +1325,15 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         clearLtOverlayState();
         try { kvRemove("ai_phone_lt_state_v1"); } catch { /* 静默 */ }
     }, []);
+
+    // 一起听按钮点击：第一次启动，第二次询问退出
+    const handleListenTogetherClick = useCallback(() => {
+        if (ltActive) {
+            setShowLtExitConfirm(true);
+        } else {
+            startListenTogether();
+        }
+    }, [ltActive, startListenTogether]);
 
     // 一起听：监听音乐APP的播放状态变化
     useEffect(() => {
@@ -1380,6 +1415,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     isPlaying: newIsPlaying,
                     elapsedSeconds: ltElapsed,
                     charName: character?.name || "对方",
+                    characterId: character?.id || session.contactId || "",
                     userNickname: userIdentity?.name || "我",
                     userAvatar: userIdentity?.avatarUrl,
                     charAvatar: character?.avatar || undefined,
@@ -3113,6 +3149,25 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     );
                     continue;
                 }
+            }
+            // Listen together: AI initiates listen-together (optionally with a song)
+            if (p.mediaType === "listen_together") {
+                const mTitle = p.mediaData?.musicTitle;
+                pushFilteredPart(
+                    { content: `[一起听${mTitle ? `:${mTitle}` : ""}]` },
+                    () => {
+                        if (mTitle) {
+                            autoPlayMusic(mTitle, charN, p.mediaData?.musicArtist || undefined);
+                        }
+                        // Start listen-together after a short delay to allow music to start
+                        setTimeout(() => {
+                            if (!ltActiveRef.current) {
+                                startListenTogether();
+                            }
+                        }, mTitle ? 1500 : 0);
+                    },
+                );
+                continue;
             }
             // Poke: keep mediaType so UI renders it as a system notice, while preserving response order.
             if (p.mediaType === "poke") {
@@ -5534,6 +5589,29 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 <div className="lt-toast">{ltToast}</div>
             )}
 
+            {/* 一起听退出确认对话框 */}
+            {showLtExitConfirm && (
+                <div className="lt-exit-confirm-overlay" onClick={() => setShowLtExitConfirm(false)}>
+                    <div className="lt-exit-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+                        <div className="lt-exit-confirm-title">结束一起听？</div>
+                        <div className="lt-exit-confirm-desc">
+                            正在和{character?.name || "对方"}一起听「{ltCurrentTrack?.title || "未知歌曲"}」
+                        </div>
+                        <div className="lt-exit-confirm-actions">
+                            <button className="lt-exit-confirm-btn lt-exit-confirm-cancel" onClick={() => setShowLtExitConfirm(false)}>
+                                继续听
+                            </button>
+                            <button className="lt-exit-confirm-btn lt-exit-confirm-ok" onClick={() => {
+                                setShowLtExitConfirm(false);
+                                closeListenTogether();
+                            }}>
+                                结束
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Message List */}
             <div
                 ref={scrollRef}
@@ -6265,7 +6343,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 onOpenCustomPlusAction={handleOpenCustomPlusAction}
                 onStartVideoCall={() => { cancelFollowUp(session.id); setShowPlusMenu(false); setCallInitiator("user"); setShowVideoCall(true); }}
                 onStartVoiceCall={() => { cancelFollowUp(session.id); setShowPlusMenu(false); setCallInitiator("user"); setShowVoiceCall(true); }}
-                onStartListenTogether={startListenTogether}
+                onStartListenTogether={handleListenTogetherClick}
                 onSendText={handleSendText}
                 onStopGeneration={clearStuckGeneration}
                 onTriggerAIResponse={triggerAIResponse}

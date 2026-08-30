@@ -68,6 +68,7 @@ export type LtOverlayState = {
     isPlaying: boolean;
     elapsedSeconds: number;
     charName: string;
+    characterId: string;  // 当前一起听绑定的角色ID，用于跨角色隔离
     userNickname: string;
     userAvatar?: string;
     charAvatar?: string;
@@ -84,6 +85,7 @@ let _overlayState: LtOverlayState = {
     isPlaying: false,
     elapsedSeconds: 0,
     charName: "",
+    characterId: "",
     userNickname: "我",
     currentTime: 0,
     duration: 0,
@@ -106,6 +108,7 @@ export function setLtOverlayState(patch: Partial<LtOverlayState>): void {
             isPlaying: _overlayState.isPlaying,
             elapsedSeconds: _overlayState.elapsedSeconds,
             charName: _overlayState.charName,
+            characterId: _overlayState.characterId,
             userNickname: _overlayState.userNickname,
             userAvatar: _overlayState.userAvatar,
             charAvatar: _overlayState.charAvatar,
@@ -121,7 +124,7 @@ export function setLtOverlayState(patch: Partial<LtOverlayState>): void {
 export function clearLtOverlayState(): void {
     _overlayState = {
         active: false, track: null, isPlaying: false, elapsedSeconds: 0,
-        charName: "", userNickname: "我", currentTime: 0, duration: 0, switchedBy: null,
+        charName: "", characterId: "", userNickname: "我", currentTime: 0, duration: 0, switchedBy: null,
     };
     try { kvRemove(LT_OVERLAY_KEY); } catch { /* 静默 */ }
     _notifyOverlayListeners();
