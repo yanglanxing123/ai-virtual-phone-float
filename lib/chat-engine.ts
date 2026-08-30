@@ -1965,7 +1965,7 @@ export async function buildChatPromptMessages(
         const insertIdx = firstNonSystemIdx >= 0 ? firstNonSystemIdx : llmMessages.length;
         llmMessages.splice(insertIdx, 0, {
             role: "system",
-            content: `【用户正在使用阅读App，以下是其手机屏幕当前显示的阅读内容】\n书名：${readingBookTitle}\n${readingChapterTitle}\n\n${readingChapterContent}\n\n注意：【当前页面 — 用户手机屏幕正在显示的内容】部分是用户此刻手机屏幕上正在显示的文字，请优先关注此部分；【前文回顾】是用户刚刚翻过页看过的前文，仅作背景参考。`,
+            content: `【用户正在使用阅读App，以下是其手机屏幕当前显示的阅读内容】\n书名：${readingBookTitle}\n${readingChapterTitle}\n\n${readingChapterContent}\n\n注意："当前阅读中心"是用户此刻手机屏幕上正在显示的段落范围，请以此为中心与用户讨论阅读内容。"本次上下文范围"是为保证连贯性而包含的前后文。`,
         });
     }
     if (promptProfile?.output === "plain_text") {
