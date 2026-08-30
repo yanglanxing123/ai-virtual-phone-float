@@ -28,6 +28,7 @@ import { Toggle } from "@/components/ui/form";
 import { PdfPageRenderer } from "./reading-pdf-viewer";
 import { decodeTxtArrayBuffer, parsePdfPageRange, PDF_PAGES_PER_CHAPTER, parseTxtContent, parseEpubFile } from "@/lib/reading-parser";
 import type { Book, BookChapter, ReadingAnnotation, ReadingProgress } from "@/lib/reading-types";
+import { kvGet, kvSet } from "@/lib/kv-db";
 import type { Character } from "@/lib/character-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
 
@@ -35,6 +36,7 @@ import { splitBilingualText } from "@/lib/bilingual-text";
  * 过滤系统级内容：移除 XML 标签、系统指令等不应展示给用户的内容。
  * 防止 <action_result>、<system> 等标签和系统提示泄露到聊天界面。
  * 此函数在保存时和渲染时都会调用，确保已存储的旧消息也能被清理。
+ * 全部包裹在 try-catch 中，确保任何正则错误都不会崩溃组件。
  */
 function filterSystemContent(text: string): string {
     if (!text || typeof text !== "string") return "";
@@ -66,27 +68,21 @@ function filterSystemContent(text: string): string {
                 cleaned = cleaned.replace(standaloneRe, "");
             } catch { /* 跳过 */ }
         }
-        // 移除残留的系统标签
-        try {
-            cleaned = cleaned.replace(/<\/?(?:action_result|action|system|instruction|tool_call|function_call|tool_result|memory_write|tool_use|memory_request|function_result|result|response|output|error|status)[^>]*\/?>/gi, "");
-        } catch { /* 跳过 */ }
+        // 移除残留的自闭合或未闭合系统标签
+        cleaned = cleaned.replace(/<\/?(?:action_result|action|system|instruction|tool_call|function_call|tool_result|memory_write|tool_use|memory_request|function_result|result|response|output|error|status)[^>]*\/?>/gi, "");
         // 移除系统提示语
-        try {
-            cleaned = cleaned.replace(/以下是系统处理结果[：:].*?(?=\n|$)/gs, "");
-            cleaned = cleaned.replace(/请基于以上结果[，,].*?(?:角色身份|继续|回复)[^。]*。/gs, "");
-            cleaned = cleaned.replace(/不要重复你之前已经[说做]过[^。]*。/g, "");
-            cleaned = cleaned.replace(/不要再次执行相同的动作[^。]*。/g, "");
-            cleaned = cleaned.replace(/请以.*?角色.*?身份.*?(?:回复|继续)[^。]*。/gs, "");
-            cleaned = cleaned.replace(/系统提示[：:].*?(?=\n\n|\n(?=[^\s])|$)/gs, "");
-            cleaned = cleaned.replace(/\[系统\].*?(?=\n\n|\n(?=[^\s])|$)/g, "");
-        } catch { /* 跳过 */ }
-        // 清理多余空行
-        try {
-            cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
-        } catch { /* 跳过 */ }
+        cleaned = cleaned.replace(/以下是系统处理结果[：:].*?(?=\n|$)/gs, "");
+        cleaned = cleaned.replace(/请基于以上结果[，,].*?(?:角色身份|继续|回复)[^。]*。/gs, "");
+        cleaned = cleaned.replace(/不要重复你之前已经[说做]过[^。]*。/g, "");
+        cleaned = cleaned.replace(/不要再次执行相同的动作[^。]*。/g, "");
+        cleaned = cleaned.replace(/请以.*?角色.*?身份.*?(?:回复|继续)[^。]*。/gs, "");
+        cleaned = cleaned.replace(/系统提示[：:].*?(?=\n\n|\n(?=[^\s])|$)/gs, "");
+        cleaned = cleaned.replace(/\[系统\].*?(?=\n\n|\n(?=[^\s])|$)/g, "");
+        // 清理多余空行和前后空白
+        cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
         return cleaned;
     } catch {
-        // 如果整个过滤过程出错，返回原始文本（不崩溃组件）
+        // 如果过滤过程出错，返回原始文本（不崩溃组件）
         return text || "";
     }
 }
@@ -119,6 +115,7 @@ const DISCUSS_TARGET_CHARS = 1000;
 const DISCUSS_MIN_CHARS = 700;
 const DISCUSS_MAX_CHARS = 1600;
 const DISCUSS_MAX_PARAGRAPHS = 16;
+const PREVIOUS_CONTEXT_CHARS = 3000;
 
 function toCanvasFont(style: CSSStyleDeclaration): string {
     return [
@@ -509,10 +506,10 @@ export function ReadingViewer({ book, onBack }: Props) {
             id: `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             contactId: companionId,
             isGroup: false,
-            updatedAt: new Date().toISOString(),
-            isPinned: false,
+            createdAt: Date.now(),
+            lastMessageAt: Date.now(),
             unreadCount: 0,
-            alias: contact?.nickname || "阅读讨论",
+            title: contact?.name || "阅读讨论",
         };
         saveChatSessions([...sessions, newSession]);
         return newSession;
@@ -656,8 +653,8 @@ export function ReadingViewer({ book, onBack }: Props) {
                         return true;
                     });
                     msgs.sort((a, b) => {
-                        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                        const ta = a.createdAt || 0;
+                        const tb = b.createdAt || 0;
                         if (ta !== tb) return ta - tb;
                         return a.id.localeCompare(b.id);
                     });
@@ -1140,52 +1137,59 @@ export function ReadingViewer({ book, onBack }: Props) {
 
         if (focusParagraphIndexes.length === 0) return null;
 
-        const chapterRefs = sourceParagraphRefs.filter((item) => item.chapterIndex === focusChapterIndex && item.text.trim());
-        if (chapterRefs.length === 0) return null;
+        // Find the current page's paragraph refs in the global paragraphRefs
+        const currentPageRefs = sourceParagraphRefs.filter(
+            (item) => item.chapterIndex === focusChapterIndex && focusParagraphIndexes.includes(item.paragraphIndex) && item.text.trim(),
+        );
+        if (currentPageRefs.length === 0) return null;
 
-        const focusStartParagraph = focusParagraphIndexes[0];
-        const focusEndParagraph = focusParagraphIndexes[focusParagraphIndexes.length - 1];
-        let startPos = chapterRefs.findIndex((item) => item.paragraphIndex === focusStartParagraph);
-        let endPos = chapterRefs.findIndex((item) => item.paragraphIndex === focusEndParagraph);
-        if (startPos === -1 || endPos === -1) return null;
+        // Get the absolute index range of the current page
+        const focusAbsoluteStart = currentPageRefs[0].absoluteIndex;
+        const focusAbsoluteEnd = currentPageRefs[currentPageRefs.length - 1].absoluteIndex;
 
-        let usedChars = chapterRefs.slice(startPos, endPos + 1).reduce((sum, item) => sum + getParagraphLength(item.text), 0);
-        while ((usedChars < DISCUSS_TARGET_CHARS || usedChars < DISCUSS_MIN_CHARS) && (startPos > 0 || endPos < chapterRefs.length - 1)) {
-            if (endPos - startPos + 1 >= DISCUSS_MAX_PARAGRAPHS) break;
-
-            const prevRef = startPos > 0 ? chapterRefs[startPos - 1] : null;
-            const nextRef = endPos < chapterRefs.length - 1 ? chapterRefs[endPos + 1] : null;
-            if (!prevRef && !nextRef) break;
-
-            const prevChars = prevRef ? getParagraphLength(prevRef.text) : Number.POSITIVE_INFINITY;
-            const nextChars = nextRef ? getParagraphLength(nextRef.text) : Number.POSITIVE_INFINITY;
-            const pickPrev = prevRef && (!nextRef || prevChars <= nextChars);
-            const candidate = pickPrev ? prevRef : nextRef;
-            if (!candidate) break;
-
-            const nextUsedChars = usedChars + getParagraphLength(candidate.text);
-            if (usedChars >= DISCUSS_TARGET_CHARS && usedChars >= DISCUSS_MIN_CHARS && nextUsedChars > DISCUSS_MAX_CHARS) break;
-
-            if (pickPrev) startPos -= 1;
-            else endPos += 1;
-            usedChars = nextUsedChars;
+        // Collect previous content (up to PREVIOUS_CONTEXT_CHARS characters before current page, across chapters)
+        const previousRefs: ParagraphRef[] = [];
+        let previousChars = 0;
+        for (let i = focusAbsoluteStart - 1; i >= 0 && previousChars < PREVIOUS_CONTEXT_CHARS; i -= 1) {
+            const ref = sourceParagraphRefs[i];
+            if (!ref || !ref.text.trim()) continue;
+            previousRefs.unshift(ref);
+            previousChars += getParagraphLength(ref.text);
         }
 
-        const contextRefs = chapterRefs.slice(startPos, endPos + 1);
+        // Combine: previous content + current page content
+        const contextRefs = [...previousRefs, ...currentPageRefs];
         if (contextRefs.length === 0) return null;
 
-        const contextStartParagraph = contextRefs[0].paragraphIndex;
-        const contextEndParagraph = contextRefs[contextRefs.length - 1].paragraphIndex;
-        const paragraphSet = new Set(contextRefs.map((item) => item.paragraphIndex));
+        // Collect annotations for the context range (across chapters)
+        const contextParagraphKeys = new Set(contextRefs.map((item) => `${item.chapterIndex}:${item.paragraphIndex}`));
         const contextAnnotations = annotations.filter(
-            (annotation) => annotation.chapterIndex === focusChapterIndex && paragraphSet.has(annotation.paragraphIndex),
+            (annotation) => contextParagraphKeys.has(`${annotation.chapterIndex}:${annotation.paragraphIndex}`),
         );
+
+        // Build chapter title
         const chapterTitleText = chapters[focusChapterIndex]?.title || currentChapter?.title || book.title;
+
+        // Format content with clear separation between previous context and current page
+        const focusStartParagraph = focusParagraphIndexes[0];
+        const focusEndParagraph = focusParagraphIndexes[focusParagraphIndexes.length - 1];
+
+        const prevContentLines = previousRefs.length > 0
+            ? previousRefs.map((item) => `[${item.chapterIndex + 1}章/${item.paragraphIndex + 1}段] ${item.text}`).join("\n\n")
+            : "（无前文）";
+        const currentContentLines = currentPageRefs.map((item) => `[${item.chapterIndex + 1}章/${item.paragraphIndex + 1}段] ${item.text}`).join("\n\n");
+
         const chapterContent = [
-            `当前阅读中心：${formatParagraphRangeLabel(focusStartParagraph, focusEndParagraph)}`,
-            `本次上下文范围：${formatParagraphRangeLabel(contextStartParagraph, contextEndParagraph)}`,
+            `当前阅读页面：第${focusChapterIndex + 1}章 ${formatParagraphRangeLabel(focusStartParagraph, focusEndParagraph)}`,
+            previousRefs.length > 0
+                ? `前文回顾（约${previousChars}字，${previousRefs.length}段）`
+                : `前文回顾：无`,
             "",
-            contextRefs.map((item) => `[${item.paragraphIndex + 1}] ${item.text}`).join("\n\n"),
+            "【前文内容】",
+            prevContentLines,
+            "",
+            "【当前页面】",
+            currentContentLines,
         ].join("\n");
 
         return {
@@ -1638,6 +1642,23 @@ export function ReadingViewer({ book, onBack }: Props) {
         };
         saveProgress(progress);
     }, [book.id, chapterIndex, chapters.length, companionId, isPdf, pdfCurrentPage, pdfTotalPages, txtPage, txtTotalPages]);
+
+    // Sync reading context to kv-db so the main chat system can access it
+    useEffect(() => {
+        if (chapters.length === 0) return;
+        const ctx = buildDiscussContext();
+        if (!ctx) return;
+        try {
+            kvSet("ai_phone_reading_context_v1", JSON.stringify({
+                bookTitle: book.title,
+                chapterTitle: ctx.chapterTitle,
+                chapterContent: ctx.chapterContent,
+                updatedAt: Date.now(),
+            }));
+        } catch {
+            // Ignore kv-db write failures — reading discuss mode still works directly
+        }
+    }, [book.title, buildDiscussContext, chapters.length]);
 
     useEffect(() => {
         setTxtPage((prev) => Math.min(prev, Math.max(0, txtTotalPages - 1)));
