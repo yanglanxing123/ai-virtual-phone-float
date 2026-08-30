@@ -7262,6 +7262,74 @@
   to { opacity: 1; transform: translate(-50%, -50%); }
 }
 
+/* ── 一起听退出确认对话框 ── */
+.lt-exit-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: lt-exit-overlay-in 180ms ease-out;
+}
+.lt-exit-confirm-dialog {
+  width: 280px;
+  border-radius: 16px;
+  background: var(--c-bg, #fff);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  padding: 24px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: lt-exit-dialog-in 200ms ease-out;
+}
+.lt-exit-confirm-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--c-text, #1a1a1a);
+}
+.lt-exit-confirm-desc {
+  font-size: 13px;
+  color: var(--c-text-sub, #888);
+  text-align: center;
+  line-height: 1.5;
+}
+.lt-exit-confirm-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+.lt-exit-confirm-btn {
+  flex: 1;
+  height: 40px;
+  border-radius: 20px;
+  border: none;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 120ms;
+}
+.lt-exit-confirm-btn:active { opacity: 0.7; }
+.lt-exit-confirm-cancel {
+  background: rgba(0,0,0,0.06);
+  color: var(--c-text, #1a1a1a);
+}
+.lt-exit-confirm-ok {
+  background: #ff4d4f;
+  color: #fff;
+}
+@keyframes lt-exit-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lt-exit-dialog-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 /* ── 响应式调整 ── */
 @media (max-width: 380px) {
   .lt-avatar-name {
