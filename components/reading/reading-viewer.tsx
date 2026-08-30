@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from "react";
 import { Bot, ChevronDown, ChevronRight, Languages, Menu, Minus, PenLine, SendHorizontal, X } from "lucide-react";
 import {
     loadChapters,
@@ -1643,18 +1643,24 @@ export function ReadingViewer({ book, onBack }: Props) {
         saveProgress(progress);
     }, [book.id, chapterIndex, chapters.length, companionId, isPdf, pdfCurrentPage, pdfTotalPages, txtPage, txtTotalPages]);
 
-    // Sync reading context to kv-db so the main chat system can access it
-    useEffect(() => {
+    // Sync reading context to kv-db AND window.__readingScreenContext for real-time access.
+    // useLayoutEffect runs synchronously after DOM mutations, before browser paint —
+    // ensures the content is available before the user sees it on screen.
+    useLayoutEffect(() => {
         if (chapters.length === 0) return;
         const ctx = buildDiscussContext();
         if (!ctx) return;
+        const screenContext = {
+            bookTitle: book.title,
+            chapterTitle: ctx.chapterTitle,
+            chapterContent: ctx.chapterContent,
+            updatedAt: Date.now(),
+        };
+        // Real-time mirror on window — chat-engine reads this synchronously
+        try { (window as any).__readingScreenContext = screenContext; } catch { /* 静默 */ }
+        // Also persist to kv-db as backup
         try {
-            kvSet("ai_phone_reading_context_v1", JSON.stringify({
-                bookTitle: book.title,
-                chapterTitle: ctx.chapterTitle,
-                chapterContent: ctx.chapterContent,
-                updatedAt: Date.now(),
-            }));
+            kvSet("ai_phone_reading_context_v1", JSON.stringify(screenContext));
         } catch {
             // Ignore kv-db write failures — reading discuss mode still works directly
         }
