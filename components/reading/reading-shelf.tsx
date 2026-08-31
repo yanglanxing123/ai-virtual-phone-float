@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ChevronLeft, Palette } from "lucide-react";
-import { loadBooks, addBook, deleteBook, saveChapters, loadProgress, saveRawFile } from "@/lib/reading-storage";
+import { loadBooks, addBook, deleteBook, saveChapters, loadProgress, saveRawFile, saveCover, loadCover } from "@/lib/reading-storage";
 import { decodeTxtArrayBuffer, parseTxtContent, parseEpubFile, PDF_PAGES_PER_CHAPTER } from "@/lib/reading-parser";
 import type { Book, BookChapter } from "@/lib/reading-types";
 import type { ReadingAppearance } from "@/lib/reading-appearance";
@@ -98,6 +98,7 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
     const [importing, setImporting] = useState(false);
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [importError, setImportError] = useState<{ summary: string; detail?: string } | null>(null);
+    const [coverUrls, setCoverUrls] = useState<Record<string, string>>({});
     const [search, setSearch] = useState("");
     const [showAppearanceDialog, setShowAppearanceDialog] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -114,6 +115,7 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
     useEffect(() => {
         const allBooks = loadBooks();
         setBooks(allBooks);
+        let blobUrls: string[] = [];
         (async () => {
             const map: typeof progressMap = {};
             for (const b of allBooks) {
@@ -129,7 +131,26 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                 };
             }
             setProgressMap(map);
+
+            // 加载封面
+            const coverMap: Record<string, string> = {};
+            for (const b of allBooks) {
+                if (b.hasCover) {
+                    const blob = await loadCover(b.id);
+                    if (blob) {
+                        const url = URL.createObjectURL(blob);
+                        coverMap[b.id] = url;
+                        blobUrls.push(url);
+                    }
+                }
+            }
+            setCoverUrls(coverMap);
         })();
+        return () => {
+            for (const url of blobUrls) {
+                URL.revokeObjectURL(url);
+            }
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -257,6 +278,7 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                 format,
                 totalChapters: parsed.chapters.length,
                 createdAt: new Date().toISOString(),
+                hasCover: !!parsed.coverBlob,
             };
 
             const chapters: BookChapter[] = parsed.chapters.map((ch, i) => {
@@ -289,6 +311,9 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
             });
             await addBook(book);
             await saveChapters(bookId, chapters);
+            if (parsed.coverBlob) {
+                try { await saveCover(bookId, parsed.coverBlob); } catch { /* 非关键，静默 */ }
+            }
             if (rawFile) {
                 try {
                     importStage = format === "pdf" ? "保存原始 PDF 文件" : "保存原始文件";
@@ -320,6 +345,13 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
             }
             setBooks(loadBooks());
             setProgressMap(prev => ({ ...prev, [bookId]: { chapterIndex: 0, total: chapters.length, hasProgress: false } }));
+            if (book.hasCover) {
+                const blob = await loadCover(bookId);
+                if (blob) {
+                    const url = URL.createObjectURL(blob);
+                    setCoverUrls(prev => ({ ...prev, [bookId]: url }));
+                }
+            }
             setImportStatus(null);
             persistImportDiagnostic(null);
         } catch (err) {
@@ -344,8 +376,15 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
 
     const handleDelete = async (bookId: string) => {
         if (!confirm("确定删除这本书吗？")) return;
+        const url = coverUrls[bookId];
+        if (url) URL.revokeObjectURL(url);
         await deleteBook(bookId);
         setBooks(loadBooks());
+        setCoverUrls(prev => {
+            const next = { ...prev };
+            delete next[bookId];
+            return next;
+        });
     };
 
     const formatBadge = (f: string) => f.toUpperCase();
@@ -438,8 +477,14 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                             return (
                                 <div key={book.id} className="reading-list-item" onClick={() => onOpenBook(book)}>
                                     <div className={`reading-list-cover reading-list-cover--${gradient} reading-list-cover--${layout}`}>
-                                        <span className="reading-list-cover-author">{book.author || ""}</span>
-                                        <span className="reading-list-cover-title">{book.title}</span>
+                                        {coverUrls[book.id] ? (
+                                            <img src={coverUrls[book.id]} alt={book.title} className="reading-list-cover-img" />
+                                        ) : (
+                                            <>
+                                                <span className="reading-list-cover-author">{book.author || ""}</span>
+                                                <span className="reading-list-cover-title">{book.title}</span>
+                                            </>
+                                        )}
                                     </div>
                                     <div className="reading-list-info">
                                         <span className="reading-list-title">{book.title}</span>
