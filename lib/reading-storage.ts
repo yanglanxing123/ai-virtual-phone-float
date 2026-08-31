@@ -13,6 +13,7 @@ class ReadingDB extends Dexie {
     progress!: Dexie.Table<ReadingProgress, string>;
     annotations!: Dexie.Table<ReadingAnnotation, string>;
     rawFiles!: Dexie.Table<{ bookId: string; data: Blob }, string>;
+    covers!: Dexie.Table<{ bookId: string; data: Blob }, string>;
 
     constructor() {
         super("reading-db");
@@ -34,6 +35,14 @@ class ReadingDB extends Dexie {
             progress: "bookId",
             annotations: "id, [bookId+chapterIndex]",
             rawFiles: "bookId",
+        });
+        this.version(4).stores({
+            books: "id, createdAt",
+            chapters: "id, bookId, [bookId+index]",
+            progress: "bookId",
+            annotations: "id, [bookId+chapterIndex]",
+            rawFiles: "bookId",
+            covers: "bookId",
         });
     }
 }
@@ -93,6 +102,7 @@ export async function deleteBook(bookId: string): Promise<void> {
     await db.progress.delete(bookId);
     await db.annotations.where("[bookId+chapterIndex]").between([bookId, Dexie.minKey], [bookId, Dexie.maxKey]).delete();
     await deleteRawFile(bookId).catch(() => {});
+    await db.covers.delete(bookId).catch(() => {});
     _booksCache = null;
     _booksCache = await db.books.orderBy("createdAt").reverse().toArray();
     _chaptersCache.delete(bookId);
@@ -291,4 +301,15 @@ export async function loadRawFileBlob(bookId: string): Promise<Blob | null> {
     } catch {
         return null;
     }
+}
+
+// ── Covers ──
+
+export async function saveCover(bookId: string, blob: Blob): Promise<void> {
+    await db.covers.put({ bookId, data: blob });
+}
+
+export async function loadCover(bookId: string): Promise<Blob | null> {
+    const record = await db.covers.get(bookId);
+    return record?.data ?? null;
 }

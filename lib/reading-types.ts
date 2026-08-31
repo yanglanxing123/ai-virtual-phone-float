@@ -7,6 +7,7 @@ export type Book = {
     format: "txt" | "epub" | "pdf";
     totalChapters: number;
     createdAt: string;
+    hasCover?: boolean;
 };
 
 export type BookChapter = {

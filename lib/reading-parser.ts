@@ -41,6 +41,7 @@ export type ParsedBook = {
     title: string;
     author?: string;
     chapters: ParsedChapter[];
+    coverBlob?: Blob;
 };
 
 export type TxtDecodeResult = {
@@ -276,7 +277,69 @@ export async function parseEpubFile(arrayBuffer: ArrayBuffer, fileName?: string)
         return { title: bookTitle, author, chapters: [{ title: "全文", paragraphs: ["（EPUB 解析失败，未找到文本内容）"] }] };
     }
 
-    return { title: bookTitle, author, chapters };
+    // 6. 提取封面图片
+    const coverBlob = await extractEpubCover(zip, opfXml, rootDir, idToHref);
+
+    return { title: bookTitle, author, chapters, coverBlob };
+}
+
+/**
+ * Extract cover image from EPUB.
+ * Tries multiple strategies:
+ * 1. OPF <meta name="cover" content="id"> → manifest lookup
+ * 2. EPUB 3 manifest item with properties="cover-image"
+ * 3. Fallback: file named cover.* in common image directories
+ */
+async function extractEpubCover(
+    zip: any,
+    opfXml: string,
+    rootDir: string,
+    idToHref: Map<string, string>,
+): Promise<Blob | undefined> {
+    let coverId: string | null = null;
+
+    // Strategy 1: <meta name="cover" content="id">
+    const metaCoverMatch = opfXml.match(/<meta[^>]+name=["']cover["'][^>]+content=["']([^"']+)["']/i);
+    if (metaCoverMatch) {
+        coverId = metaCoverMatch[1];
+    }
+
+    // Strategy 2: EPUB 3 <item properties="cover-image" ...>
+    if (!coverId) {
+        const itemWithCoverProps = opfXml.match(/<item[^>]+properties=["'][^"']*cover-image[^"']*["'][^>]+id=["']([^"']+)["']/i)
+            || opfXml.match(/<item[^>]+id=["']([^"']+)["'][^>]+properties=["'][^"']*cover-image[^"']*["']/i);
+        if (itemWithCoverProps) {
+            coverId = itemWithCoverProps[1];
+        }
+    }
+
+    // Try to get cover blob by manifest ID
+    if (coverId) {
+        const href = idToHref.get(coverId);
+        if (href) {
+            const filePath = rootDir + decodeURIComponent(href);
+            const file = zip.file(filePath);
+            if (file) {
+                const blob = await file.async("blob");
+                if (blob.size > 0) return blob;
+            }
+        }
+    }
+
+    // Strategy 3: fallback — look for cover.* image files in the zip
+    const coverFilePattern = /(^|\/)cover\.(jpe?g|png|gif|webp|svg)$/i;
+    const allFiles = Object.keys(zip.files || {});
+    for (const path of allFiles) {
+        if (coverFilePattern.test(path)) {
+            const file = zip.file(path);
+            if (file) {
+                const blob = await file.async("blob");
+                if (blob.size > 0) return blob;
+            }
+        }
+    }
+
+    return undefined;
 }
 
 /** Extract readable text from HTML/XHTML content. */
