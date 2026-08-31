@@ -89,7 +89,8 @@
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  /* page-body 底部 = 输入栏高度 + 键盘高度，不延伸到键盘后方 */
+  bottom: var(--chat-bottom-reserve, 120px);
   flex: none;
   min-height: 0;
   overflow-y: auto;
@@ -97,12 +98,12 @@
   padding-left: 16px;
   padding-right: 16px;
   padding-bottom: 18px;
-  scroll-padding-bottom: calc(var(--chat-bottom-reserve, 120px) + 18px);
+  scroll-padding-bottom: 18px;
 }
 
 .chat-app .chat-room-wrapper > .page-body::after {
   content: "";
-  flex: 0 0 var(--chat-bottom-reserve, 120px);
+  flex: 0 0 0px;
   width: 1px;
   min-height: 0;
   pointer-events: none;
