@@ -1131,6 +1131,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const ltIsPlayingRef = useRef(false);
     const ltStartTimeRef = useRef<number | null>(null);
     const ltPausedDurationRef = useRef(0);
+    // Track previous poll's playback position for auto-play detection
+    const ltPrevStateRef = useRef<{ currentTime: number; duration: number }>({ currentTime: 0, duration: 0 });
+    // Debounce timestamp for track changes — prevents stale state from triggering false switch messages
+    const ltTrackChangeDebounceRef = useRef(0);
     const ltElapsed = useListenTogetherTimer(ltActive, ltIsPlaying, ltStartTime, ltPausedDuration);
 
     // Keep refs in sync for use in polling interval
@@ -1410,38 +1414,61 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 const newIsPlaying = !!state.isPlaying;
 
                 // 检测切歌
+                let trackChanged = false;
                 if (newTrack && ltPrevTrackRef.current && newTrack.title !== ltPrevTrackRef.current.title) {
-                    // 判断是谁切的歌
-                    const isAiSwitch = consumeBridgeCallFlag();
-                    const actor = isAiSwitch ? (character?.name || "对方") : (userIdentity?.name || "我");
-                    const actionType = isAiSwitch ? "switch" : "switch";
-                    pushMusicSystemMessage(session.id, actionType, actor, newTrack);
-                    syncMessagesRef.current();
-                    ltPrevTrackRef.current = newTrack;
+                    const now = Date.now();
+                    const inDebounce = now - ltTrackChangeDebounceRef.current < 3000;
 
-                    // 异步获取歌词
-                    if (newTrack.songId && !newTrack.lyrics) {
-                        getNeteaseLyrics(newTrack.songId).then(lrc => {
-                            if (lrc) {
-                                const trackWithLyrics = { ...newTrack, lyrics: lrc };
-                                setLtCurrentTrack(trackWithLyrics);
-                                setLtOverlayState({
-                                    track: trackWithLyrics,
-                                    switchedBy: isAiSwitch ? "character" : "user",
-                                });
-                            }
-                        }).catch(() => {});
+                    if (inDebounce) {
+                        // Debounce window: silently update ref to absorb stale state fluctuations
+                        ltPrevTrackRef.current = newTrack;
+                    } else {
+                        // 判断是谁切的歌
+                        const isAiSwitch = consumeBridgeCallFlag();
+
+                        // 检测是否为自动播放下一首（上一首接近播放结束）
+                        const prevState = ltPrevStateRef.current;
+                        const isAutoPlay = prevState && prevState.duration > 0 && prevState.currentTime >= prevState.duration - 3;
+
+                        let actor: string;
+                        if (isAutoPlay) {
+                            actor = "自动播放";
+                        } else if (isAiSwitch) {
+                            actor = character?.name || "对方";
+                        } else {
+                            actor = userIdentity?.name || "我";
+                        }
+
+                        pushMusicSystemMessage(session.id, "switch", actor, newTrack);
+                        syncMessagesRef.current();
+                        ltPrevTrackRef.current = newTrack;
+                        ltTrackChangeDebounceRef.current = now;
+                        trackChanged = true;
+
+                        // 异步获取歌词
+                        if (newTrack.songId && !newTrack.lyrics) {
+                            getNeteaseLyrics(newTrack.songId).then(lrc => {
+                                if (lrc) {
+                                    const trackWithLyrics = { ...newTrack, lyrics: lrc };
+                                    setLtCurrentTrack(trackWithLyrics);
+                                    setLtOverlayState({
+                                        track: trackWithLyrics,
+                                        switchedBy: isAutoPlay ? null : (isAiSwitch ? "character" : "user"),
+                                    });
+                                }
+                            }).catch(() => {});
+                        }
                     }
                 } else if (newTrack && !ltPrevTrackRef.current) {
                     ltPrevTrackRef.current = newTrack;
                 }
 
-                // 检测暂停/恢复
-                if (newIsPlaying !== curIsPlaying) {
+                // 检测暂停/恢复 — skip if track just changed (avoid stale "resume old song" message)
+                if (!trackChanged && newIsPlaying !== curIsPlaying) {
                     setLtIsPlaying(newIsPlaying);
-                    if (newIsPlaying && curTrack) {
+                    if (newIsPlaying && newTrack) {
                         const resumeActor = consumeBridgeCallFlag() ? (character?.name || "对方") : (userIdentity?.name || "我");
-                        pushMusicSystemMessage(session.id, "resume", resumeActor, curTrack);
+                        pushMusicSystemMessage(session.id, "resume", resumeActor, newTrack);
                         syncMessagesRef.current();
                     }
                 }
@@ -1471,6 +1498,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     currentTime: state.currentTime || 0,
                     duration: state.duration || 0,
                 });
+
+                // Store previous state for auto-play detection on next poll
+                ltPrevStateRef.current = { currentTime: state.currentTime || 0, duration: state.duration || 0 };
             } catch { /* 静默 */ }
         }, 2000);
 
