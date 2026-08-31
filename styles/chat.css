@@ -3213,6 +3213,14 @@
   overflow: hidden;
 }
 .reading-list-cover::after { content: none; }
+.reading-list-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
 .reading-list-cover--linen { background: linear-gradient(180deg, #fff8d9 0%, #f6e8a8 100%); }
 .reading-list-cover--mist { background: linear-gradient(180deg, #fffdf0 0%, #f3eccd 100%); }
 .reading-list-cover--graphite { background: linear-gradient(180deg, #e6e0cf 0%, #cac1aa 100%); }

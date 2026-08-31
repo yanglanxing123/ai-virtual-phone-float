@@ -1154,6 +1154,12 @@
     box-shadow: none;
   }
 
+  /* 移动设备：移除 phone-shell 内边距，让内容全屏铺满。
+     避免底部输入栏与键盘之间出现空隙，也消除全局底部空白。 */
+  .phone-shell-wrap .phone-shell {
+    padding: 0;
+  }
+
   .phone-shell-wrap .phone-frame::before,
   .phone-shell-wrap .phone-frame::after {
     display: none;
