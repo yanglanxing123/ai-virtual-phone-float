@@ -48,7 +48,7 @@
 /* ── 聊天室：page-body 自己滚动，header absolute 浮在上方，输入栏在滚动区外 ── */
 .chat-app .chat-room-wrapper.page-shell {
   overflow: hidden;
-  --chat-bottom-reserve: 120px;
+  --chat-bottom-reserve: calc(120px + var(--vkbd-height, 0px));
 }
 
 .chat-app .chat-room-wrapper .page-header {
@@ -674,7 +674,7 @@
 
 .chat-input-bar {
   position: absolute;
-  bottom: 0;
+  bottom: var(--vkbd-height, 0px);
   left: 0;
   right: 0;
   z-index: 10;
@@ -1308,7 +1308,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--vkbd-height, 0px);
   z-index: 35;
   display: flex;
   align-items: center;
@@ -4245,7 +4245,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--vkbd-height, 0px);
   z-index: 28;
   border-top: 1px solid rgba(45, 35, 28, 0.06);
   background: rgba(255, 252, 237, 0.85);

@@ -1085,22 +1085,18 @@
 
   :root {
     --phone-screen-width: 100vw;
-    --phone-screen-height: 100lvh;
-    --phone-screen-height: 100dvh;
-    /* --vvh 由 KeyboardViewportHandler 组件动态设置，优先使用 */
-    --vvh: 100dvh;
+    /* phone-shell 始终铺满全屏，不随键盘缩小
+       100vh 在 iOS PWA = 全屏高度（含安全区域）
+       键盘弹出时 phone-shell 不缩小，输入栏用 bottom: var(--vkbd-height) 上移 */
+    --phone-screen-height: 100vh;
+    --vvh: 100vh;
   }
 
   html,
   body {
-    position: fixed;
-    top: 0;
-    left: 0;
     overflow: hidden;
     width: 100%;
-    height: 100lvh;
-    height: 100dvh;
-    height: var(--vvh, 100dvh);
+    height: 100vh;
     background: var(--c-page-body-bg);
   }
 
@@ -1109,9 +1105,7 @@
     top: 0;
     left: 0;
     width: 100vw;
-    height: 100lvh;
-    height: 100dvh;
-    height: var(--vvh, 100dvh);
+    height: 100vh;
     padding: 0;
     display: flex;
     justify-content: flex-start;
