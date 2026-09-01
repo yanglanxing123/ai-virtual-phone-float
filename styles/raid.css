@@ -2472,13 +2472,17 @@
 }
 .raid-portrait-bg-img {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   display: block;
   width: 100%;
-  height: 100%;
+  height: 115%;
   object-fit: cover;
-  /* 由容器负责铺满，图片不再用 translateY 人为挪动，避免底部出现黑色空档 */
-  object-position: center center;
+  /* 融合图底部存在一段黑色/空白边缘：
+     放大到 115% 并从顶部对齐，让容器直接裁掉底部空白，
+     同时保持顶部章节区域和人物位置稳定。 */
+  object-position: center top;
   transform: none;
   transition: transform 0.4s ease;
 }
