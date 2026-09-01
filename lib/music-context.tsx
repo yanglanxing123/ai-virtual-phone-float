@@ -3,11 +3,11 @@
 
 import { createContext, useContext, useState, useRef, useCallback, useEffect, useMemo, type ReactNode } from "react";
 import type { MusicTrack } from "./music-storage";
+import type { MusicActionSource, MusicActionSnapshot } from "./music-control-bridge";
 import { getAudioBlob, markTrackPlayed } from "./music-storage";
 import { findPlayableMatch, getNeteaseLyrics, getNeteasePlayUrl, getNeteasePlayInfo, getNeteaseSongDetail } from "./music-service";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { registerMusicControlBridge } from "./music-control-bridge";
-import { setBridgeCallFlag } from "@/components/chat/listen-together";
 
 // ── Types ──
 
@@ -106,6 +106,16 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const [volume, setVolumeState] = useState(0.8);
     const [showFullPlayer, setShowFullPlayer] = useState(false);
     const [floatDismissed, setFloatDismissed] = useState(false);
+    const musicActionSeqRef = useRef(0);
+    const lastMusicActionRef = useRef<MusicActionSnapshot | null>(null);
+    const markMusicAction = useCallback((type: MusicActionSnapshot["type"], source: MusicActionSource, track?: MusicTrack | null) => {
+        lastMusicActionRef.current = {
+            id: ++musicActionSeqRef.current,
+            type,
+            source,
+            trackId: track?.id,
+        };
+    }, []);
 
     // Persist queue on change.
     useEffect(() => {
@@ -170,7 +180,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
                 if (nextTrack) {
                     // Defer to avoid state conflicts
-                    setTimeout(() => loadAndPlay(nextTrack!), 0);
+                    setTimeout(() => loadAndPlay(nextTrack!, "autoplay"), 0);
                 }
                 return q;
             });
@@ -188,9 +198,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    const loadAndPlay = useCallback(async (track: MusicTrack) => {
+    const loadAndPlay = useCallback(async (track: MusicTrack, source: MusicActionSource = "user") => {
         const audio = audioRef.current;
         if (!audio) return;
+        markMusicAction("switch", source, track);
 
         cleanupBlobUrl();
         audio.pause();
@@ -221,7 +232,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         } catch {
             // Autoplay blocked — user interaction needed
         }
-    }, [cleanupBlobUrl]);
+    }, [cleanupBlobUrl, markMusicAction]);
 
     const playTrack = useCallback((track: MusicTrack) => {
         setFloatDismissed(false);
@@ -229,25 +240,28 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     }, [loadAndPlay]);
 
     /** Play from a direct URL (for online streaming) */
-    const playUrl = useCallback((url: string, track: MusicTrack) => {
+    const playUrl = useCallback((url: string, track: MusicTrack, source: MusicActionSource = "user") => {
         const audio = audioRef.current;
         if (!audio) return;
         setFloatDismissed(false);
+        markMusicAction("play", source, track);
         cleanupBlobUrl();
         audio.pause();
         audio.src = url;
         setCurrentTrack(track);
         setCurrentTime(0);
         audio.play().catch(() => {});
-    }, [cleanupBlobUrl]);
+    }, [cleanupBlobUrl, markMusicAction]);
 
-    const pause = useCallback(() => {
+    const pause = useCallback((source: MusicActionSource = "user") => {
+        markMusicAction("pause", source, currentTrack);
         audioRef.current?.pause();
-    }, []);
+    }, [currentTrack, markMusicAction]);
 
-    const resume = useCallback(() => {
+    const resume = useCallback((source: MusicActionSource = "user") => {
+        markMusicAction("resume", source, currentTrack);
         audioRef.current?.play().catch(() => {});
-    }, []);
+    }, [currentTrack, markMusicAction]);
 
     const togglePlay = useCallback(() => {
         const audio = audioRef.current;
@@ -256,7 +270,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         else audio.pause();
     }, []);
 
-    const next = useCallback(() => {
+    const next = useCallback((source: MusicActionSource = "user") => {
         if (queue.length === 0 || !currentTrack) return;
         const idx = queue.findIndex(t => t.id === currentTrack.id);
         let nextIdx: number;
@@ -265,14 +279,15 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         } else {
             nextIdx = (idx + 1) % queue.length;
         }
-        loadAndPlay(queue[nextIdx]);
+        loadAndPlay(queue[nextIdx], source);
     }, [queue, currentTrack, playMode, loadAndPlay]);
 
-    const prev = useCallback(() => {
+    const prev = useCallback((source: MusicActionSource = "user") => {
         if (queue.length === 0 || !currentTrack) return;
         const audio = audioRef.current;
         // If more than 3s into the song, restart it
         if (audio && audio.currentTime > 3) {
+            markMusicAction("play", source, currentTrack);
             audio.currentTime = 0;
             return;
         }
@@ -283,8 +298,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         } else {
             prevIdx = (idx - 1 + queue.length) % queue.length;
         }
-        loadAndPlay(queue[prevIdx]);
-    }, [queue, currentTrack, playMode, loadAndPlay]);
+        loadAndPlay(queue[prevIdx], source);
+    }, [queue, currentTrack, playMode, loadAndPlay, markMusicAction]);
 
     const seek = useCallback((time: number) => {
         const audio = audioRef.current;
@@ -302,7 +317,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         if (audioRef.current) audioRef.current.volume = clamped;
     }, []);
 
-    const stop = useCallback(() => {
+    const stop = useCallback((source: MusicActionSource = "user") => {
+        markMusicAction("stop", source, currentTrack);
         const audio = audioRef.current;
         if (audio) {
             audio.pause();
@@ -314,7 +330,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         setCurrentTime(0);
         setDuration(0);
         setShowFullPlayer(false);
-    }, [cleanupBlobUrl]);
+    }, [cleanupBlobUrl, currentTrack, markMusicAction]);
 
     const removeFromQueue = useCallback((trackId: string) => {
         setQueueRaw(prev => {
@@ -332,7 +348,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const openFullPlayer = useCallback(() => { setFloatDismissed(false); setShowFullPlayer(true); }, []);
     const closeFullPlayer = useCallback(() => setShowFullPlayer(false), []);
 
-    const playResolvedTrack = useCallback(async (track: MusicTrack): Promise<{ ok: boolean; message: string; track?: MusicTrack }> => {
+    const playResolvedTrack = useCallback(async (track: MusicTrack, source: MusicActionSource = "user"): Promise<{ ok: boolean; message: string; track?: MusicTrack }> => {
         setFloatDismissed(false);
         setQueueRaw(prev => prev.some(item => item.id === track.id) ? prev : [track, ...prev]);
 
@@ -352,20 +368,20 @@ export function MusicProvider({ children }: { children: ReactNode }) {
                 coverUrl: detail?.coverUrl || track.coverUrl,
                 lyrics: lyrics || track.lyrics,
             };
-            playUrl(url, resolvedTrack);
+            playUrl(url, resolvedTrack, source);
             return { ok: true, message: `正在播放「${resolvedTrack.title}」`, track: resolvedTrack };
         }
 
-        playTrack(track);
+        loadAndPlay(track, source);
         return { ok: true, message: `正在播放「${track.title}」`, track };
     }, [playTrack, playUrl]);
 
-    const playByQuery = useCallback(async (query: string, artist?: string): Promise<{ ok: boolean; message: string; track?: MusicTrack }> => {
+    const playByQuery = useCallback(async (query: string, artist?: string, source: MusicActionSource = "user"): Promise<{ ok: boolean; message: string; track?: MusicTrack }> => {
         const found = await findPlayableMatch(query, artist);
         if (!found) return { ok: false, message: "没有找到可播放的音乐" };
         const { result, playUrl: onlineUrl } = found;
         if (result.source === "local" && result.localTrack) {
-            return playResolvedTrack(result.localTrack);
+            return playResolvedTrack(result.localTrack, source);
         }
         if (result.source === "netease" && result.neteaseResult && onlineUrl) {
             const r = result.neteaseResult;
@@ -385,7 +401,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
             };
             setFloatDismissed(false);
             setQueueRaw(prev => prev.some(item => item.id === track.id) ? prev : [track, ...prev]);
-            playUrl(onlineUrl, track);
+            playUrl(onlineUrl, track, source);
             return { ok: true, message: `正在播放「${track.title}」`, track };
         }
         return { ok: false, message: "没有找到可播放的音乐" };
@@ -420,32 +436,30 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         };
     }, [playResolvedTrack, queue]);
 
+    // Register the bridge exactly once. The previous implementation re-registered it on every
+    // playback tick, which created a window where chat could see a null/stale bridge.
+    const musicStateRefs = useRef({ currentTrack, isPlaying, currentTime, duration, playMode, queue, volume });
+    const musicActionRefs = useRef({ lastAction: lastMusicActionRef.current });
+    musicStateRefs.current = { currentTrack, isPlaying, currentTime, duration, playMode, queue, volume };
+    musicActionRefs.current = { lastAction: lastMusicActionRef.current };
+
     useEffect(() => {
         registerMusicControlBridge({
-            getState: () => ({
-                currentTrack,
-                isPlaying,
-                currentTime,
-                duration,
-                playMode,
-                queue,
-                volume,
-            }),
-            playTrack: (track) => { setBridgeCallFlag(); return playResolvedTrack(track); },
-            playByQuery: (query, artist) => { setBridgeCallFlag(); return playByQuery(query, artist); },
+            getState: () => ({ ...musicStateRefs.current, lastAction: musicActionRefs.current.lastAction }),
+            playTrack: (track, source = "character") => playResolvedTrack(track, source),
+            playByQuery: (query, artist, source = "character") => playByQuery(query, artist, source),
             addToQueue,
-            pause,
-            resume,
-            stop,
-            next,
-            prev,
+            pause: (source = "character") => pause(source),
+            resume: (source = "character") => resume(source),
+            stop: (source = "character") => stop(source),
+            next: (source = "character") => next(source),
+            prev: (source = "character") => prev(source),
             setPlayMode,
         });
         return () => registerMusicControlBridge(null);
-    }, [
-        currentTrack, isPlaying, currentTime, duration, playMode, queue, volume,
-        playResolvedTrack, playByQuery, addToQueue, pause, resume, stop, next, prev, setPlayMode,
-    ]);
+    // The bridge reads refs, so its identity never needs to follow playback state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const controlsValue = useMemo<MusicControlsValue>(() => ({
         currentTrack, isPlaying, duration, playMode, queue, volume, showFullPlayer, floatDismissed,
