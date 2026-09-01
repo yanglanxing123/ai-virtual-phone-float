@@ -2455,7 +2455,9 @@
    ═══════════════════════════════════════════════════════════ */
 .raid-portrait-fullscreen {
   position: relative;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -2469,11 +2471,14 @@
   background: #06060a;
 }
 .raid-portrait-bg-img {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* 底部锚定：保证立绘始终填满到工具栏上方，不因 translateY 留出黑色空白 */
-  object-position: center bottom;
+  /* 由容器负责铺满，图片不再用 translateY 人为挪动，避免底部出现黑色空档 */
+  object-position: center center;
   transform: none;
   transition: transform 0.4s ease;
 }
@@ -2596,10 +2601,11 @@
   display: none;
 }
 
-/* 章节标题 — 正上方居中显示，兼容刘海/挖孔安全区 */
+/* 章节标题 — 正上方居中显示，恋与星空风格：简约优雅 */
 .raid-portrait-chapter-title {
   position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 18px);
+  /* 虚拟状态栏（top + height）和 iOS safe-area 取较大值，避免标题被遮挡 */
+  top: calc(max(env(safe-area-inset-top, 0px), calc(var(--status-bar-top, 12px) + var(--status-bar-height, 36px))) + 8px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
@@ -3217,7 +3223,8 @@
 /* ═══ 浮动面板（属性/回顾/音量）通用样式 ═══ */
 .raid-portrait-overlay-panel {
   position: absolute;
-  top: 0;
+  /* 属性/回顾面板从状态栏下方开始，不再与顶部状态栏重叠 */
+  top: max(env(safe-area-inset-top, 0px), calc(var(--status-bar-top, 12px) + var(--status-bar-height, 36px)));
   left: 0;
   right: 0;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 52px);
