@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useContext } from "react";
-import { Plus, RefreshCw, Rss, AlertCircle, FileEdit, Trash2, X, Check } from "lucide-react";
+import { Plus, RefreshCw, Rss, AlertCircle, FileEdit, Trash2, X, Check, Search, ChevronDown } from "lucide-react";
 import { SettingsContext } from "../phone-settings-app";
 import type { ApiConfig } from "@/lib/settings-types";
 import { loadApiConfigs, removeApiConfigReferences, saveApiConfigs } from "@/lib/settings-storage";
@@ -44,6 +44,8 @@ export function ApiSettings() {
     const [fetchedModels, setFetchedModels] = useState<Record<string, string[]>>({});
     const [isTesting, setIsTesting] = useState<Record<string, boolean>>({});
     const [testResult, setTestResult] = useState<Record<string, { success: boolean; message: string }>>({});
+    const [modelPickerOpen, setModelPickerOpen] = useState(false);
+    const [modelSearch, setModelSearch] = useState("");
 
     // Load from localStorage on mount
     useEffect(() => {
@@ -285,9 +287,9 @@ export function ApiSettings() {
                 <div className="modal-overlay modal-overlay-bottom">
                     <div className="modal-sheet" data-ui="modal-sheet">
                         <div className="modal-header" data-ui="modal-header">
-                            <button onClick={() => { if (isNewConfig && editingId) removeConfig(editingId); setIsNewConfig(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-muted"><X size={18} /></button>
+                            <button onClick={() => { if (isNewConfig && editingId) removeConfig(editingId); setModelPickerOpen(false); setModelSearch(""); setIsNewConfig(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-muted"><X size={18} /></button>
                             <span className="modal-header-title">{isNewConfig ? "添加配置" : "编辑配置"}</span>
-                            <button onClick={() => { setIsNewConfig(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-action"><Check size={18} /></button>
+                            <button onClick={() => { setModelPickerOpen(false); setModelSearch(""); setIsNewConfig(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-action"><Check size={18} /></button>
                         </div>
 
                         <div className="modal-body hide-scrollbar flex flex-col gap-4 pb-10" data-ui="modal-body">
@@ -359,21 +361,95 @@ export function ApiSettings() {
                                                 placeholder="sk-..."
                                             />
                                         </div>
-
                                         <div className="flex flex-col gap-1">
                                             <label className="menu-desc ml-1">默认模型 (Default Model)</label>
                                             <div className="flex gap-2">
                                                 {fetchedModels[config.id] && fetchedModels[config.id].length > 0 ? (
-                                                    <select
-                                                        value={config.defaultModel}
-                                                        onChange={(e) => updateConfig(config.id, { defaultModel: e.target.value })}
-                                                        className="ui-select flex-1"
-                                                    >
-                                                        <option value="">请选择模型...</option>
-                                                        {fetchedModels[config.id].map(m => (
-                                                            <option key={m} value={m}>{m}</option>
-                                                        ))}
-                                                    </select>
+                                                    <div className="relative flex-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setModelPickerOpen(prev => !prev);
+                                                                setModelSearch("");
+                                                            }}
+                                                            className="ui-select flex w-full items-center justify-between text-left"
+                                                        >
+                                                            <span className={config.defaultModel ? "" : "text-gray-400"}>
+                                                                {config.defaultModel || "请选择模型..."}
+                                                            </span>
+                                                            <ChevronDown
+                                                                size={18}
+                                                                className={`shrink-0 transition-transform ${modelPickerOpen ? "rotate-180" : ""}`}
+                                                            />
+                                                        </button>
+
+                                                        {modelPickerOpen && (
+                                                            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[100] overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl">
+                                                                <div className="border-b border-black/10 p-2">
+                                                                    <div className="flex items-center gap-2 rounded-xl bg-gray-100 px-3">
+                                                                        <Search size={16} className="shrink-0 text-gray-500" />
+                                                                        <input
+                                                                            type="text"
+                                                                            value={modelSearch}
+                                                                            onChange={(e) => setModelSearch(e.target.value)}
+                                                                            placeholder="搜索模型..."
+                                                                            autoFocus
+                                                                            className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
+                                                                        />
+                                                                        {modelSearch && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setModelSearch("")}
+                                                                                className="rounded-full p-1 text-gray-400 active:bg-gray-200"
+                                                                                aria-label="清除搜索"
+                                                                            >
+                                                                                <X size={14} />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="max-h-64 overflow-y-auto overscroll-contain p-1">
+                                                                    {(() => {
+                                                                        const keyword = modelSearch.trim().toLowerCase();
+                                                                        const filteredModels = fetchedModels[config.id].filter(m =>
+                                                                            m.toLowerCase().includes(keyword)
+                                                                        );
+
+                                                                        if (filteredModels.length === 0) {
+                                                                            return (
+                                                                                <div className="px-4 py-8 text-center text-sm text-gray-400">
+                                                                                    没有找到匹配的模型
+                                                                                </div>
+                                                                            );
+                                                                        }
+
+                                                                        return filteredModels.map(m => (
+                                                                            <button
+                                                                                key={m}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    updateConfig(config.id, { defaultModel: m });
+                                                                                    setModelPickerOpen(false);
+                                                                                    setModelSearch("");
+                                                                                }}
+                                                                                className={`flex min-h-11 w-full items-center rounded-xl px-3 py-2 text-left text-sm transition-colors active:bg-gray-100 ${
+                                                                                    config.defaultModel === m
+                                                                                        ? "bg-gray-100 font-semibold text-gray-900"
+                                                                                        : "text-gray-700"
+                                                                                }`}
+                                                                            >
+                                                                                {config.defaultModel === m && (
+                                                                                    <Check size={16} className="mr-2 shrink-0" />
+                                                                                )}
+                                                                                <span className="min-w-0 break-all">{m}</span>
+                                                                            </button>
+                                                                        ));
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 ) : (
                                                     <input
                                                         type="text"
