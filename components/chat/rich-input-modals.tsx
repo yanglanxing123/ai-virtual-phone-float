@@ -407,20 +407,81 @@ export function VoiceRecordModal({ characterId, onSend, onClose }: VoiceRecordMo
         }
         streamRef.current = stream;
 
-        // Start recorder
-        const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm" });
+        // Safari/iOS does not reliably support WebM recording. Pick the first
+        // MIME type the current browser actually supports, while keeping WebM
+        // as the preferred format on Chrome/Android.
+        if (typeof MediaRecorder === "undefined") {
+            stream.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
+            setInterim("当前浏览器不支持录音");
+            showSttCompatibilityWarning();
+            return;
+        }
+
+        const mimeTypes = [
+            "audio/webm;codecs=opus",
+            "audio/webm",
+            "audio/mp4",
+            "audio/aac",
+            "audio/mp4;codecs=mp4a.40.2",
+        ];
+        const supportedMimeType = mimeTypes.find(type => {
+            try {
+                return MediaRecorder.isTypeSupported(type);
+            } catch {
+                return false;
+            }
+        });
+
+        let recorder: MediaRecorder;
+        try {
+            // Some Safari versions are happier when MediaRecorder is created
+            // without an options object, so fall back to the default format.
+            recorder = supportedMimeType
+                ? new MediaRecorder(stream, { mimeType: supportedMimeType })
+                : new MediaRecorder(stream);
+        } catch {
+            try {
+                recorder = new MediaRecorder(stream);
+            } catch {
+                stream.getTracks().forEach(t => t.stop());
+                streamRef.current = null;
+                setInterim("当前浏览器不支持录音");
+                showSttCompatibilityWarning();
+                return;
+            }
+        }
+
         recorderRef.current = recorder;
+        const actualMimeType = recorder.mimeType || supportedMimeType || "audio/webm";
         recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+        recorder.onerror = () => {
+            setInterim("录音失败，请检查麦克风权限");
+            setState("idle");
+            stream.getTracks().forEach(t => t.stop());
+            showSttCompatibilityWarning();
+        };
         recorder.onstop = () => {
             stream!.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
             if (chunksRef.current.length > 0) {
-                const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+                const blob = new Blob(chunksRef.current, { type: actualMimeType });
                 const reader = new FileReader();
                 reader.onload = () => setAudioDataUrl(reader.result as string);
                 reader.readAsDataURL(blob);
             }
         };
-        recorder.start();
+
+        try {
+            recorder.start();
+        } catch {
+            stream.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
+            recorderRef.current = null;
+            setInterim("录音启动失败");
+            showSttCompatibilityWarning();
+            return;
+        }
 
         sttRef.current = stt;
         setState("recording");
