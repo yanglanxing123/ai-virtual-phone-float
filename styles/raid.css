@@ -2472,10 +2472,9 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* 有裁切时锚定顶部；无裁切时由 translateY 兜底 */
-  object-position: center top;
-  /* 物理下移 8%，无论图片是否被裁切都生效，把角色从头/上半身位置往下挪，避开顶部按钮 */
-  transform: translateY(8%);
+  /* 底部锚定：保证立绘始终填满到工具栏上方，不因 translateY 留出黑色空白 */
+  object-position: center bottom;
+  transform: none;
   transition: transform 0.4s ease;
 }
 .raid-portrait-bg-placeholder {
@@ -2597,10 +2596,10 @@
   display: none;
 }
 
-/* 章节标题 — 正上方居中显示，恋与星空风格：简约优雅 */
+/* 章节标题 — 正上方居中显示，兼容刘海/挖孔安全区 */
 .raid-portrait-chapter-title {
   position: absolute;
-  top: 18px;
+  top: calc(env(safe-area-inset-top, 0px) + 18px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
