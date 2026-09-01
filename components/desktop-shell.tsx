@@ -923,6 +923,122 @@ function getKeyboardTargetRect(element: HTMLElement): KeyboardTargetRect {
   };
 }
 
+function useIosSafariKeyboardScrollLock() {
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    if (!/iPhone|iPad|iPod/i.test(navigator.userAgent)) return;
+
+    const mobileMq = window.matchMedia("(max-width: 500px) and (hover: none) and (pointer: coarse)");
+    const viewport = window.visualViewport;
+    let locked = false;
+    let restoreScrollY = 0;
+    let raf = 0;
+    let focusedElement: HTMLElement | null = null;
+
+    const isChatEditable = (target: EventTarget | null): target is HTMLElement => {
+      if (!(target instanceof HTMLElement)) return false;
+      if (!isKeyboardEditableElement(target)) return false;
+      return !!target.closest(".chat-app");
+    };
+
+    const forceTop = () => {
+      if (!locked) return;
+      // Safari can pan the document/visual viewport to reveal a focused
+      // input even when the app itself is fixed. The virtual phone must
+      // remain anchored at the top; the chat message list handles scrolling.
+      if (window.scrollY !== restoreScrollY) {
+        window.scrollTo(0, restoreScrollY);
+      }
+    };
+
+    const scheduleForceTop = () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(forceTop);
+    };
+
+    const lock = (element: HTMLElement) => {
+      if (!mobileMq.matches || locked) return;
+      locked = true;
+      focusedElement = element;
+      restoreScrollY = window.scrollY || window.pageYOffset || 0;
+
+      const html = document.documentElement;
+      const body = document.body;
+      html.dataset.iosKeyboardLocked = "1";
+      body.dataset.iosKeyboardLocked = "1";
+
+      // Keep the browser document stationary. Do not change the app's
+      // internal overflow containers or the keyboard height variable.
+      html.style.overflow = "hidden";
+      body.style.overflow = "hidden";
+      body.style.position = "fixed";
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.width = "100%";
+      body.style.top = `${-restoreScrollY}px`;
+
+      scheduleForceTop();
+    };
+
+    const unlock = () => {
+      if (!locked) return;
+      locked = false;
+      focusedElement = null;
+      if (raf) {
+        window.cancelAnimationFrame(raf);
+        raf = 0;
+      }
+
+      const html = document.documentElement;
+      const body = document.body;
+      html.style.overflow = "";
+      body.style.overflow = "";
+      body.style.position = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      body.style.top = "";
+      delete html.dataset.iosKeyboardLocked;
+      delete body.dataset.iosKeyboardLocked;
+      window.scrollTo(0, restoreScrollY);
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      if (isChatEditable(event.target)) lock(event.target);
+    };
+
+    const handleFocusOut = () => {
+      // iOS may fire focusout while moving between controls. Give the next
+      // focus event a chance to arrive before releasing the document lock.
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        if (!isChatEditable(active)) unlock();
+      }, 0);
+    };
+
+    const handleViewportChange = () => {
+      if (locked && focusedElement && document.activeElement === focusedElement) {
+        scheduleForceTop();
+      }
+    };
+
+    document.addEventListener("focusin", handleFocusIn, true);
+    document.addEventListener("focusout", handleFocusOut, true);
+    window.addEventListener("scroll", handleViewportChange, { passive: true });
+    viewport?.addEventListener("resize", handleViewportChange);
+    viewport?.addEventListener("scroll", handleViewportChange);
+
+    return () => {
+      document.removeEventListener("focusin", handleFocusIn, true);
+      document.removeEventListener("focusout", handleFocusOut, true);
+      window.removeEventListener("scroll", handleViewportChange);
+      viewport?.removeEventListener("resize", handleViewportChange);
+      viewport?.removeEventListener("scroll", handleViewportChange);
+      unlock();
+    };
+  }, []);
+}
+
 function useAndroidCaretKeyboardLift() {
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
@@ -1051,6 +1167,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     musicOverlayControllerRef.current = controller;
   }, []);
   useAndroidCaretKeyboardLift();
+  useIosSafariKeyboardScrollLock();
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [layout, setLayout] = useState<DesktopLayout>(DEFAULT_LAYOUT);
   // Dock is an ordered icon-id list (max DOCK_MAX), kept disjoint from `layout`.
