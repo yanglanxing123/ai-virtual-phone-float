@@ -80,7 +80,6 @@ import {
     pushMusicSystemMessage,
     setLtOverlayState,
     clearLtOverlayState,
-    consumeBridgeCallFlag,
     type ListenTogetherTrack,
 } from "./listen-together";
 // getNeteaseLyrics already imported above from music-service
@@ -1134,10 +1133,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const ltIsPlayingRef = useRef(false);
     const ltStartTimeRef = useRef<number | null>(null);
     const ltPausedDurationRef = useRef(0);
-    // Track previous poll's playback position for auto-play detection
+    // Previous playback snapshot. Kept only as a fallback for older bridge states.
     const ltPrevStateRef = useRef<{ currentTime: number; duration: number }>({ currentTime: 0, duration: 0 });
-    // Debounce timestamp for track changes — prevents stale state from triggering false switch messages
-    const ltTrackChangeDebounceRef = useRef(0);
+    // Every explicit music action has a monotonic id. Process each action at most once.
+    const ltLastActionIdRef = useRef(0);
     const ltElapsed = useListenTogetherTimer(ltActive, ltIsPlaying, ltStartTime, ltPausedDuration);
 
     // Keep refs in sync for use in polling interval
@@ -1203,6 +1202,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 }
                 try {
                     const state = bridge.getState();
+                    ltLastActionIdRef.current = state?.lastAction?.id ?? 0;
                     if (state?.currentTrack && state.isPlaying) {
                         // 音乐仍在播放，恢复一起听状态
                         setLtActive(true);
@@ -1265,6 +1265,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         let duration = 0;
         try {
             const state = bridge.getState();
+            // The click that starts 一起听 is a user action; do not replay a stale
+            // music action from before the session was started.
+            ltLastActionIdRef.current = state?.lastAction?.id ?? 0;
             if (state?.currentTrack) {
                 const t = state.currentTrack;
                 currentTrack = {
@@ -1291,6 +1294,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 await new Promise(r => setTimeout(r, 800));
                 // 重新读取状态
                 const newState = bridge.getState();
+                ltLastActionIdRef.current = newState?.lastAction?.id ?? ltLastActionIdRef.current;
                 if (newState?.currentTrack) {
                     const t = newState.currentTrack;
                     currentTrack = {
@@ -1351,10 +1355,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             }).catch(() => {});
         }
 
-        // 插入"播放歌曲"系统消息 — 判断是谁发起的播放
-        const isAiInitiated = consumeBridgeCallFlag();
-        const initActor = isAiInitiated ? (character?.name || "对方") : (userIdentity?.name || "我");
-        pushMusicSystemMessage(session.id, "play", initActor, currentTrack);
+        // “一起听”是由当前用户点击启动的；不要读取旧的 AI 播放标记，
+        // 否则刚刚发生过的 AI 播放会被错误归因到这次启动。
+        pushMusicSystemMessage(session.id, "play", userIdentity?.name || "我", currentTrack);
         syncMessagesRef.current();
     }, [session.id, character?.name, userIdentity?.name, userIdentity?.avatarUrl, character?.avatar]);
 
@@ -1416,61 +1419,71 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
                 const newIsPlaying = !!state.isPlaying;
 
-                // 检测切歌
+                // 检测切歌：优先使用播放器明确记录的 action/source，而不是
+                // 用“上一轮是否接近 duration”猜测自动播放来源。
                 let trackChanged = false;
                 if (newTrack && ltPrevTrackRef.current && newTrack.title !== ltPrevTrackRef.current.title) {
-                    const now = Date.now();
-                    const inDebounce = now - ltTrackChangeDebounceRef.current < 3000;
+                    const action = state.lastAction;
+                    const hasNewAction = !!action && action.id > ltLastActionIdRef.current;
+                    if (hasNewAction) ltLastActionIdRef.current = action.id;
 
-                    if (inDebounce) {
-                        // Debounce window: silently update ref to absorb stale state fluctuations
-                        ltPrevTrackRef.current = newTrack;
+                    const isAutoPlay = hasNewAction && action?.source === "autoplay";
+                    const isAiSwitch = hasNewAction
+                        && action?.trackId === (state.currentTrack as any)?.id
+                        && (action?.source === "character" || action?.source === "system")
+                        && (action?.type === "switch" || action?.type === "play");
+
+                    let actor: string;
+                    if (isAutoPlay) {
+                        actor = "自动播放";
+                    } else if (isAiSwitch) {
+                        actor = character?.name || "对方";
                     } else {
-                        // 判断是谁切的歌
-                        const isAiSwitch = consumeBridgeCallFlag();
+                        actor = userIdentity?.name || "我";
+                    }
 
-                        // 检测是否为自动播放下一首（上一首接近播放结束）
-                        const prevState = ltPrevStateRef.current;
-                        const isAutoPlay = prevState && prevState.duration > 0 && prevState.currentTime >= prevState.duration - 3;
+                    pushMusicSystemMessage(session.id, "switch", actor, newTrack);
+                    syncMessagesRef.current();
+                    ltPrevTrackRef.current = newTrack;
+                    trackChanged = true;
 
-                        let actor: string;
-                        if (isAutoPlay) {
-                            actor = "自动播放";
-                        } else if (isAiSwitch) {
-                            actor = character?.name || "对方";
-                        } else {
-                            actor = userIdentity?.name || "我";
-                        }
+                    // 切歌本身会让 audio 重新进入播放态；同步状态，避免下一轮
+                    // 把这次“切歌后的 play”误判成一次 resume。
+                    setLtIsPlaying(newIsPlaying);
+                    ltIsPlayingRef.current = newIsPlaying;
+                    setLtCurrentTrack(newTrack);
+                    setLtOverlayState({
+                        track: newTrack,
+                        isPlaying: newIsPlaying,
+                        switchedBy: isAutoPlay ? null : (isAiSwitch ? "character" : "user"),
+                    });
 
-                        pushMusicSystemMessage(session.id, "switch", actor, newTrack);
-                        syncMessagesRef.current();
-                        ltPrevTrackRef.current = newTrack;
-                        ltTrackChangeDebounceRef.current = now;
-                        trackChanged = true;
-
-                        // 异步获取歌词
-                        if (newTrack.songId && !newTrack.lyrics) {
-                            getNeteaseLyrics(newTrack.songId).then(lrc => {
-                                if (lrc) {
-                                    const trackWithLyrics = { ...newTrack, lyrics: lrc };
-                                    setLtCurrentTrack(trackWithLyrics);
-                                    setLtOverlayState({
-                                        track: trackWithLyrics,
-                                        switchedBy: isAutoPlay ? null : (isAiSwitch ? "character" : "user"),
-                                    });
-                                }
-                            }).catch(() => {});
-                        }
+                    // 异步获取歌词
+                    if (newTrack.songId && !newTrack.lyrics) {
+                        getNeteaseLyrics(newTrack.songId).then(lrc => {
+                            if (lrc) {
+                                const trackWithLyrics = { ...newTrack, lyrics: lrc };
+                                setLtCurrentTrack(trackWithLyrics);
+                                setLtOverlayState({ track: trackWithLyrics });
+                            }
+                        }).catch(() => {});
                     }
                 } else if (newTrack && !ltPrevTrackRef.current) {
                     ltPrevTrackRef.current = newTrack;
                 }
 
-                // 检测暂停/恢复 — skip if track just changed (avoid stale "resume old song" message)
+                // 检测暂停/恢复。切歌产生的播放状态变化已经在上面处理，
+                // 这里只处理真正的 pause -> resume。
                 if (!trackChanged && newIsPlaying !== curIsPlaying) {
                     setLtIsPlaying(newIsPlaying);
+                    ltIsPlayingRef.current = newIsPlaying;
                     if (newIsPlaying && newTrack) {
-                        const resumeActor = consumeBridgeCallFlag() ? (character?.name || "对方") : (userIdentity?.name || "我");
+                        const action = state.lastAction;
+                        const hasNewAction = !!action && action.id > ltLastActionIdRef.current;
+                        if (hasNewAction) ltLastActionIdRef.current = action.id;
+                        const resumeActor = hasNewAction && (action?.source === "character" || action?.source === "system")
+                            ? (character?.name || "对方")
+                            : (userIdentity?.name || "我");
                         pushMusicSystemMessage(session.id, "resume", resumeActor, newTrack);
                         syncMessagesRef.current();
                     }
