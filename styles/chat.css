@@ -7979,3 +7979,39 @@
   text-shadow: 0 0 6px rgba(255, 107, 138, 0.25);
 }
 
+/* =========================================================
+   iOS Safari: keep the chat header visible while the keyboard
+   is open.
+
+   The message list remains the only scrolling region. The
+   composer keeps using --vkbd-height, so the working bottom
+   keyboard behavior is preserved.
+   ========================================================= */
+@media (max-width: 500px) and (hover: none) and (pointer: coarse) {
+  @supports (-webkit-touch-callout: none) {
+    .chat-app .chat-room-wrapper.page-shell {
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .chat-app .chat-room-wrapper .page-header {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      z-index: 100 !important;
+      transform: translate3d(0, 0, 0);
+      -webkit-transform: translate3d(0, 0, 0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+
+    .chat-app .chat-room-wrapper > .page-body {
+      top: 0 !important;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+  }
+}
