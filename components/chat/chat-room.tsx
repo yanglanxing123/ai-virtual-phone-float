@@ -20,6 +20,7 @@ import { sendBrowserNotification } from "@/lib/browser-notification";
 import { dispatchChatMessageNotice } from "@/lib/chat-notification-events";
 import { shouldSendChatInputOnEnter } from "@/lib/chat-input-keyboard";
 import { useChatBottomReserve } from "./use-chat-bottom-reserve";
+import { useChatKeyboardOffsetStyle } from "./use-chat-keyboard-offset";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
@@ -670,6 +671,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
 }, ref) {
     const [inputText, setInputText] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const chatKeyboardOffsetStyle = useChatKeyboardOffsetStyle();
     // 表情包搜索联想：ESC/失焦置 true 隐藏，输入变化重新开启
     const [suggestClosed, setSuggestClosed] = useState(false);
     // 围观群/被禁言：输入与富媒体入口全部锁定，只留线下切换和生成按钮
@@ -761,7 +763,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     ];
 
     return (
-        <div className="chat-input-bar chat-room-main-pane flex flex-col" data-ui="input">
+        <div className="chat-input-bar chat-room-main-pane flex flex-col" data-ui="input" style={chatKeyboardOffsetStyle}>
             {theaterMode && (
                 <div className="chat-theater-mode-strip" role="status">
                     <span className="chat-theater-mode-icon" aria-hidden="true">
@@ -943,6 +945,7 @@ const OfflineTextInputBar = memo(forwardRef<OfflineTextInputHandle, {
 }, ref) {
     const [inputText, setInputText] = useState("");
     const inputTextRef = useRef("");
+    const chatKeyboardOffsetStyle = useChatKeyboardOffsetStyle();
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
     const resetTextareaHeight = () => {
@@ -999,7 +1002,7 @@ const OfflineTextInputBar = memo(forwardRef<OfflineTextInputHandle, {
     };
 
     return (
-        <div className="chat-input-bar chat-room-main-pane flex flex-col" data-ui="input">
+        <div className="chat-input-bar chat-room-main-pane flex flex-col" data-ui="input" style={chatKeyboardOffsetStyle}>
             <textarea
                 ref={textareaRef}
                 rows={1}
