@@ -1718,65 +1718,95 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    // iOS Safari: when the software keyboard opens, the message viewport
-    // becomes shorter but its scrollTop is often left at the old position.
-    // Keep the conversation anchored to the newest messages while the input
-    // is focused, without changing normal manual scrolling.
+    // iOS Safari: the message pane changes height after the keyboard opens.
+    // Safari may preserve the old scroll position when the pane is resized,
+    // leaving the newest message underneath the composer. Watch the actual
+    // scroll container (not only visualViewport) and re-anchor it to its real
+    // maximum scroll position after every keyboard-driven resize.
     useEffect(() => {
-        const viewport = window.visualViewport;
-        if (!viewport) return;
+        if (typeof window === "undefined" || typeof document === "undefined") return;
+        if (!/iPhone|iPad|iPod/i.test(navigator.userAgent)) return;
 
-        let lastHeight = viewport.height;
-        let rafId = 0;
+        const el = scrollRef.current;
+        if (!el) return;
 
-        const scrollToLatest = () => {
-            const el = scrollRef.current;
-            if (!el) return;
+        let keyboardFocused = false;
+        let raf1 = 0;
+        let raf2 = 0;
+        let timer: number | null = null;
+        let observer: ResizeObserver | null = null;
 
-            const active = document.activeElement;
-            const input = active instanceof HTMLTextAreaElement
-                ? active
-                : active instanceof HTMLInputElement
-                    ? active
-                    : null;
+        const isOurInput = (target: EventTarget | null) => {
+            if (!(target instanceof HTMLElement)) return false;
+            if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) return false;
+            return !!target.closest(".chat-room-wrapper");
+        };
 
-            // Only auto-anchor when this ChatRoom's own text input is focused.
-            if (!input || !wrapperRef.current?.contains(input)) return;
+        const keyboardOpen = () => {
+            const vv = window.visualViewport;
+            return !!vv && vv.height < window.innerHeight - 40;
+        };
 
-            cancelAnimationFrame(rafId);
-            rafId = requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    const current = scrollRef.current;
-                    if (current) current.scrollTop = current.scrollHeight;
-                });
+        const pinLatestMessage = () => {
+            if (!keyboardFocused || !keyboardOpen()) return;
+            cancelAnimationFrame(raf1);
+            cancelAnimationFrame(raf2);
+            if (timer !== null) window.clearTimeout(timer);
+
+            const run = () => {
+                const current = scrollRef.current;
+                if (!current) return;
+                // Disable Safari's scroll anchoring while the keyboard is
+                // resizing this container; otherwise WebKit can immediately
+                // undo the new scrollTop.
+                current.style.overflowAnchor = "none";
+                current.scrollTop = Math.max(0, current.scrollHeight - current.clientHeight);
+            };
+
+            raf1 = requestAnimationFrame(() => {
+                run();
+                raf2 = requestAnimationFrame(run);
             });
+            timer = window.setTimeout(run, 100);
         };
 
-        const handleViewportResize = () => {
-            const height = viewport.height;
-            const keyboardOpening = height < lastHeight - 40;
-            lastHeight = height;
-            if (keyboardOpening) scrollToLatest();
+        const onFocusIn = (event: FocusEvent) => {
+            if (!isOurInput(event.target)) return;
+            keyboardFocused = true;
+            pinLatestMessage();
         };
 
-        const handleFocusIn = (event: FocusEvent) => {
-            const target = event.target;
-            if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
-                if (wrapperRef.current?.contains(target)) {
-                    // Safari may perform its own scroll immediately after focus;
-                    // run after that scroll so the newest message remains visible.
-                    scrollToLatest();
+        const onFocusOut = () => {
+            window.setTimeout(() => {
+                if (!isOurInput(document.activeElement)) {
+                    keyboardFocused = false;
+                    if (scrollRef.current) scrollRef.current.style.removeProperty("overflow-anchor");
                 }
-            }
+            }, 0);
         };
 
-        viewport.addEventListener('resize', handleViewportResize);
-        document.addEventListener('focusin', handleFocusIn);
+        const onViewportResize = () => pinLatestMessage();
+
+        if (typeof ResizeObserver !== "undefined") {
+            observer = new ResizeObserver(() => pinLatestMessage());
+            observer.observe(el);
+        }
+
+        document.addEventListener("focusin", onFocusIn, true);
+        document.addEventListener("focusout", onFocusOut, true);
+        window.visualViewport?.addEventListener("resize", onViewportResize);
+        window.addEventListener("resize", onViewportResize);
 
         return () => {
-            viewport.removeEventListener('resize', handleViewportResize);
-            document.removeEventListener('focusin', handleFocusIn);
-            cancelAnimationFrame(rafId);
+            document.removeEventListener("focusin", onFocusIn, true);
+            document.removeEventListener("focusout", onFocusOut, true);
+            window.visualViewport?.removeEventListener("resize", onViewportResize);
+            window.removeEventListener("resize", onViewportResize);
+            observer?.disconnect();
+            cancelAnimationFrame(raf1);
+            cancelAnimationFrame(raf2);
+            if (timer !== null) window.clearTimeout(timer);
+            if (scrollRef.current) scrollRef.current.style.removeProperty("overflow-anchor");
         };
     }, []);
 
