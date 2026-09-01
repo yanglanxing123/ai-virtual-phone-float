@@ -2518,9 +2518,9 @@
       rgba(8, 8, 12, 0.08) 62%,
       transparent 68%,
       transparent 78%,
-      rgba(8, 8, 12, 0.4) 86%,
-      rgba(8, 8, 12, 0.75) 94%,
-      rgba(8, 8, 12, 0.92) 100%
+      rgba(8, 8, 12, 0.12) 86%,
+      rgba(8, 8, 12, 0.20) 94%,
+      rgba(8, 8, 12, 0.30) 100%
     );
   pointer-events: none;
 }
@@ -2860,13 +2860,13 @@
   width: fit-content;
   min-width: 140px;
   max-width: 80vw;
-  padding: 7px 22px !important;
-  border: none !important;
+  padding: 8px 22px !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
   border-radius: 999px !important;
-  background: rgba(0, 0, 0, 0.35) !important;
+  background: rgba(10, 12, 20, 0.72) !important;
   backdrop-filter: blur(12px) saturate(1.1);
   -webkit-backdrop-filter: blur(12px) saturate(1.1);
-  color: rgba(255, 255, 255, 0.92) !important;
+  color: #ffffff !important;
   font-size: 12px !important;
   line-height: 1.3;
   cursor: pointer;
@@ -2876,7 +2876,7 @@
   justify-content: center;
   gap: 0;
   text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
   letter-spacing: 0.02em;
   position: relative;
   -webkit-tap-highlight-color: transparent;
@@ -2886,7 +2886,8 @@
   content: none !important;
 }
 .raid-portrait-choice-btn--compact:hover {
-  background: rgba(0, 0, 0, 0.5) !important;
+  background: rgba(20, 22, 34, 0.88) !important;
+  border-color: rgba(255, 122, 170, 0.55) !important;
   color: #ffffff !important;
   transform: translateY(-1px);
 }
@@ -2902,10 +2903,10 @@
 }
 /* 继续按钮 — 同样胶囊形，略亮 */
 .raid-portrait-choice-btn--continue {
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-  font-weight: 500;
-  border: none !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
 }
 /* 指导输入行 — 紧凑 */
 .raid-portrait-guidance-row {
