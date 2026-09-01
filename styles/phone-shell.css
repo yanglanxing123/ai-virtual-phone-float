@@ -1467,3 +1467,22 @@
 .folder-dots .dot.active {
   background: color-mix(in srgb, var(--c-home-label, #ffffff) 85%, transparent);
 }
+
+/* =========================================================
+   iOS Safari keyboard/header fix
+   ---------------------------------------------------------
+   Safari may report a reduced/shifted visual viewport while
+   the keyboard is open. The chat input bar already follows
+   --vkbd-height, so the phone shell itself must NOT be lifted
+   at the same time.
+
+   Android keeps the existing --mobile-keyboard-lift behavior.
+   ========================================================= */
+@media (max-width: 500px) and (hover: none) and (pointer: coarse) {
+  @supports (-webkit-touch-callout: none) {
+    .phone-shell-wrap {
+      transform: translate3d(0, 0, 0) !important;
+      will-change: auto;
+    }
+  }
+}
