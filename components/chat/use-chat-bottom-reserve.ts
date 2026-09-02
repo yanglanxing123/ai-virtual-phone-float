@@ -73,6 +73,7 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
             }
         };
 
+        const scheduleStickToBottom = () => stickToBottom(false);
 
         const measure = () => {
             frame = 0;
@@ -89,15 +90,23 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
             const height = Math.ceil(overlay.getBoundingClientRect().height);
 
             if (height > 0) {
-                wrapper.style.setProperty(CHAT_BOTTOM_RESERVE_CSS_VAR, `${height}px`);
+                // The composer itself is moved upward by --vkbd-height on iOS.
+                // The message viewport must end at the composer's TOP, not at
+                // the composer's bottom. Therefore reserve BOTH the composer
+                // height and the keyboard height.
+                wrapper.style.setProperty(
+                    CHAT_BOTTOM_RESERVE_CSS_VAR,
+                    `calc(${height}px + var(--vkbd-height, 0px))`,
+                );
             } else {
                 wrapper.style.removeProperty(CHAT_BOTTOM_RESERVE_CSS_VAR);
             }
 
-            // Only preserve the bottom anchor if the user was already near it.
-            // Never force a history view to the latest message just because the
-            // keyboard is focused or the visual viewport changed.
-            if (wasNearBottom) {
+            // Normal behavior: preserve the user's bottom anchor only when
+            // they were already near it. Keyboard behavior is different: the
+            // viewport itself just changed, so force the latest-message anchor
+            // while this Chat input owns focus.
+            if (wasNearBottom || (inputFocused() && isKeyboardOpen())) {
                 stickToBottom(inputFocused() && isKeyboardOpen());
             }
         };
@@ -110,17 +119,17 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
         const handleFocusIn = (event: FocusEvent) => {
             if (!isEditableElement(event.target as Element | null)) return;
             if (!wrapper.contains(event.target as Node)) return;
-            // Re-measure the composer, but do not change the user's message
-            // scroll position here. The chat room itself decides whether it is
-            // allowed to follow the latest message.
-            requestMeasure();
+            // Let Safari finish opening the keyboard first, then anchor the
+            // message list to its latest message.
+            stickToBottom(true);
         };
 
         const handleViewportResize = () => {
-            // Keyboard geometry can change the available message-pane height.
-            // measure() will preserve the bottom anchor only when the user was
-            // already near the bottom.
             requestMeasure();
+            if (inputFocused() && isKeyboardOpen()) {
+                // Run after the keyboard CSS variable/layout has settled.
+                stickToBottom(true);
+            }
         };
 
         const overlay = findBottomOverlay(wrapper);
