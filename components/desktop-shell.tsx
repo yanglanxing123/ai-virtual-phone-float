@@ -128,7 +128,7 @@ import { generateChatCompletion, flattenCompletionResult } from "@/lib/chat-engi
 import { parseAIResponse } from "@/lib/rich-message-parser";
 import { requestBackgroundChatReply, scheduleFollowUp } from "@/lib/follow-up-service";
 import { CHAT_MESSAGE_NOTICE_EVENT, CHAT_OPEN_SESSION_EVENT, type ChatMessageNoticeDetail } from "@/lib/chat-notification-events";
-import { playChatMessageSound, unlockChatSound } from "@/lib/chat-sound";
+import { playChatMessageSound, unlockChatSound } from "@/lib/qq-chat-sound";
 import { getTotalUnreadCount, CHAT_UNREAD_UPDATED_EVENT } from "@/lib/chat-storage";
 import { startIncomingCallVibration } from "@/lib/call-vibration";
 import { setMascotContext } from "@/lib/mascot-context";
@@ -2531,12 +2531,15 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
       const isCurrentMainChat = activeApp === "chat" && activeChatSession?.id === detail.sessionId;
       const isCurrentMiniChat = showMiniChat && miniSessionRef.current?.id === detail.sessionId;
-      if (isCurrentMainChat || isCurrentMiniChat) return;
 
-      // 仿QQ提示音：静音会话不响，特别关心使用专属提示音
+      // 仿QQ提示音：静音会话不响，特别关心使用专属提示音。
+      // 无论当前是否正在该聊天窗口，都播放一次提示音。
       if (!detail.isMuted) {
         playChatMessageSound(detail.isSpecial);
       }
+
+      // 当前聊天/小窗中不显示顶部消息通知，但声音已经正常播放。
+      if (isCurrentMainChat || isCurrentMiniChat) return;
 
       const sessions = loadChatSessions();
       const session = sessions.find(s => s.id === detail.sessionId);
