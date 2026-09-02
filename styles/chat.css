@@ -65,6 +65,10 @@
 
 .chat-app .chat-room-wrapper > .page-body > * {
   overflow-anchor: none;
+  /* iOS Safari: never let the column flex container shrink a message row.
+     A visually overflowing flex item can sit below scrollHeight, which makes
+     the newest messages unreachable when the keyboard reduces the viewport. */
+  flex: 0 0 auto;
 }
 
 @supports (-webkit-touch-callout: none) {
