@@ -1718,6 +1718,16 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Track whether the user is currently following the latest message.
+    // Automatic scroll-to-bottom is only allowed while this is true; otherwise
+    // incoming messages / keyboard resizing must never steal the user's scroll position.
+    const isNearBottomRef = useRef(true);
+    const updateScrollPositionState = useCallback((el: HTMLDivElement) => {
+        const distanceFromBottom =
+            el.scrollHeight - el.scrollTop - el.clientHeight;
+        isNearBottomRef.current = distanceFromBottom <= 48;
+    }, []);
+
     // iOS Safari: the message pane changes height after the keyboard opens.
     // Safari may preserve the old scroll position when the pane is resized,
     // leaving the newest message underneath the composer. Watch the actual
@@ -1749,6 +1759,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
         const pinLatestMessage = () => {
             if (!keyboardFocused || !keyboardOpen()) return;
+
+            // If the user has scrolled up into history, keyboard/layout changes
+            // must not pull the conversation back to the latest message.
+            if (!isNearBottomRef.current) return;
             cancelAnimationFrame(raf1);
             cancelAnimationFrame(raf2);
             if (timer !== null) window.clearTimeout(timer);
@@ -2537,7 +2551,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     img.addEventListener("error", onDone, { once: true });
                 }
             }
-        } else if (displayMessages.length > prevMsgCountRef.current && el) {
+        } else if (
+            displayMessages.length > prevMsgCountRef.current &&
+            el &&
+            isNearBottomRef.current
+        ) {
             el.scrollTop = el.scrollHeight;
         }
         prevMsgCountRef.current = displayMessages.length;
@@ -2546,7 +2564,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     useLayoutEffect(() => {
         if (!offlineMode) return;
         const el = scrollRef.current;
-        if (el) el.scrollTop = el.scrollHeight;
+        if (el && isNearBottomRef.current) el.scrollTop = el.scrollHeight;
     }, [offlineMode, offlineTurns.length, isOfflineGenerating, pendingOfflineUserText]);
 
     // Sync current session+messages to debug store for DebugPromptPanel
@@ -5793,6 +5811,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 className="page-body chat-room-main-pane flex flex-col gap-4"
                 style={{ overflowAnchor: "none" }}
                 onScroll={(e) => {
+                    updateScrollPositionState(e.currentTarget);
                     if (activeMessageId || activeOfflineTarget) closeContextMenu();
                 }}
                 onPointerDown={(e) => {
