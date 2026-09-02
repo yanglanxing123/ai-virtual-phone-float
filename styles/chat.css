@@ -48,7 +48,32 @@
 /* ── 聊天室：page-body 自己滚动，header absolute 浮在上方，输入栏在滚动区外 ── */
 .chat-app .chat-room-wrapper.page-shell {
   overflow: hidden;
+  /* The message viewport ends exactly where the input bar begins.
+     The keyboard handler moves the input bar with --vkbd-height. */
   --chat-bottom-reserve: calc(120px + var(--vkbd-height, 0px));
+}
+
+/* iOS Safari keyboard layout: keep the message viewport as the only
+   scrolling surface.  Do not let scroll anchoring or the outer page steal
+   the scroll position when the visual viewport changes. */
+.chat-app .chat-room-wrapper > .page-body {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  overflow-anchor: none;
+  scroll-behavior: auto;
+}
+
+.chat-app .chat-room-wrapper > .page-body > * {
+  overflow-anchor: none;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .chat-app .chat-room-wrapper > .page-body {
+    /* Safari can otherwise preserve an obsolete visual-viewport anchor
+       after the keyboard reduces the viewport. */
+    -webkit-overflow-scrolling: touch;
+    overflow-anchor: none;
+  }
 }
 
 .chat-app .chat-room-wrapper .page-header {
