@@ -5790,7 +5790,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             {/* Message List */}
             <div
                 ref={scrollRef}
-                className="page-body chat-room-main-pane flex flex-col gap-4 chat-scroll-anchored"
+                className="page-body chat-room-main-pane flex flex-col gap-4"
+                style={{ overflowAnchor: "none" }}
                 onScroll={(e) => {
                     if (activeMessageId || activeOfflineTarget) closeContextMenu();
                 }}
@@ -6440,8 +6441,6 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         </div>
                     );
                 })}
-                {/* Scroll anchor: browser keeps this in view when content above changes height */}
-                <div style={{ overflowAnchor: 'auto', height: 1 }} />
             </div>
 
             {/* Input Bar — absolute at bottom, same layer as header */}
