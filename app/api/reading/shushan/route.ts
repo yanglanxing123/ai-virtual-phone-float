@@ -274,6 +274,23 @@ export async function POST(request: NextRequest) {
       }));
     }
 
+    if (action === "module") {
+      const moduleUrl = String(input.moduleUrl || "").trim();
+      if (!moduleUrl) return NextResponse.json({ ok: false, error: "缺少榜单地址" }, { status: 400 });
+      let parsedUrl: URL;
+      try { parsedUrl = new URL(moduleUrl); } catch { return NextResponse.json({ ok: false, error: "榜单地址无效" }, { status: 400 }); }
+      if (!/vossc\.com$/i.test(parsedUrl.hostname)) return NextResponse.json({ ok: false, error: "该地址不是书山榜单地址" }, { status: 400 });
+      const preferredHost = String(input.host || "").trim();
+      const path = `${parsedUrl.pathname}${parsedUrl.search}`;
+      return NextResponse.json(await tryHosts(chooseHosts([preferredHost, parsedUrl.origin]), async (host) => {
+        const result = await fetchUpstream(host, path, { apiKey });
+        if (!result.response.ok) throw upstreamError(host, path, result.response.status, result.parsed, result.text);
+        let data = result.parsed;
+        if (data == null) { try { data = JSON.parse(result.text); } catch { data = result.text; } }
+        return { ok: true as const, data, host };
+      }));
+    }
+
     if (action === "details") {
       const detail = jsonObject(input.detail);
       return NextResponse.json(await tryHosts(hosts, async (host) => {
