@@ -298,7 +298,12 @@ export async function fetchReadingSourceModule(source: ReadingBookSource, module
     });
     const data = await response.json().catch(() => null);
     if (!response.ok || !data?.ok) throw new Error(data?.error || `首页榜单请求失败（${response.status}）`);
-    return data.data ?? data.result ?? data;
+    let moduleData: any = data.data ?? data.result ?? data;
+    // 兼容服务端/上游返回 JSON 字符串的情况。
+    for (let i = 0; i < 2 && typeof moduleData === "string"; i += 1) {
+      try { moduleData = JSON.parse(moduleData); } catch { break; }
+    }
+    return moduleData;
   }
 
   const options = request.options || {};
