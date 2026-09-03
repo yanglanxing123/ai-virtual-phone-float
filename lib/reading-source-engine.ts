@@ -276,6 +276,27 @@ export async function fetchReadingSourceModule(source: ReadingBookSource, module
   const templated = replaceVars(moduleUrl, vars);
   const request = parseRequestUrl(templated, source.url);
   if (!/^https?:/i.test(request.url)) throw new Error("首页模块地址不是有效的 HTTP/HTTPS 地址");
+
+  // 书山发现页的 style_top / type_style 并不是普通“书源 HTTP 模块”。
+  // 原书源是在 Legado 的 Java.ajax 环境里请求，并依赖书山自己的服务器轮换；
+  // 浏览器直接走通用代理容易遇到 404/CORS/服务器节点差异，因此交给专用适配器。
+  if (isShushanSource(source) && /vossc\.com\/style_top|vossc\.com\/type_style/i.test(request.url)) {
+    const account = requireShushanAccount();
+    const response = await fetch("/api/reading/shushan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "module",
+        apiKey: account.apiKey,
+        moduleUrl: request.url,
+        host: state.variables?.host || source.url,
+      }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.ok) throw new Error(data?.error || `首页榜单请求失败（${response.status}）`);
+    return data.data ?? data.result ?? data;
+  }
+
   const options = request.options || {};
   const payload = await fetchSource({
     source,
