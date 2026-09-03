@@ -1,0 +1,57 @@
+/* 阅读 APP 首页/书架/书源/外观的独立样式。建议追加到现有阅读 CSS 末尾。 */
+.reading-hub { position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden; color:var(--reading-warm-ink,#111); background:var(--reading-warm-bg,#fffced); }
+.reading-hub-header { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; padding:max(18px,env(safe-area-inset-top,18px)) 16px 12px; }
+.reading-hub-kicker { font-size:10px; letter-spacing:.18em; font-weight:800; opacity:.45; }
+.reading-hub-header h1 { margin:3px 0 0; font-size:29px; line-height:1; font-weight:900; }
+.reading-hub-actions { display:flex; gap:8px; }
+.reading-hub-icon-btn { width:38px; height:38px; border:1px solid rgba(80,55,20,.08); border-radius:50%; background:rgba(255,255,255,.82); display:grid; place-items:center; color:inherit; }
+.reading-hub-body { flex:1; min-height:0; overflow:auto; padding:4px 16px 100px; -webkit-overflow-scrolling:touch; }
+.reading-hub-welcome { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; padding:18px; margin:4px 0 16px; border-radius:22px; background:linear-gradient(135deg,rgba(250,227,137,.48),rgba(255,255,255,.84)); box-shadow:0 12px 28px rgba(60,45,20,.06); }
+.reading-hub-welcome-label { display:block; font-size:9px; letter-spacing:.14em; opacity:.45; font-weight:800; }
+.reading-hub-welcome strong { display:block; margin-top:5px; font-size:23px; }
+.reading-hub-welcome p { margin:6px 0 0; font-size:12px; line-height:1.5; opacity:.56; }
+.reading-hub-welcome button,.reading-hub-primary,.reading-hub-outline { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:12px; min-height:38px; padding:0 13px; font-weight:800; }
+.reading-hub-welcome button,.reading-hub-primary { background:var(--reading-warm-accent,#fae389); color:#241c0d; }
+.reading-hub-outline { background:transparent; border:1px solid rgba(80,55,20,.12); color:inherit; }
+.reading-hub-module { margin:0 0 16px; padding:16px; border-radius:20px; background:rgba(255,255,255,.8); border:1px solid rgba(80,55,20,.06); }
+.reading-hub-module-title { display:flex; align-items:center; gap:11px; margin-bottom:13px; }
+.reading-hub-module-icon { width:36px; height:36px; border-radius:12px; background:rgba(250,227,137,.55); display:grid; place-items:center; }
+.reading-hub-module h2,.reading-hub-panel h2 { margin:0; font-size:17px; font-weight:900; }
+.reading-hub-module p,.reading-hub-panel p { margin:3px 0 0; font-size:11px; opacity:.5; }
+.reading-hub-book-row { display:flex; gap:10px; overflow:auto; padding-bottom:2px; }
+.reading-hub-shelf-grid { display:grid; grid-template-columns:1fr 1fr; gap:11px; }
+.reading-hub-book-card { flex:0 0 145px; min-width:0; display:flex; gap:9px; text-align:left; border:0; padding:0; background:transparent; color:inherit; }
+.reading-hub-book-card--detailed { flex-direction:column; gap:8px; padding:10px; border-radius:16px; background:rgba(255,255,255,.75); border:1px solid rgba(80,55,20,.06); }
+.reading-hub-book-cover { width:52px; height:72px; flex:0 0 auto; border-radius:8px; display:grid; place-items:center; overflow:hidden; background:linear-gradient(145deg,#f7e9b7,#eadcc2); color:#8a5a2b; }
+.reading-hub-book-card--detailed .reading-hub-book-cover { width:100%; height:125px; }
+.reading-hub-book-cover img { width:100%; height:100%; object-fit:cover; }
+.reading-hub-book-meta { min-width:0; padding-top:3px; }
+.reading-hub-book-meta strong { display:block; font-size:12px; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.reading-hub-book-meta span { display:block; margin-top:3px; font-size:10px; opacity:.48; }
+.reading-hub-progress { margin-top:8px; width:100%; height:3px; border-radius:999px; overflow:hidden; background:rgba(80,55,20,.08); }
+.reading-hub-progress i { display:block; height:100%; border-radius:inherit; background:var(--reading-warm-accent,#fae389); }
+.reading-hub-empty { padding:16px 8px 4px; text-align:center; font-size:11px; opacity:.45; }
+.reading-hub-panel { margin:4px 0; padding:16px; border-radius:20px; background:rgba(255,255,255,.82); border:1px solid rgba(80,55,20,.06); }
+.reading-hub-panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:15px; }
+.reading-hub-source-brand { display:flex; align-items:center; gap:10px; }
+.reading-hub-source-dot { width:34px; height:34px; border-radius:12px; background:linear-gradient(145deg,#f7e9b7,#e8d4aa); }
+.reading-hub-source-brand strong { display:block; font-size:17px; }
+.reading-hub-source-brand small { display:block; margin-top:2px; font-size:10px; opacity:.48; }
+.reading-hub-source-note { margin:14px 0; padding:11px 12px; border-radius:12px; background:rgba(250,227,137,.16); font-size:11px; line-height:1.55; opacity:.72; }
+.reading-hub-source-card label { display:block; margin-top:11px; font-size:11px; font-weight:700; }
+.reading-hub-source-card input,.reading-hub-css { width:100%; box-sizing:border-box; margin-top:6px; border:1px solid rgba(80,55,20,.1); border-radius:12px; background:rgba(255,255,255,.9); color:inherit; outline:0; }
+.reading-hub-source-card input { height:42px; padding:0 12px; }
+.reading-hub-source-card .reading-hub-primary { width:100%; margin-top:14px; }
+.reading-hub-source-divider { height:1px; background:rgba(80,55,20,.07); margin:17px 0; }
+.reading-hub-search { display:flex; align-items:center; gap:7px; height:42px; padding:0 10px 0 12px; border:1px solid rgba(80,55,20,.1); border-radius:13px; background:rgba(255,255,255,.9); }
+.reading-hub-search input { border:0; margin:0; padding:0; height:100%; flex:1; background:transparent; }
+.reading-hub-search button { border:0; border-radius:9px; padding:7px 9px; font-weight:800; background:var(--reading-warm-accent,#fae389); }
+.reading-hub-search button:disabled { opacity:.45; }
+.reading-hub-warning { margin-top:10px!important; color:#9b5c27; opacity:.85!important; }
+.reading-hub-css { min-height:190px; padding:12px; resize:vertical; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.reading-hub-module-settings { margin-top:18px; }
+.reading-hub-module-settings h3 { margin:0 0 8px; font-size:13px; }
+.reading-hub-module-settings label { display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-top:1px solid rgba(80,55,20,.06); font-size:12px; }
+.reading-hub-nav { position:absolute; left:0; right:0; bottom:0; z-index:20; display:grid; grid-template-columns:repeat(4,1fr); padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px)); background:rgba(255,252,237,.92); backdrop-filter:blur(18px); border-top:1px solid rgba(80,55,20,.07); }
+.reading-hub-nav-item { border:0; background:transparent; color:var(--reading-warm-ink-tertiary,#999); display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10px; font-weight:700; padding:6px 0; }
+.reading-hub-nav-item.is-active { color:var(--reading-warm-brown,#8a5a2b); }
