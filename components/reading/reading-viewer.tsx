@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from "react";
-import { BookOpenText, Bot, ChevronDown, ChevronRight, Languages, Menu, Minus, PenLine, SendHorizontal, X } from "lucide-react";
+import { BookOpenText, Bot, ChevronDown, ChevronRight, Languages, Menu, Minus, PenLine, SendHorizontal, Settings2, X } from "lucide-react";
 import {
     loadChapters,
     loadProgress,
@@ -275,6 +275,8 @@ export function ReadingViewer({ book, onBack }: Props) {
     const [pdfTotalPages, setPdfTotalPages] = useState(0);
     const [txtPage, setTxtPage] = useState(0);
     const [readingMode, setReadingMode] = useState<"continuous" | "page">("continuous");
+    const [readingMargin, setReadingMargin] = useState(24);
+    const [sharedLayout, setSharedLayout] = useState(false);
     const [annotations, setAnnotations] = useState<ReadingAnnotation[]>([]);
     const [generating, setGenerating] = useState(false);
     const [companionId, setCompanionId] = useState<string | null>(null);
@@ -355,6 +357,19 @@ export function ReadingViewer({ book, onBack }: Props) {
             if (saved === "page" || saved === "continuous") setReadingMode(saved);
         } catch { /* ignore */ }
     }, [book.id, isPdf]);
+
+    useEffect(() => {
+        try {
+            const shared = window.localStorage.getItem(`reading-shared-layout:${book.id}`) === "true";
+            setSharedLayout(shared);
+            const own = Number(window.localStorage.getItem(`reading-margin:${book.id}`));
+            const ownMargin = Number.isFinite(own) && own >= 8 && own <= 48 ? own : 24;
+            const common = Number(window.localStorage.getItem("reading-shared-margin"));
+            const commonMargin = Number.isFinite(common) && common >= 8 && common <= 48 ? common : ownMargin;
+            setReadingMargin(shared ? commonMargin : ownMargin);
+            if (shared && !Number.isFinite(common)) window.localStorage.setItem("reading-shared-margin", String(ownMargin));
+        } catch { setSharedLayout(false); setReadingMargin(24); }
+    }, [book.id]);
 
     const companion = companionId ? (enrichedContacts.find(c => c.characterId === companionId)?.char || loadCharacters().find(c => c.id === companionId)) : null;
     const bilingualTranslationEnabled = readingConfig.bilingualTranslationEnabled === true;
@@ -1803,6 +1818,47 @@ export function ReadingViewer({ book, onBack }: Props) {
         try { window.localStorage.setItem(`reading-mode:${book.id}`, mode); } catch { /* ignore */ }
     }, [book.id, isPdf, readingMode, txtPage, txtPages.length]);
 
+    const handleReadingMarginChange = useCallback((value: number) => {
+        const next = Math.max(8, Math.min(48, Math.round(value)));
+        setReadingMargin(next);
+        setTxtLayoutVersion(v => v + 1);
+        try {
+            if (sharedLayout) {
+                window.localStorage.setItem("reading-shared-margin", String(next));
+                window.dispatchEvent(new CustomEvent("reading-shared-layout-change", { detail: { margin: next } }));
+            } else {
+                window.localStorage.setItem(`reading-margin:${book.id}`, String(next));
+            }
+        } catch {}
+    }, [book.id, sharedLayout]);
+
+    const handleSharedLayoutChange = useCallback((enabled: boolean) => {
+        try {
+            if (enabled) {
+                const common = Number(window.localStorage.getItem("reading-shared-margin"));
+                const next = Number.isFinite(common) && common >= 8 && common <= 48 ? common : readingMargin;
+                window.localStorage.setItem("reading-shared-margin", String(next));
+                setReadingMargin(next);
+            } else {
+                const own = Number(window.localStorage.getItem(`reading-margin:${book.id}`));
+                setReadingMargin(Number.isFinite(own) && own >= 8 && own <= 48 ? own : 24);
+            }
+            window.localStorage.setItem(`reading-shared-layout:${book.id}`, String(enabled));
+        } catch {}
+        setSharedLayout(enabled);
+        setTxtLayoutVersion(v => v + 1);
+    }, [book.id, readingMargin]);
+
+    useEffect(() => {
+        const handler = (event: Event) => {
+            if (!sharedLayout) return;
+            const margin = Number((event as CustomEvent<{ margin?: number }>).detail?.margin);
+            if (margin >= 8 && margin <= 48) { setReadingMargin(margin); setTxtLayoutVersion(v => v + 1); }
+        };
+        window.addEventListener("reading-shared-layout-change", handler);
+        return () => window.removeEventListener("reading-shared-layout-change", handler);
+    }, [sharedLayout]);
+
     const txtDisplayedPage = Math.min(txtPage + 1, txtTotalPages);
     const currentPageCount = isPdf ? Math.max(1, pdfTotalPages || 1) : Math.max(1, txtTotalPages);
     const txtBookSliderMax = Math.max(1, chapters.length);
@@ -2105,7 +2161,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                         >
                             <div
                                 className={readingMode === "continuous" ? "reading-continuous-surface" : "reading-page-surface"}
-                                style={{ display: "block", height: "auto", minHeight: "max-content" }}
+                                style={{ display: "block", height: "auto", minHeight: "max-content", paddingLeft: `${readingMargin}px`, paddingRight: `${readingMargin}px`, boxSizing: "border-box" }}
                             >
                                 {chaptersLoaded ? (
                                     readingMode === "continuous"
@@ -2195,24 +2251,13 @@ export function ReadingViewer({ book, onBack }: Props) {
                             <PenLine size={22} strokeWidth={1.7} />
                             <span>写批注</span>
                         </button>
-                        {!isPdf && (
-                            <button
-                                type="button"
-                                className={`reading-footer-icon-btn ${readingMode === "page" ? "is-active" : ""}`}
-                                onClick={() => switchReadingMode(readingMode === "continuous" ? "page" : "continuous")}
-                                title={readingMode === "continuous" ? "切换到翻页模式" : "切换到连续滚动"}
-                            >
-                                <BookOpenText size={22} strokeWidth={1.7} />
-                                <span>{readingMode === "continuous" ? "翻页模式" : "连续滚动"}</span>
-                            </button>
-                        )}
                         <button
                             type="button"
                             className="reading-footer-icon-btn"
                             onClick={() => setShowReadingSettings(true)}
                         >
-                            <Languages size={22} strokeWidth={1.7} />
-                            <span>设置</span>
+                            <Settings2 size={22} strokeWidth={1.7} />
+                            <span>界面</span>
                         </button>
                     </div>
                 </div>
@@ -2426,6 +2471,26 @@ export function ReadingViewer({ book, onBack }: Props) {
                     onCancel={() => setAnnotationDialogMode(null)}
                 >
                     <div className="reading-settings-grid">
+                        {!isPdf && (
+                            <>
+                                <div className="reading-settings-group">
+                                    <div className="reading-settings-heading"><BookOpenText size={17} strokeWidth={1.8} /><span>阅读模式</span></div>
+                                    <div className="reading-settings-actions">
+                                        <button type="button" className={`ui-btn ${readingMode === "continuous" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("continuous")}>连续滚动</button>
+                                        <button type="button" className={`ui-btn ${readingMode === "page" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("page")}>翻页模式</button>
+                                    </div>
+                                </div>
+                                <div className="reading-settings-group">
+                                    <div className="reading-settings-inline-note">
+                                        <div><div className="reading-settings-heading" style={{ marginBottom: 2 }}><span>共享布局</span></div><div style={{ fontSize: 12, opacity: 0.72 }}>开启后，所有开启共享布局的书籍使用同一边距</div></div>
+                                        <Toggle checked={sharedLayout} onChange={handleSharedLayoutChange} />
+                                    </div>
+                                    <div className="reading-settings-heading"><span>正文左右边距</span><span>{readingMargin}px</span></div>
+                                    <input type="range" min={8} max={48} step={2} value={readingMargin} onChange={e => handleReadingMarginChange(Number(e.target.value))} className="reading-custom-slider" aria-label="正文左右边距" />
+                                    <div className="reading-settings-inline-note"><span>窄</span><span>左右各 {readingMargin}px</span><span>宽</span></div>
+                                </div>
+                            </>
+                        )}
                         {annotationDialogMode === "auto" && autoAnnotate ? (
                             <>
                                 <div className="reading-settings-inline-note">
@@ -2467,7 +2532,7 @@ export function ReadingViewer({ book, onBack }: Props) {
             )}
             {showReadingSettings && (
                 <ContentDialog
-                    title="阅读双语翻译"
+                    title="界面"
                     confirmLabel="完成"
                     cancelLabel="关闭"
                     onConfirm={() => setShowReadingSettings(false)}
