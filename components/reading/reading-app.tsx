@@ -19,6 +19,7 @@ import {
 import type { Book } from "@/lib/reading-types";
 import {
   clearShushanAccount,
+  getShushanBookInfo,
   getShushanDetail,
   getShushanCatalog,
   loadShushanAccount,
