@@ -300,6 +300,7 @@ export function ReadingViewer({ book, onBack }: Props) {
     const [annotationBatchInput, setAnnotationBatchInput] = useState(String(isPdf ? 5 : 50));
     const [annotationDialogMode, setAnnotationDialogMode] = useState<AnnotationDialogMode | null>(null);
     const [showReadingSettings, setShowReadingSettings] = useState(false);
+    const [showReadingInterface, setShowReadingInterface] = useState(false);
     const [showNavigationDialog, setShowNavigationDialog] = useState(false);
     const [pdfJumpPage, setPdfJumpPage] = useState<number | undefined>(undefined);
     const [chaptersLoaded, setChaptersLoaded] = useState(false);
@@ -2254,10 +2255,18 @@ export function ReadingViewer({ book, onBack }: Props) {
                         <button
                             type="button"
                             className="reading-footer-icon-btn"
-                            onClick={() => setShowReadingSettings(true)}
+                            onClick={() => setShowReadingInterface(true)}
                         >
                             <Settings2 size={22} strokeWidth={1.7} />
                             <span>界面</span>
+                        </button>
+                        <button
+                            type="button"
+                            className="reading-footer-icon-btn"
+                            onClick={() => setShowReadingSettings(true)}
+                        >
+                            <Languages size={22} strokeWidth={1.7} />
+                            <span>设置</span>
                         </button>
                     </div>
                 </div>
@@ -2471,26 +2480,6 @@ export function ReadingViewer({ book, onBack }: Props) {
                     onCancel={() => setAnnotationDialogMode(null)}
                 >
                     <div className="reading-settings-grid">
-                        {!isPdf && (
-                            <>
-                                <div className="reading-settings-group">
-                                    <div className="reading-settings-heading"><BookOpenText size={17} strokeWidth={1.8} /><span>阅读模式</span></div>
-                                    <div className="reading-settings-actions">
-                                        <button type="button" className={`ui-btn ${readingMode === "continuous" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("continuous")}>连续滚动</button>
-                                        <button type="button" className={`ui-btn ${readingMode === "page" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("page")}>翻页模式</button>
-                                    </div>
-                                </div>
-                                <div className="reading-settings-group">
-                                    <div className="reading-settings-inline-note">
-                                        <div><div className="reading-settings-heading" style={{ marginBottom: 2 }}><span>共享布局</span></div><div style={{ fontSize: 12, opacity: 0.72 }}>开启后，所有开启共享布局的书籍使用同一边距</div></div>
-                                        <Toggle checked={sharedLayout} onChange={handleSharedLayoutChange} />
-                                    </div>
-                                    <div className="reading-settings-heading"><span>正文左右边距</span><span>{readingMargin}px</span></div>
-                                    <input type="range" min={8} max={48} step={2} value={readingMargin} onChange={e => handleReadingMarginChange(Number(e.target.value))} className="reading-custom-slider" aria-label="正文左右边距" />
-                                    <div className="reading-settings-inline-note"><span>窄</span><span>左右各 {readingMargin}px</span><span>宽</span></div>
-                                </div>
-                            </>
-                        )}
                         {annotationDialogMode === "auto" && autoAnnotate ? (
                             <>
                                 <div className="reading-settings-inline-note">
@@ -2530,9 +2519,47 @@ export function ReadingViewer({ book, onBack }: Props) {
                     </div>
                 </ContentDialog>
             )}
-            {showReadingSettings && (
+            {showReadingInterface && (
                 <ContentDialog
                     title="界面"
+                    confirmLabel="完成"
+                    cancelLabel="关闭"
+                    onConfirm={() => setShowReadingInterface(false)}
+                    onCancel={() => setShowReadingInterface(false)}
+                >
+                    <div className="reading-settings-grid">
+                        {!isPdf && (
+                            <>
+                                <div className="reading-settings-group">
+                                    <div className="reading-settings-heading">
+                                        <BookOpenText size={17} strokeWidth={1.8} />
+                                        <span>阅读模式</span>
+                                    </div>
+                                    <div className="reading-settings-actions">
+                                        <button type="button" className={`ui-btn ${readingMode === "continuous" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("continuous")}>连续滚动</button>
+                                        <button type="button" className={`ui-btn ${readingMode === "page" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("page")}>翻页模式</button>
+                                    </div>
+                                </div>
+                                <div className="reading-settings-group">
+                                    <div className="reading-settings-inline-note">
+                                        <div>
+                                            <div className="reading-settings-heading" style={{ marginBottom: 2 }}><span>共享布局</span></div>
+                                            <div style={{ fontSize: 12, opacity: 0.72 }}>开启后，所有开启共享布局的书籍使用同一边距</div>
+                                        </div>
+                                        <Toggle checked={sharedLayout} onChange={handleSharedLayoutChange} />
+                                    </div>
+                                    <div className="reading-settings-heading"><span>正文左右边距</span><span>{readingMargin}px</span></div>
+                                    <input type="range" min={8} max={48} step={2} value={readingMargin} onChange={e => handleReadingMarginChange(Number(e.target.value))} className="reading-custom-slider" aria-label="正文左右边距" />
+                                    <div className="reading-settings-inline-note"><span>窄</span><span>左右各 {readingMargin}px</span><span>宽</span></div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </ContentDialog>
+            )}
+            {showReadingSettings && (
+                <ContentDialog
+                    title="阅读双语翻译"
                     confirmLabel="完成"
                     cancelLabel="关闭"
                     onConfirm={() => setShowReadingSettings(false)}
