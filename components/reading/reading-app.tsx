@@ -734,14 +734,6 @@ export default function ReadingApp({ onClose }: Props) {
               <div className="reading-hub-kicker">READING</div>
               <h1>{getTitle(tab)}</h1>
             </div>
-            <button
-              type="button"
-              className="reading-hub-close"
-              aria-label="关闭阅读 APP"
-              onClick={onClose}
-            >
-              <X size={18} />
-            </button>
           </header>
 
           <main className="reading-hub-content">
@@ -821,6 +813,9 @@ export default function ReadingApp({ onClose }: Props) {
                   </div>
                 ) : (
                 <>
+                <button type="button" className="reading-hub-desktop-back" onClick={onClose}>
+                  ← 返回桌面
+                </button>
                 <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>排行榜</h2><p>直接使用书源发现页：阅读榜、新书榜、分类榜等都可以单独添加。</p></div></div>
                   <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={() => { void openHomeBookDetail(module, book); }}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
                 </div>
