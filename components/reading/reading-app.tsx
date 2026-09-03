@@ -20,6 +20,7 @@ import type { Book } from "@/lib/reading-types";
 import {
   clearShushanAccount,
   getShushanDetail,
+  getShushanBookInfo,
   getShushanCatalog,
   loadShushanAccount,
   saveRemoteBook,
@@ -332,9 +333,10 @@ export default function ReadingApp({ onClose }: Props) {
       if (Array.isArray(v)) { for (const item of v) visit(item, depth + 1); return; }
       if (typeof v !== "object") return;
       const title = v.title ?? v.book_name ?? v.bookName ?? v.name ?? v.book_title ?? v.novel_name;
-      const bookUrl = v.book_url ?? v.bookUrl ?? v.detail_url ?? v.url ?? "";
-      if (title && (bookUrl || v.author || v.cover || v.cover_url || v.image_url || v.thumb_url || v.thumbUri || v.audio_thumb_uri)) {
-        const key = `${String(title)}|${String(bookUrl)}`;
+      const bookId = String(v.book_id_str ?? v.book_id ?? v.bookId ?? "");
+      const bookUrl = v.book_url ?? v.bookUrl ?? v.detail_url ?? (bookId ? "" : (v.url ?? ""));
+      if (title && (bookUrl || bookId || v.author || v.cover || v.cover_url || v.image_url || v.thumb_url || v.thumbUri || v.audio_thumb_uri)) {
+        const key = `${String(title)}|${String(bookUrl)}|${bookId}`;
         if (!seen.has(key)) {
           seen.add(key);
           list.push({
@@ -343,6 +345,10 @@ export default function ReadingApp({ onClose }: Props) {
             cover: normalizeRemoteUrl(v.cover ?? v.cover_url ?? v.image_url ?? v.book_cover ?? v.thumb_url ?? v.thumbUri ?? v.audio_thumb_uri),
             desc: v.desc ?? v.abstract ?? v.description,
             latestChapterTitle: v.latest_chapter_title ?? v.latestChapterTitle ?? v.last_chapter_title,
+            wordCount: v.word_number ?? v.WordsCount ?? v.wordCount,
+            tags: v.tags ?? v.kind,
+            source: v.source ?? v.source_name ?? v.book_source ?? v.origin,
+            bookId: String(v.book_id_str ?? v.book_id ?? v.bookId ?? "") || undefined,
             bookUrl: String(bookUrl),
             raw: v,
           });
@@ -407,10 +413,55 @@ export default function ReadingApp({ onClose }: Props) {
           <main className="reading-hub-content">
             {tab === "home" && (
               <section className="reading-hub-home">
+                {(selectedSourceBook && sourceDetail) || (genericBook && genericDetail) ? (
+                  <div className="reading-hub-discovery-detail">
+                    <button type="button" className="reading-hub-backlink" onClick={() => { setSelectedSourceBook(null); setSourceDetail(null); setSourceChapters([]); setGenericBook(null); setGenericDetail(null); setGenericChapters([]); setSourceMessage(""); }}>← 返回发现页</button>
+                    {selectedSourceBook && sourceDetail ? (
+                      <div className="reading-discovery-book-card">
+                        <div className="reading-discovery-book-head">
+                          <div className="reading-discovery-cover">{sourceDetail.cover || selectedSourceBook.cover ? <img src={sourceDetail.cover || selectedSourceBook.cover} alt="" /> : <BookOpen size={32} />}</div>
+                          <div className="reading-discovery-book-main">
+                            <h2>{sourceDetail.title || selectedSourceBook.title}</h2>
+                            <p>{sourceDetail.author || selectedSourceBook.author || "未知作者"}</p>
+                            <span>📚 {sourceDetail.source || selectedSourceBook.source || "书山聚合"}</span>
+                          </div>
+                        </div>
+                        <div className="reading-discovery-stats">
+                          <div><small>标签</small><strong>{(sourceDetail as any).tags || (selectedSourceBook as any).tags || "—"}</strong></div>
+                          <div><small>字数</small><strong>{(sourceDetail as any).wordCount || (selectedSourceBook as any).wordCount || "—"}</strong></div>
+                          <div><small>状态</small><strong>{(sourceDetail as any).status || "连载"}</strong></div>
+                          <div><small>章节</small><strong>{sourceChapters.filter(x=>!x.isVolume).length}章</strong></div>
+                        </div>
+                        <div className="reading-discovery-actions">
+                          <button type="button" onClick={async()=>{const id=`shushan_${Date.now()}`;const chapters=sourceChapters.filter(x=>!x.isVolume);const cover=sourceDetail.cover||selectedSourceBook.cover;const coverSaved=await downloadCoverForBook(id,cover);const book:Book={id,title:sourceDetail.title||selectedSourceBook.title,author:sourceDetail.author||selectedSourceBook.author,format:"txt",totalChapters:chapters.length,createdAt:new Date().toISOString(),hasCover:coverSaved,coverUrl:normalizeRemoteUrl(cover,sourceDetail.book_url)} as Book & {coverUrl?:string};await addBook(book);await saveChapters(id,chapters.map((c,i)=>({id:`${id}_ch${i}`,bookId:id,index:i,title:c.title||`第${i+1}章`,paragraphs:[]})));saveRemoteBook(id,{source:sourceDetail.source,url:sourceDetail.book_url,name:sourceDetail.title||selectedSourceBook.title,apiKey:loadShushanAccount().apiKey,cover,desc:sourceDetail.desc,chapters});setActiveBook(book);}}><span>🔖</span>放入书架</button>
+                          <button type="button" onClick={()=>setSourceMessage(`目录共 ${sourceChapters.filter(x=>!x.isVolume).length} 章`)}><span>☷</span>查看目录</button>
+                          <button type="button" onClick={()=>setTab("sources")}><span>&lt;&gt;</span>书源</button>
+                          <button type="button" onClick={()=>setSourceMessage("阅读记录已保存在本地书架中") }><span>⌁</span>阅读记录</button>
+                        </div>
+                        <div className="reading-discovery-current">
+                          <strong>在读 · 第1章 {sourceChapters[0]?.title || "暂无章节"}</strong>
+                          <span>共 {sourceChapters.filter(x=>!x.isVolume).length} 章</span>
+                        </div>
+                        <div className="reading-discovery-source">
+                          <p>✨ 源站：{sourceDetail.source || selectedSourceBook.source || "书山聚合"}</p>
+                          <p>📕 书名：{sourceDetail.title || selectedSourceBook.title}</p>
+                          <p>👤 作者：{sourceDetail.author || selectedSourceBook.author || "未知作者"}</p>
+                          {sourceDetail.desc && <p>📝 简介：{sourceDetail.desc}</p>}
+                        </div>
+                        <button type="button" className="reading-hub-primary reading-discovery-read" onClick={async()=>{const id=`shushan_${Date.now()}`;const chapters=sourceChapters.filter(x=>!x.isVolume);const cover=sourceDetail.cover||selectedSourceBook.cover;const coverSaved=await downloadCoverForBook(id,cover);const book:Book={id,title:sourceDetail.title||selectedSourceBook.title,author:sourceDetail.author||selectedSourceBook.author,format:"txt",totalChapters:chapters.length,createdAt:new Date().toISOString(),hasCover:coverSaved,coverUrl:normalizeRemoteUrl(cover,sourceDetail.book_url)} as Book & {coverUrl?:string};await addBook(book);await saveChapters(id,chapters.map((c,i)=>({id:`${id}_ch${i}`,bookId:id,index:i,title:c.title||`第${i+1}章`,paragraphs:[]})));saveRemoteBook(id,{source:sourceDetail.source,url:sourceDetail.book_url,name:sourceDetail.title||selectedSourceBook.title,apiKey:loadShushanAccount().apiKey,cover,desc:sourceDetail.desc,chapters});setActiveBook(book);}}>▣ 阅读</button>
+                      </div>
+                    ) : genericBook && genericDetail ? (
+                      <div className="reading-discovery-book-card"><div className="reading-discovery-book-head"><div className="reading-discovery-cover">{genericDetail.cover||genericBook.cover?<img src={genericDetail.cover||genericBook.cover} alt=""/>:<BookOpen size={32}/>}</div><div className="reading-discovery-book-main"><h2>{genericDetail.title}</h2><p>{genericDetail.author||"未知作者"}</p><span>📚 {bookSources.find(x=>x.id===selectedSourceId)?.name||"书源"}</span></div></div><div className="reading-discovery-stats"><div><small>标签</small><strong>{genericDetail.tags||"—"}</strong></div><div><small>字数</small><strong>{genericDetail.wordCount||"—"}</strong></div><div><small>状态</small><strong>连载</strong></div><div><small>章节</small><strong>{genericChapters.length}章</strong></div></div><div className="reading-discovery-source"><p>📝 简介：{genericDetail.desc||"暂无简介"}</p></div></div>
+                    ) : null}
+                  </div>
+                ) : (
+                <>
                 <div className="reading-hub-hero"><div><span>DISCOVER</span><strong>首页</strong><p>书源数据可以直接组成首页模块，模块可自由添加和隐藏。</p></div><div className="reading-hub-home-hero-actions"><button type="button" onClick={()=>setTab("sources")}><Search size={16}/> 搜索</button><button type="button" onClick={()=>setSourceDrawerOpen(true)} aria-label="首页设置"><MoreVertical size={18}/></button></div></div>
                 <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>首页模块</h2><p>直接使用书源发现页：阅读榜、新书榜、分类榜等都可以单独添加。</p></div><button type="button" onClick={()=>homeModuleAddRef.current?.scrollIntoView({behavior:"smooth",block:"center"})}><Plus size={14}/> 添加模块</button></div>
-                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={async()=>{setHomeModuleLoading(module.id);try{const source=bookSources.find(x=>x.id===module.sourceId);if(!source)throw new Error("书源不存在");const parsed=await fetchReadingSourceModule(source,module.url,1);setHomeModuleData(prev=>({...prev,[module.id]:extractHomeBooks(parsed)}));}catch(error){setHomeModuleData(prev=>({...prev,[module.id]:[]}));setSourceMessage(error instanceof Error?error.message:"首页模块加载失败");}finally{setHomeModuleLoading(null)}}}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={async()=>{const source=bookSources.find(x=>x.id===module.sourceId);if(!source)return;setSelectedSourceId(source.id);setTab("sources");setSourceLoading(true);setSourceMessage("正在打开榜单书籍…");setGenericBook(book);setGenericDetail(null);setGenericChapters([]);try{const detail=await getGenericDetail(source,book);setGenericDetail(detail);const chapters=await getGenericCatalog(source,detail);setGenericChapters(chapters);setSourceMessage(`目录 ${chapters.length} 章`);}catch(error){setSourceMessage(error instanceof Error?error.message:"打开书籍失败");}finally{setSourceLoading(false);}}}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
+                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={async()=>{setHomeModuleLoading(module.id);try{const source=bookSources.find(x=>x.id===module.sourceId);if(!source)throw new Error("书源不存在");const parsed=await fetchReadingSourceModule(source,module.url,1);setHomeModuleData(prev=>({...prev,[module.id]:extractHomeBooks(parsed)}));}catch(error){setHomeModuleData(prev=>({...prev,[module.id]:[]}));setSourceMessage(error instanceof Error?error.message:"首页模块加载失败");}finally{setHomeModuleLoading(null)}}}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={async()=>{const source=bookSources.find(x=>x.id===module.sourceId);if(!source)return;setSelectedSourceId(source.id);setSourceLoading(true);setSourceMessage("");setGenericBook(null);setGenericDetail(null);setGenericChapters([]);setSelectedSourceBook(null);setSourceDetail(null);setSourceChapters([]);try{if(source.adapter==="shushan"){const raw=book.raw&&typeof book.raw==="object"?book.raw as Record<string,unknown>:{};const shushanItem:ShushanSearchBook={...raw,title:book.title,author:book.author,cover:book.cover,desc:book.desc,source:String(book.source||raw.source||raw.source_name||raw.book_source||"小说"),book_url:book.bookUrl,latestChapterTitle:book.latestChapterTitle,wordCount:book.wordCount,tags:book.tags};let detail:ShushanSearchBook;const bid=book.bookId||String(raw.book_id_str||raw.book_id||raw.bookId||"");if(bid){const info=await getShushanBookInfo(loadShushanAccount().apiKey,bid);const payload:any=info.data;const arr=Array.isArray(payload)?payload:(Array.isArray(payload?.book_info)?payload.book_info:(Array.isArray(payload?.data)?payload.data:[payload]));detail=arr[0]||shushanItem;}else{const result=await getShushanDetail(loadShushanAccount().apiKey,shushanItem);detail=result.data;}setSelectedSourceBook(shushanItem);setSourceDetail(detail);const cat=await getShushanCatalog(loadShushanAccount().apiKey,detail);setSourceChapters(cat.data||[]);}else{setGenericBook(book);const detail=await getGenericDetail(source,book);setGenericDetail(detail);const chapters=await getGenericCatalog(source,detail);setGenericChapters(chapters);}}catch(error){setSourceMessage(error instanceof Error?error.message:"打开书籍失败");}finally{setSourceLoading(false);}}}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
                 </div>
+                </>
+                )}
               </section>
             )}
 

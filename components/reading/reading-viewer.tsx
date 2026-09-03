@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from "react";
-import { Bot, ChevronDown, ChevronRight, Languages, Menu, Minus, PenLine, SendHorizontal, X } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Languages, Menu, Minus, PenLine, SendHorizontal, Settings2, X } from "lucide-react";
 import {
     loadChapters,
     loadProgress,
@@ -336,6 +336,7 @@ export function ReadingViewer({ book, onBack }: Props) {
     const [annotationBatchInput, setAnnotationBatchInput] = useState(String(isPdf ? 5 : 50));
     const [annotationDialogMode, setAnnotationDialogMode] = useState<AnnotationDialogMode | null>(null);
     const [showReadingSettings, setShowReadingSettings] = useState(false);
+    const [showReadingInterface, setShowReadingInterface] = useState(false);
     const [readingLayout, setReadingLayout] = useState<ReadingLayoutConfig>(() => loadReadingLayout(book.id));
     const [showNavigationDialog, setShowNavigationDialog] = useState(false);
 
@@ -2373,13 +2374,13 @@ export function ReadingViewer({ book, onBack }: Props) {
                     </div>
                 </ContentDialog>
             )}
-            {showReadingSettings && (
+            {showReadingInterface && (
                 <ContentDialog
-                    title="阅读界面"
+                    title="界面"
                     confirmLabel="完成"
                     cancelLabel="关闭"
-                    onConfirm={() => setShowReadingSettings(false)}
-                    onCancel={() => setShowReadingSettings(false)}
+                    onConfirm={() => setShowReadingInterface(false)}
+                    onCancel={() => setShowReadingInterface(false)}
                 >
                     <div className="reading-settings-grid">
                         <div className="reading-settings-inline-note">
@@ -2398,6 +2399,18 @@ export function ReadingViewer({ book, onBack }: Props) {
                             <span>布局说明</span>
                             <span>{readingLayout.shared ? "共享布局开启：所有开启共享布局的书使用同一组上下边距" : "当前书使用独立上下边距"}</span>
                         </div>
+                    </div>
+                </ContentDialog>
+            )}
+            {showReadingSettings && (
+                <ContentDialog
+                    title="设置"
+                    confirmLabel="完成"
+                    cancelLabel="关闭"
+                    onConfirm={() => setShowReadingSettings(false)}
+                    onCancel={() => setShowReadingSettings(false)}
+                >
+                    <div className="reading-settings-grid">
                         <div className="reading-settings-inline-note">
                             <span>启用阅读双语翻译</span>
                             <Toggle

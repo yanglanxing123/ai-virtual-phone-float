@@ -673,3 +673,28 @@
 .reading-hub-drawer-discovered-list button span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .reading-hub-drawer-discovered-list button em{font-style:normal;opacity:.45;white-space:nowrap}
 .reading-hub-drawer-discovered-list button.is-added{opacity:.45}
+
+/* 发现页书籍详情：保持在阅读 APP 内部打开，不跳外部网页。 */
+.reading-hub-discovery-detail{margin-top:4px;padding-bottom:90px}
+.reading-discovery-book-card{padding:16px;border-radius:22px;background:rgba(255,255,255,.82);border:1px solid rgba(80,55,20,.07);box-shadow:0 10px 28px rgba(80,55,20,.05)}
+.reading-discovery-book-head{display:flex;gap:16px;align-items:flex-start}
+.reading-discovery-cover{width:112px;height:152px;flex:none;border-radius:14px;overflow:hidden;background:rgba(80,55,20,.06);display:grid;place-items:center}
+.reading-discovery-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.reading-discovery-book-main{min-width:0;padding-top:3px}
+.reading-discovery-book-main h2{margin:0;font-size:22px;line-height:1.28;font-weight:950;color:#2b241f}
+.reading-discovery-book-main p{margin:8px 0 7px;font-size:14px;color:#6f6259}
+.reading-discovery-book-main span{display:inline-block;font-size:12px;color:#806d5d}
+.reading-discovery-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;margin:18px 0;border-radius:15px;overflow:hidden;background:rgba(80,55,20,.08)}
+.reading-discovery-stats>div{padding:12px;background:rgba(255,255,255,.72)}
+.reading-discovery-stats small{display:block;font-size:10px;color:#8b7e73;margin-bottom:5px}
+.reading-discovery-stats strong{display:block;font-size:14px;color:#5e5047;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reading-discovery-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0 16px}
+.reading-discovery-actions button{min-height:72px;border:0;border-radius:14px;background:rgba(255,250,239,.9);color:#5d5148;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;font-size:11px;font-weight:750}
+.reading-discovery-actions button span{font-size:22px;line-height:1}
+.reading-discovery-current{padding:14px 15px;border-radius:16px;background:rgba(250,227,137,.22);margin-bottom:14px}
+.reading-discovery-current strong{display:block;font-size:15px;line-height:1.45;color:#493d35}
+.reading-discovery-current span{display:block;margin-top:5px;font-size:11px;color:#8b796b}
+.reading-discovery-source{padding:14px 15px;border-radius:16px;background:rgba(255,255,255,.62);border:1px solid rgba(80,55,20,.06);font-size:12px;line-height:1.65;color:#66584e}
+.reading-discovery-source p{margin:4px 0}
+.reading-discovery-read{width:100%;margin-top:14px;min-height:52px;font-size:15px}
+@media (max-width:480px){.reading-discovery-book-head{gap:12px}.reading-discovery-cover{width:96px;height:132px}.reading-discovery-book-main h2{font-size:19px}.reading-discovery-actions{gap:5px}.reading-discovery-actions button{min-height:68px;font-size:10px}}
