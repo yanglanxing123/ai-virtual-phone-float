@@ -163,21 +163,64 @@ function extractCatalogChapters(value: any): any[] {
   const output: any[] = [];
   const seen = new Set<string>();
   const visit = (node: any, depth = 0) => {
-    if (depth > 8 || node == null) return;
+    if (depth > 12 || node == null) return;
+    if (typeof node === "string") {
+      try { visit(JSON.parse(node), depth + 1); } catch {}
+      return;
+    }
     if (Array.isArray(node)) { node.forEach(item => visit(item, depth + 1)); return; }
     if (typeof node !== "object") return;
-    const title = node.title ?? node.chapter_title ?? node.chapterName ?? node.name ?? node.chapter_name;
-    const cid = node.cid ?? node.chapter_id ?? node.chapterId ?? node.id;
-    const url = node.url ?? node.chapter_url ?? node.chapterUrl ?? "";
-    const isChapterLike = title != null && (cid != null || url);
+    const title = node.title ?? node.chapter_title ?? node.chapterName ?? node.name ?? node.chapter_name ?? node.chapterTitle;
+    const cid = node.cid ?? node.chapter_id ?? node.chapterId ?? node.chapterid ?? node.id;
+    const url = node.url ?? node.chapter_url ?? node.chapterUrl ?? node.chapter_url_str ?? "";
+    const isVolume = node.isVolume === true || node.is_volume === true;
+    const isChapterLike = title != null && (cid != null || url || isVolume);
     if (isChapterLike) {
-      const key = `${String(cid ?? "")}|${String(url)}|${String(title)}`;
-      if (!seen.has(key)) { seen.add(key); output.push(node); }
+      const key = `${String(cid ?? "")}|${String(url)}|${String(title)}|${isVolume ? "v" : "c"}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        output.push({
+          ...(node as Record<string, unknown>),
+          title: String(title),
+          ...(cid != null ? { cid } : {}),
+          ...(url ? { url: String(url) } : {}),
+          isVolume,
+        });
+      }
     }
     Object.values(node).forEach(child => visit(child, depth + 1));
   };
   visit(value);
   return output;
+}
+
+function buildChapterUrl(chapter: any, catalog: any): string {
+  const source = String(catalog?.source || "");
+  const chapterUrl = String(chapter?.url || chapter?.chapter_url || chapter?.chapterUrl || "");
+  const catalogUrl = String(catalog?.url || "");
+  const urlToMatch = chapterUrl || catalogUrl;
+  const bookId = urlToMatch.match(/book_id=(\d{19})\b/)?.[1] || null;
+  const itemId = urlToMatch.match(/item_id=(\d+)/)?.[1] || null;
+  if (source === "书旗听书") {
+    const bid = chapterUrl.match(/[?&]?bookid=(\d+)/)?.[1];
+    const item = chapterUrl.match(/[?&]?item_ids=(\d+)/)?.[1];
+    if (bid && item) return JSON.stringify({ cid: chapter?.cid, source, bookid: bid, item_ids: item });
+  }
+  if (["番茄小说", "番茄短剧", "番茄听书", "番茄畅听"].includes(source)) {
+    return JSON.stringify({ cid: chapter?.cid, source, book_id: bookId, item_id: itemId });
+  }
+  if (["企鹅看书", "QQ阅读", "起点"].includes(source) && chapterUrl) {
+    const bid = chapterUrl.match(/bookid=(\d+)/)?.[1];
+    const chapterid = chapterUrl.match(/chapterid=(\d+)/)?.[1];
+    if (bid && chapterid) return JSON.stringify({ cid: chapter?.cid, source, bookid: source === "企鹅看书" && bid.length > 2 ? bid.substring(2) : bid, chapterid });
+  }
+  if (source === "晋江" || source === "半夏") {
+    const novelId = chapterUrl.match(/novelId=(\d+)/)?.[1];
+    const chapterId = chapterUrl.match(/chapterId=(\d+)/)?.[1];
+    if (novelId && chapterId) return JSON.stringify({ cid: chapter?.cid, source, novelId, chapterId });
+  }
+  if (source === "七猫" && chapterUrl) return JSON.stringify({ cid: chapter?.cid, source, qm_url: chapterUrl });
+  return catalogUrl;
 }
 
 function extractModuleBooks(value: any): any[] {
@@ -414,7 +457,13 @@ export async function POST(request: NextRequest) {
               isVolume: item?.isVolume === true || item?.is_volume === true,
             }))
           : extractCatalogChapters(rawData);
-        return { ok: true as const, data, host };
+        const normalized = data.map((item: any, index: number) => ({
+          ...item,
+          title: String(item?.title || `第${index + 1}章`),
+          isVolume: item?.isVolume === true || item?.is_volume === true,
+          url: item?.isVolume === true || item?.is_volume === true ? "" : buildChapterUrl(item, catalog),
+        }));
+        return { ok: true as const, data: normalized, host };
       }));
     }
 
