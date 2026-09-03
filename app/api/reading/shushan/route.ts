@@ -93,9 +93,12 @@ async function fetchUpstream(
       "User-Agent": DEFAULT_UA,
     };
     let body: string | undefined;
-    if (options.apiKey) headers["X-Api-Key"] = options.apiKey;
-    headers["X-Novel-Token"] = NOVEL_TOKEN;
-    if (options.deviceId) headers["X-Novel-Id"] = options.deviceId;
+    if (options.apiKey) headers["X-Api-Key"] = Buffer.from(options.apiKey, "utf8").toString("base64");
+    if (options.deviceId) {
+      // 书山原书源的 content 请求使用 X-Device-Type / X-Device-Id。
+      headers["X-Device-Type"] = "ios";
+      headers["X-Device-Id"] = options.deviceId;
+    }
     if (options.body !== undefined) {
       headers["Content-Type"] = "application/json";
       body = typeof options.body === "string" ? options.body : JSON.stringify(options.body);
@@ -153,7 +156,6 @@ export async function POST(request: NextRequest) {
             "Accept": "application/json,text/plain,*/*;q=0.8",
             "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
             "User-Agent": DEFAULT_UA,
-            "X-Novel-Token": NOVEL_TOKEN,
           },
           body,
           redirect: "follow",
@@ -184,6 +186,20 @@ export async function POST(request: NextRequest) {
 
     const apiKey = String(input.apiKey || "").trim();
     if (!apiKey) return NextResponse.json({ ok: false, error: "缺少书山 apiKey，请重新登录" }, { status: 401 });
+
+    if (action === "user") {
+      const host = String(input.host || hosts[0]).trim();
+      const timestamp = Math.floor(Date.now() / 1000);
+      const encodedKey = Buffer.from(apiKey, "utf8").toString("base64");
+      return NextResponse.json(await tryHosts([host, ...hosts], async (currentHost) => {
+        const result = await fetchUpstream(currentHost, "/login", {
+          method: "POST",
+          body: JSON.stringify({ key: encodedKey, timestamp }),
+        });
+        if (!result.response.ok) throw upstreamError(currentHost, "/login", result.response.status, result.parsed, result.text);
+        return { ok: true as const, data: result.parsed?.data ?? result.parsed, host: currentHost };
+      }));
+    }
 
     if (action === "search") {
       const keyword = String(input.keyword || "").trim();
@@ -234,7 +250,15 @@ export async function POST(request: NextRequest) {
           deviceId,
         });
         if (!result.response.ok) throw upstreamError(host, "/content", result.response.status, result.parsed, result.text);
-        const content = String(result.parsed?.data?.content ?? result.parsed?.content ?? "");
+        let content = String(result.parsed?.data?.content ?? result.parsed?.content ?? "");
+        // 书山原生规则会在客户端检测并解码 base64 正文。这里在服务端完成，
+        // 避免阅读器把整段 base64 当成正文，也与原书源行为保持一致。
+        if (/^[A-Za-z0-9+/]*={0,2}$/.test(content) && content.length >= 16 && content.length % 4 === 0) {
+          try {
+            const decoded = Buffer.from(content, "base64").toString("utf8");
+            if (decoded && /[\u4e00-\u9fffA-Za-z0-9]/.test(decoded)) content = decoded;
+          } catch {}
+        }
         if (!content && result.parsed?.data && typeof result.parsed.data === "object" && "content" in result.parsed.data) {
           throw new Error(`书山正文为空 [${host}/content]`);
         }
