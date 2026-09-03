@@ -181,34 +181,30 @@ function extractCatalogChapters(value: any): any[] {
 }
 
 function extractModuleBooks(value: any): any[] {
-  let root = value;
-  for (let i = 0; i < 4 && typeof root === "string"; i += 1) {
-    try { root = JSON.parse(root); } catch { break; }
-  }
-  const candidates: any[] = [];
-  const pushArray = (v: any) => { if (Array.isArray(v)) candidates.push(v); };
-  const d = root?.data;
-  pushArray(root?.book_info);
-  pushArray(root?.book_list);
-  pushArray(root?.list);
-  pushArray(root?.result);
-  pushArray(root?.records);
-  pushArray(d?.book_info);
-  pushArray(d?.book_list);
-  pushArray(d?.list);
-  pushArray(d?.result);
-  pushArray(d?.records);
-  pushArray(d?.publication_list);
-  pushArray(d?.cell_view?.book_data);
-  pushArray(d?.data);
-  if (Array.isArray(d)) candidates.push(d);
-  for (const arr of candidates) {
-    const books = arr.filter((item: any) => item && typeof item === "object" && (
-      item.title || item.book_name || item.bookName || item.novel_name || item.book_url || item.book_id || item.book_id_str
-    ));
-    if (books.length) return books;
-  }
-  return [];
+  const output: any[] = [];
+  const seen = new Set<string>();
+  const visit = (node: any, depth = 0) => {
+    if (depth > 10 || node == null) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1);
+      return;
+    }
+    if (typeof node !== "object") return;
+    const title = node.title ?? node.book_name ?? node.bookName ?? node.book_title ?? node.novel_name ?? node.original_book_name ?? node.name;
+    const bookId = node.book_id_str ?? node.book_id ?? node.bookId ?? node.series_id ?? node.item_id ?? "";
+    const bookUrl = node.book_url ?? node.bookUrl ?? node.detail_url ?? node.detailUrl ?? node.url ?? "";
+    const isBook = title && (bookUrl || bookId || node.author || node.author_name || node.cover || node.cover_url || node.thumb_url || node.thumbUri || node.audio_thumb_uri);
+    if (isBook) {
+      const key = `${String(title)}|${String(bookId)}|${String(bookUrl)}|${String(node.source || node.source_name || "")}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        output.push({ ...node, book_id_str: node.book_id_str ?? bookId, book_url: node.book_url ?? bookUrl });
+      }
+    }
+    for (const child of Object.values(node)) visit(child, depth + 1);
+  };
+  visit(value);
+  return output.slice(0, 100);
 }
 
 function normalizeModuleData(value: any): any {
