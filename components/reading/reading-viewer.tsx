@@ -308,6 +308,16 @@ type Props = {
 export function ReadingViewer({ book, onBack }: Props) {
     const isPdf = book.format === "pdf";
     const [readingConfig, setReadingConfig] = useState(() => loadReadingInteractionConfig());
+    const READING_MODE_KEY = "reading-mode-v1";
+    const [readingMode, setReadingMode] = useState<"continuous" | "page">(() => {
+        if (typeof window === "undefined") return "page";
+        try { return window.localStorage.getItem(READING_MODE_KEY) === "continuous" ? "continuous" : "page"; } catch { return "page"; }
+    });
+    const switchReadingMode = (mode: "continuous" | "page") => {
+        setReadingMode(mode);
+        try { window.localStorage.setItem(READING_MODE_KEY, mode); } catch {}
+        if (mode === "page") scrollRef.current?.scrollTo(0, 0);
+    };
     const [chapters, setChapters] = useState<BookChapter[]>([]);
     const [chapterIndex, setChapterIndex] = useState(0);
     const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
@@ -477,6 +487,36 @@ export function ReadingViewer({ book, onBack }: Props) {
         );
     };
 
+    const renderContinuousText = () => {
+        const items = txtPages.flat();
+        if (items.length === 0) return null;
+        return (
+            <div className="reading-page-content" ref={readingContentRef}>
+                {items.map((item, i) => (
+                    item.kind === "gap"
+                        ? <div key={i} className="reading-line-gap" data-paragraph-index={item.paragraphIndex} />
+                        : item.kind === "annotation"
+                            ? (
+                                <div key={item.annotation.id} className="reading-annotation reading-annotation-interactive" data-no-nav="true" data-paragraph-index={item.paragraphIndex}
+                                    onPointerDown={() => { longPressTimer.current = setTimeout(() => { setActiveMessageId(null); setActiveAnnotationId(item.annotation.id); }, 500); }}
+                                    onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                                    onPointerCancel={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                                    onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                                    onClick={(e) => { e.stopPropagation(); if (activeAnnotationId && activeAnnotationId !== item.annotation.id) setActiveAnnotationId(null); }}>
+                                    <span className="reading-annotation-name">{item.annotation.characterName}</span>
+                                    <ReadingAnnotationContent text={item.annotation.content} bilingualEnabled={bilingualTranslationEnabled} expanded={isAnnotationTranslationExpanded(item.annotation.id)} onToggle={() => handleAnnotationTranslationToggle(item.annotation.id)} />
+                                    {activeAnnotationId === item.annotation.id && <div className="ctx-menu reading-annotation-menu" onClick={(e) => e.stopPropagation()}>
+                                        <button onClick={() => { copyToClipboard(item.annotation.content); setActiveAnnotationId(null); }} className="ctx-menu-btn">复制</button>
+                                        <button onClick={() => { void handleDeleteReadingAnnotation(item.annotation.id); }} className="ctx-menu-btn ctx-menu-btn-danger">删除</button>
+                                    </div>}
+                                </div>
+                            )
+                            : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
+                ))}
+            </div>
+        );
+    };
+
     const renderStaticPage = (items: TxtPageItem[]) => (
         <div className="reading-page-content">
             {items.map((item, i) =>
@@ -605,6 +645,31 @@ export function ReadingViewer({ book, onBack }: Props) {
                     } catch (err) {
                         console.error("[Reading] Failed to rebuild text chapters from raw file:", err);
                     }
+                }
+            }
+            // 远程书籍首次进入阅读器时，本地只有“空正文骨架”也必须恢复章节列表。
+            // 这样即使 IndexedDB 的章节记录丢失，也不会直接进入“本地章节数：0”的死状态。
+            if (!isPdf && chs.length === 0) {
+                try {
+                    const shushan = getRemoteBook(book.id);
+                    if (shushan?.chapters?.length) {
+                        chs = shushan.chapters.filter(c => !c.isVolume).map((c, index) => ({
+                            id: `${book.id}_ch${index}`, bookId: book.id, index,
+                            title: c.title || `第${index + 1}章`, paragraphs: [],
+                        }));
+                        await saveChapters(book.id, chs);
+                    } else {
+                        const generic = getReadingRemoteBook(book.id);
+                        if (generic?.chapters?.length) {
+                            chs = generic.chapters.map((c, index) => ({
+                                id: `${book.id}_ch${index}`, bookId: book.id, index,
+                                title: c.title || `第${index + 1}章`, paragraphs: [],
+                            }));
+                            await saveChapters(book.id, chs);
+                        }
+                    }
+                } catch (error) {
+                    console.warn("[Reading] Failed to rebuild remote chapter skeleton:", error);
                 }
             }
             setChapters(chs);
@@ -1868,8 +1933,8 @@ export function ReadingViewer({ book, onBack }: Props) {
         setTxtPage((prev) => Math.min(prev, Math.max(0, txtTotalPages - 1)));
     }, [txtTotalPages]);
 
-    // Scroll to top when page changes
-    useEffect(() => { scrollRef.current?.scrollTo(0, 0); }, [txtPage]);
+    // 翻页模式切换页时回到顶部；连续滚动模式保留自然滚动位置。
+    useEffect(() => { if (readingMode === "page") scrollRef.current?.scrollTo(0, 0); }, [txtPage, readingMode]);
 
     // Swipe handlers for TXT
     const handleTouchStart = (e: React.TouchEvent) => {
@@ -1969,7 +2034,7 @@ export function ReadingViewer({ book, onBack }: Props) {
             {/* Reading content */}
             <div
                 ref={scrollRef}
-                className={`relative flex-1 min-h-0 px-4 ${isPdf ? "overflow-auto" : "overflow-hidden"}`} style={{ paddingTop: "var(--reading-layout-top)", paddingBottom: "var(--reading-layout-bottom)" }}
+                className={`relative flex-1 min-h-0 px-4 ${isPdf || readingMode === "continuous" ? "overflow-auto" : "overflow-hidden"}`} style={{ paddingTop: "var(--reading-layout-top)", paddingBottom: "var(--reading-layout-bottom)" }}
                 data-ui="body"
                 onClick={handleReadingSurfaceClick}
             >
@@ -2016,8 +2081,8 @@ export function ReadingViewer({ book, onBack }: Props) {
                             onTouchStart={handleTouchStart}
                             onTouchEnd={handleTouchEnd}
                         >
-                            <div className="reading-page-surface">
-                                {txtPagesReadyForCurrentChapter ? renderTxtPage(txtPage) : null}
+                            <div className={`reading-page-surface${readingMode === "continuous" ? " reading-page-surface--continuous" : ""}`}>
+                                {txtPagesReadyForCurrentChapter ? (readingMode === "continuous" ? renderContinuousText() : renderTxtPage(txtPage)) : null}
                             </div>
                         </div>
 
@@ -2383,6 +2448,15 @@ export function ReadingViewer({ book, onBack }: Props) {
                     onCancel={() => setShowReadingInterface(false)}
                 >
                     <div className="reading-settings-grid">
+                        {!isPdf && (
+                            <div className="reading-settings-group">
+                                <div className="reading-settings-heading"><span>阅读模式</span></div>
+                                <div className="reading-settings-actions">
+                                    <button type="button" className={`ui-btn ${readingMode === "continuous" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("continuous")}>连续滚动</button>
+                                    <button type="button" className={`ui-btn ${readingMode === "page" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("page")}>翻页模式</button>
+                                </div>
+                            </div>
+                        )}
                         <div className="reading-settings-inline-note">
                             <span>共享布局</span>
                             <Toggle checked={readingLayout.shared} onChange={(checked) => updateReadingLayout({ shared: checked })} />

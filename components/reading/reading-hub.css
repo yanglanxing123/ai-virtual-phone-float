@@ -698,3 +698,21 @@
 .reading-discovery-source p{margin:4px 0}
 .reading-discovery-read{width:100%;margin-top:14px;min-height:52px;font-size:15px}
 @media (max-width:480px){.reading-discovery-book-head{gap:12px}.reading-discovery-cover{width:96px;height:132px}.reading-discovery-book-main h2{font-size:19px}.reading-discovery-actions{gap:5px}.reading-discovery-actions button{min-height:68px;font-size:10px}}
+
+/* v21：发现页详情采用封面沉浸背景，信息以简介和核心元数据为主 */
+.reading-discovery-detail-card{position:relative;overflow:hidden;min-height:100%;border-radius:24px;border:1px solid rgba(80,55,20,.08);background-size:cover;background-position:center top;box-shadow:0 14px 38px rgba(80,55,20,.08)}
+.reading-discovery-detail-card::before{content:"";position:absolute;inset:0;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);opacity:.16;pointer-events:none}
+.reading-discovery-detail-content{position:relative;z-index:1;padding:18px 16px 28px}
+.reading-discovery-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:18px 0;border-radius:16px;overflow:hidden;background:rgba(80,55,20,.09)}
+.reading-discovery-meta-grid>div{min-width:0;padding:12px 13px;background:rgba(255,255,255,.66);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.reading-discovery-meta-grid small{display:block;font-size:10px;color:#806f65;margin-bottom:5px}
+.reading-discovery-meta-grid strong{display:block;font-size:13px;line-height:1.4;color:#4f433c;font-weight:850;white-space:normal;overflow-wrap:anywhere}
+.reading-discovery-intro{margin:8px 0 16px;padding:16px 15px;border-radius:18px;background:rgba(255,255,255,.7);border:1px solid rgba(80,55,20,.06);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.reading-discovery-intro h3{margin:0 0 9px;font-size:16px;font-weight:950;color:#40352f}
+.reading-discovery-intro p{margin:0;font-size:13px;line-height:1.8;color:#5f5148;white-space:pre-wrap;word-break:break-word}
+.reading-discovery-actions--compact{grid-template-columns:repeat(4,1fr);margin-bottom:12px}
+.reading-discovery-actions--compact button{min-height:64px;background:rgba(255,255,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.reading-discovery-read{background:rgba(255,232,184,.92)!important}
+.reading-page-surface--continuous{min-height:max-content}
+.reading-page-surface--continuous .reading-page-content{padding-bottom:36px}
+@media (max-width:480px){.reading-discovery-detail-content{padding:15px 13px 24px}.reading-discovery-meta-grid>div{padding:11px 10px}.reading-discovery-meta-grid strong{font-size:12px}.reading-discovery-intro p{font-size:12.5px}.reading-discovery-actions--compact button{min-height:60px}}
