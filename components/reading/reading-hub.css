@@ -723,3 +723,52 @@
 .reading-page-surface--continuous .reading-page-content{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;padding-bottom:44px}
 .reading-page-surface--continuous .reading-page-stage{height:auto!important;min-height:0!important;overflow:visible!important}
 .reading-settings-actions .reading-footer-btn-active{background:var(--c-accent,#f4d77a)!important;color:#2b241f!important;border-color:transparent!important;font-weight:900!important;box-shadow:0 2px 8px rgba(80,55,20,.10)}
+
+
+/* v24：连续滚动必须由正文容器接管纵向手势，不能被页面翻页层截走。 */
+.reading-app-surface .reading-page-stage {
+  touch-action: pan-x;
+}
+.reading-app-surface .reading-page-stage:has(.reading-page-surface--continuous) {
+  touch-action: pan-y;
+}
+.reading-app-surface .reading-page-surface--continuous {
+  flex: none !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.reading-app-surface .reading-page-surface--continuous .reading-page-content {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* v26：连续滚动 = 正文区域上下滑动。翻页模式才允许左右手势，避免 iOS 把纵向拖动截给翻页层。 */
+.reading-app-surface .reading-page-stage {
+  touch-action: pan-x;
+}
+.reading-app-surface .reading-page-stage:has(.reading-page-surface--continuous) {
+  touch-action: pan-y;
+}
+.reading-app-surface .reading-page-surface--continuous {
+  flex: none !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.reading-app-surface .reading-page-surface--continuous .reading-page-content {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}

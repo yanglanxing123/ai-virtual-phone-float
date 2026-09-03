@@ -2043,10 +2043,17 @@ export function ReadingViewer({ book, onBack }: Props) {
                 style={{
                     paddingTop: "var(--reading-layout-top)",
                     paddingBottom: "var(--reading-layout-bottom)",
+                    minHeight: 0,
+                    height: 0,
                     ...(readingMode === "continuous" ? {
+                        overflowY: "scroll",
+                        overflowX: "hidden",
                         WebkitOverflowScrolling: "touch",
                         overscrollBehaviorY: "contain",
-                    } : {}),
+                        touchAction: "pan-y",
+                    } : {
+                        touchAction: "pan-x",
+                    }),
                 }}
                 data-ui="body"
                 onClick={handleReadingSurfaceClick}
@@ -2091,10 +2098,15 @@ export function ReadingViewer({ book, onBack }: Props) {
                     <>
                         <div
                             className="reading-page-stage"
-                            onTouchStart={handleTouchStart}
-                            onTouchEnd={handleTouchEnd}
+                            style={readingMode === "continuous" ? { height: "auto", minHeight: 0, flex: "none", overflow: "visible", touchAction: "pan-y" } : undefined}
+                            // 只有翻页模式接管左右滑动；连续滚动模式完全交给外层纵向滚动容器。
+                            onTouchStart={readingMode === "page" ? handleTouchStart : undefined}
+                            onTouchEnd={readingMode === "page" ? handleTouchEnd : undefined}
                         >
-                            <div className={`reading-page-surface${readingMode === "continuous" ? " reading-page-surface--continuous" : ""}`}>
+                            <div
+                                className={`reading-page-surface${readingMode === "continuous" ? " reading-page-surface--continuous" : ""}`}
+                                style={readingMode === "continuous" ? { height: "auto", minHeight: "100%", maxHeight: "none", overflow: "visible", display: "block" } : undefined}
+                            >
                                 {txtPagesReadyForCurrentChapter ? (readingMode === "continuous" ? renderContinuousText() : renderTxtPage(txtPage)) : null}
                             </div>
                         </div>
