@@ -1068,3 +1068,198 @@
   box-shadow: none;
   object-fit: contain;
 }
+
+/* ================================================================
+   v44 · 书架同款视觉统一版（基于 reading-hub(7).css）
+   目标：仅重做首页 / 书源 / 外观的视觉层，不改业务结构、滚动与交互。
+   核心：壁纸铺满 + 内容透明 + 白色半透明浮层 + 轻玻璃 + 黄色活动色。
+   ================================================================ */
+
+/* 1. 壁纸必须直接读取真正的 reading wallpaper。
+      不再通过 --reading-function-bg-image，避免它被写成 none 时阻断回退。 */
+.reading-app-surface.reading-hub-root:not(.is-viewing) {
+  background-color: transparent !important;
+  background-image: var(--reading-bg-image, none) !important;
+  background-position: center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+}
+
+/* 外壳本身透明，让 wallpaper 真正露出来。 */
+.reading-app-surface.reading-hub-root:not(.is-viewing),
+.reading-app-surface.reading-hub-root:not(.is-viewing) > .reading-app-surface {
+  background-color: transparent !important;
+}
+
+/* 2. 顶部改成书架那种“悬浮在壁纸上”的感觉。 */
+.reading-hub-root:not(.is-viewing) .reading-hub-topbar {
+  background: rgba(255,255,255,.38) !important;
+  border-bottom: 1px solid rgba(255,255,255,.32) !important;
+  box-shadow: 0 6px 20px rgba(55,42,25,.035);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-topbar h1 {
+  font-size: 21px;
+  letter-spacing: -.02em;
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-kicker {
+  opacity: .5;
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-close {
+  background: rgba(255,255,255,.62) !important;
+  border: 1px solid rgba(255,255,255,.48);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* 3. 三个功能页的内容区不再有整块米白底。 */
+.reading-hub-root:not(.is-viewing) .reading-hub-content {
+  background: transparent !important;
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-home,
+.reading-hub-root:not(.is-viewing) .reading-hub-panel {
+  background: transparent !important;
+}
+
+/* 4. 首页：英雄区做成书架同款大白卡，但降低不透明度，让壁纸装饰能透出来。 */
+.reading-hub-root:not(.is-viewing) .reading-hub-hero {
+  background: rgba(255,255,255,.66) !important;
+  border: 1px solid rgba(255,255,255,.58) !important;
+  border-radius: 24px;
+  box-shadow: 0 12px 32px rgba(55,42,25,.065);
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-hero strong {
+  font-size: 23px;
+  letter-spacing: -.025em;
+}
+
+/* 首页区块 / 模块：从“网页面板”变成一张张漂浮卡。 */
+.reading-hub-root:not(.is-viewing) .reading-hub-section,
+.reading-hub-root:not(.is-viewing) .reading-hub-module,
+.reading-hub-root:not(.is-viewing) .reading-hub-home-source,
+.reading-hub-root:not(.is-viewing) .reading-hub-appearance-preview,
+.reading-hub-root:not(.is-viewing) .reading-hub-css-card {
+  background: rgba(255,255,255,.64) !important;
+  border: 1px solid rgba(255,255,255,.56) !important;
+  box-shadow: 0 10px 28px rgba(55,42,25,.055);
+  backdrop-filter: blur(15px) saturate(125%);
+  -webkit-backdrop-filter: blur(15px) saturate(125%);
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-section {
+  border-radius: 22px;
+  padding: 15px;
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-module {
+  border-radius: 18px;
+}
+
+/* 5. 卡片统一成书架的柔和白色浮卡。 */
+.reading-hub-root:not(.is-viewing) .reading-hub-card,
+.reading-hub-root:not(.is-viewing) .reading-hub-result-card,
+.reading-hub-root:not(.is-viewing) .reading-discovery-intro,
+.reading-hub-root:not(.is-viewing) .reading-discovery-detail-card {
+  background: rgba(255,255,255,.68) !important;
+  border: 1px solid rgba(255,255,255,.58) !important;
+  box-shadow: 0 9px 24px rgba(55,42,25,.05);
+  backdrop-filter: blur(14px) saturate(125%);
+  -webkit-backdrop-filter: blur(14px) saturate(125%);
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-card {
+  border-radius: 19px;
+}
+
+/* 6. 书源页：搜索栏、来源列表全部保持壁纸可见。 */
+.reading-hub-root:not(.is-viewing) .reading-hub-big-searchbox,
+.reading-hub-root:not(.is-viewing) .reading-hub-searchbox {
+  background: rgba(255,255,255,.76) !important;
+  border: 1px solid rgba(255,255,255,.66) !important;
+  box-shadow: 0 10px 26px rgba(55,42,25,.055);
+  backdrop-filter: blur(15px) saturate(130%);
+  -webkit-backdrop-filter: blur(15px) saturate(130%);
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-source-item,
+.reading-hub-root:not(.is-viewing) .reading-hub-source-settings,
+.reading-hub-root:not(.is-viewing) .reading-hub-source-info,
+.reading-hub-root:not(.is-viewing) .reading-hub-source-testreport,
+.reading-hub-root:not(.is-viewing) .reading-hub-module-form {
+  background: rgba(255,255,255,.60) !important;
+  border-color: rgba(255,255,255,.55) !important;
+  backdrop-filter: blur(13px) saturate(125%);
+  -webkit-backdrop-filter: blur(13px) saturate(125%);
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-source-item.is-active,
+.reading-hub-root:not(.is-viewing) .reading-hub-source-pills button.is-active {
+  background: rgba(250,227,137,.72) !important;
+  border-color: rgba(255,255,255,.55) !important;
+}
+
+/* 7. 外观页：输入框、编辑器也做成半透明玻璃，不再出现大块纯白。 */
+.reading-hub-root:not(.is-viewing) input,
+.reading-hub-root:not(.is-viewing) textarea,
+.reading-hub-root:not(.is-viewing) select,
+.reading-hub-root:not(.is-viewing) .reading-hub-css-editor,
+.reading-hub-root:not(.is-viewing) .reading-hub-css-reference {
+  background: rgba(255,255,255,.70) !important;
+  border-color: rgba(255,255,255,.58) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-appearance-scope-note,
+.reading-hub-root:not(.is-viewing) .reading-hub-placeholder,
+.reading-hub-root:not(.is-viewing) .reading-hub-source-note {
+  background: rgba(250,227,137,.34) !important;
+  border: 1px solid rgba(255,255,255,.42);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* 8. 按钮保持书架的黄白配色，避免文字与底色糊在一起。 */
+.reading-hub-root:not(.is-viewing) .reading-hub-primary,
+.reading-hub-root:not(.is-viewing) .reading-hub-hero button,
+.reading-hub-root:not(.is-viewing) .reading-hub-searchbox button,
+.reading-hub-root:not(.is-viewing) .reading-hub-big-searchbox button {
+  background: rgba(250,227,137,.90) !important;
+  color: #2b241f !important;
+  box-shadow: 0 5px 14px rgba(110,83,25,.08);
+}
+
+/* 9. 底部导航保持书架原样逻辑，但变成更明显的悬浮玻璃层。 */
+.reading-hub-root:not(.is-viewing) .reading-hub-bottom-nav {
+  background: rgba(255,255,255,.72) !important;
+  border-top: 1px solid rgba(255,255,255,.55) !important;
+  box-shadow: 0 -8px 28px rgba(55,42,25,.055);
+  backdrop-filter: blur(20px) saturate(145%);
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
+}
+
+.reading-hub-root:not(.is-viewing) .reading-hub-nav-item.is-active {
+  background: rgba(250,227,137,.52) !important;
+}
+
+/* 10. 小屏幕继续保持内容与壁纸之间有呼吸感。 */
+@media (max-width: 460px) {
+  .reading-hub-root:not(.is-viewing) .reading-hub-content {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .reading-hub-root:not(.is-viewing) .reading-hub-hero,
+  .reading-hub-root:not(.is-viewing) .reading-hub-section,
+  .reading-hub-root:not(.is-viewing) .reading-hub-panel {
+    border-radius: 20px;
+  }
+}
