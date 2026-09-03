@@ -7,6 +7,7 @@ import {
   Code2,
   Download,
   LayoutGrid,
+  LockKeyhole,
   PaintBucket,
   Plus,
   RotateCcw,
@@ -52,6 +53,7 @@ import { BINDING_ACCENTS } from "@/lib/ui-accent-colors";
 import { ConfirmDialog, ContentDialog } from "@/components/ui/modal";
 import type { DIYWidgetTemplate } from "@/lib/widget-types";
 import { DIYWidgetEditor } from "@/components/widgets/diy-widget-editor";
+import { LockScreenSettingsPage } from "./lock-screen";
 import {
   createThemePackageBlob,
   installThemePackageFile,
@@ -62,6 +64,7 @@ type ThemeSection =
   | "menu"
   | "palette"
   | "wallpaper"
+  | "lockscreen"
   | "icons"
   | "widgets"
   | "case"
@@ -143,6 +146,7 @@ const MENU_ITEMS: Array<{
 }> = [
   { section: "palette", icon: IconPalette, label: "主题色", desc: "调色板预设", color: BINDING_ACCENTS.preset, glow: `color-mix(in srgb, ${BINDING_ACCENTS.preset} 35%, transparent)` },
   { section: "wallpaper", icon: IconWallpaper, label: "壁纸", desc: "桌面背景", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
+  { section: "lockscreen", icon: LockKeyhole, label: "锁屏", desc: "锁屏背景", color: BINDING_ACCENTS.identity, glow: `color-mix(in srgb, ${BINDING_ACCENTS.identity} 35%, transparent)` },
   { section: "icons", icon: IconGrid, label: "图标", desc: "应用图标", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 35%, transparent)` },
   { section: "widgets", icon: IconWidgets, label: "桌面组件", desc: "小组件", color: BINDING_ACCENTS.voice, glow: `color-mix(in srgb, ${BINDING_ACCENTS.voice} 35%, transparent)` },
   { section: "case", icon: IconCase, label: "状态栏", color: BINDING_ACCENTS.memory },
@@ -166,7 +170,7 @@ const SECTION_TITLES: Record<Exclude<ThemeSection, "menu">, string> = {
   css: "CSS \u53D8\u91CF",
 };
 
-const THEME_SECTIONS = new Set<string>(["menu", "palette", "wallpaper", "icons", "widgets", "case", "text", "css"]);
+const THEME_SECTIONS = new Set<string>(["menu", "palette", "wallpaper", "lockscreen", "icons", "widgets", "case", "text", "css"]);
 
 function isThemeSection(value: string): value is ThemeSection {
   return THEME_SECTIONS.has(value);
@@ -283,7 +287,7 @@ export function PhoneThemeApp({
             <div>
               <h3 className="appearance-menu-section-title">Appearance</h3>
               <div className="card-grid mt-2.5">
-                {MENU_ITEMS.filter(item => ["palette", "wallpaper", "icons", "widgets"].includes(item.section)).map((item) => (
+                {MENU_ITEMS.filter(item => ["palette", "wallpaper", "lockscreen", "icons", "widgets"].includes(item.section)).map((item) => (
                   <button
                     key={item.section}
                     className="app-card card-card"
@@ -422,6 +426,8 @@ export function PhoneThemeApp({
             onApply={onApply}
             onNotice={onNotice}
           />
+        ) : section === "lockscreen" ? (
+          <LockScreenSettingsPage onNotice={onNotice} />
         ) : section === "widgets" ? (
           <WidgetManagerPage
             widgets={widgets}

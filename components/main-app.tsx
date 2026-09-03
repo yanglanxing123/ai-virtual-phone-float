@@ -1,23 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight } from "lucide-react";
 
 import { AccountGate } from "@/components/auth/account-gate";
 import { CloudBackupScheduler } from "@/components/cloud-backup-scheduler";
 import { MediaMaintenanceScheduler } from "@/components/media-maintenance-scheduler";
 import { DesktopShell } from "./desktop-shell";
-import { SplashAnimation } from "./splash-animation";
+import { LockScreen, readLockScreenSettings } from "./lock-screen";
 import { MusicProvider } from "@/lib/music-context";
 import { hydrateKvDb } from "@/lib/kv-db";
 import { getThemeAssetMap, readThemeProfile } from "@/lib/theme-storage";
 import { resolveActiveIconSkins, type ThemeProfile } from "@/lib/theme-types";
 import { hasPendingMcpOAuthCallback } from "@/lib/tool-executor";
 import { shouldRequestPwaFullscreen } from "@/lib/pwa-display-mode";
-
-const TEXT = {
-  loading: "\u52A0\u8F7D\u4E2D...",
-};
 
 const BUILTIN_FONT_URLS = [
   "/fonts/huiwen.woff2",
@@ -147,34 +142,6 @@ async function warmBuiltinFonts(shouldStop: () => boolean): Promise<void> {
   await Promise.all(BUILTIN_FONT_LOAD_SPECS.map((spec) => document.fonts.load(spec).catch(() => [])));
 }
 
-function SplashScreen({ ready = false, onEnter }: { ready?: boolean; onEnter?: () => void }) {
-  return (
-    <main className="app-root splash-root">
-      <section
-        className="phone-shell-wrap splash-shell-wrap"
-        aria-label={TEXT.loading}
-      >
-        <div className="phone-case">
-          <div className="phone-frame">
-            <div className="phone-shell splash-phone-screen">
-              <SplashAnimation />
-              <button
-                type="button"
-                className={ready ? "splash-enter-button splash-enter-button-show" : "splash-enter-button"}
-                onClick={onEnter}
-                disabled={!ready}
-                aria-label="Enter"
-              >
-                <ArrowRight size={18} strokeWidth={1.8} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 type PreparedDesktopTheme = {
   profile: ThemeProfile;
   assets: Record<string, string>;
@@ -224,10 +191,42 @@ async function prepareDesktopThemeForFirstPaint(): Promise<PreparedDesktopTheme>
   return { profile, assets };
 }
 
+async function prepareLockScreenWallpaperForFirstPaint(): Promise<string | null> {
+  try {
+    const settings = readLockScreenSettings();
+    if (!settings.wallpaperAssetId) return null;
+    const assets = await getThemeAssetMap([settings.wallpaperAssetId]);
+    const url = assets[settings.wallpaperAssetId] ?? null;
+    if (!url || typeof window === "undefined" || !url.startsWith("data:image/")) return url;
+    await new Promise<void>((resolve) => {
+      const image = new Image();
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        if (typeof image.decode === "function") {
+          void image.decode().catch(() => undefined).finally(resolve);
+        } else {
+          resolve();
+        }
+      };
+      image.onload = finish;
+      image.onerror = finish;
+      image.src = url;
+      if (image.complete) finish();
+    });
+    return url;
+  } catch (error) {
+    console.warn("[MainApp] lock screen wallpaper preload failed:", error);
+    return null;
+  }
+}
+
 export function MainApp() {
   const [preparedDesktopTheme, setPreparedDesktopTheme] = useState<PreparedDesktopTheme | null>(null);
+  const [lockScreenWallpaper, setLockScreenWallpaper] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [splashDismissed, setSplashDismissed] = useState(false);
+  const [lockScreenDismissed, setLockScreenDismissed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -241,17 +240,20 @@ export function MainApp() {
       if (cancelled) return;
 
       let nextPreparedTheme: PreparedDesktopTheme | null = null;
+      let nextLockScreenWallpaper: string | null = null;
       try {
         nextPreparedTheme = await prepareDesktopThemeForFirstPaint();
       } catch (error) {
         console.warn("[MainApp] desktop theme preload failed:", error);
       }
+      nextLockScreenWallpaper = await prepareLockScreenWallpaperForFirstPaint();
 
       if (cancelled) return;
       setPreparedDesktopTheme(nextPreparedTheme);
+      setLockScreenWallpaper(nextLockScreenWallpaper);
       setHydrated(true);
       if (hasPendingMcpOAuthCallback()) {
-        setSplashDismissed(true);
+        setLockScreenDismissed(true);
       }
     })();
 
@@ -276,8 +278,12 @@ export function MainApp() {
 
   return (
     <AccountGate>
-      {!splashDismissed ? (
-        <SplashScreen ready={hydrated} onEnter={() => setSplashDismissed(true)} />
+      {!lockScreenDismissed ? (
+        <LockScreen
+          ready={hydrated}
+          initialWallpaper={lockScreenWallpaper}
+          onUnlock={() => setLockScreenDismissed(true)}
+        />
       ) : (
         <main className="app-root">
           <MusicProvider>
