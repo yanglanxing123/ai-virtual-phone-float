@@ -70,22 +70,6 @@
   padding: 14px 14px calc(24px + env(safe-area-inset-bottom));
 }
 
-.reading-hub-desktop-back {
-  width: 100%;
-  min-height: 42px;
-  margin: 0 0 12px;
-  padding: 0 15px;
-  border: 1px solid rgba(80,55,20,.08);
-  border-radius: 15px;
-  background: rgba(255,255,255,.76);
-  color: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  text-align: left;
-  box-shadow: 0 2px 10px rgba(80,55,20,.03);
-}
-.reading-hub-desktop-back:active { transform: scale(.99); }
-
 .reading-hub-home {
   max-width: 760px;
   margin: 0 auto;
@@ -900,3 +884,95 @@
 .reading-hub-home-detail-page .reading-discovery-detail-content {
   padding-bottom: calc(28px + env(safe-area-inset-bottom));
 }
+
+/* v39：聊天 APP 同款的可覆写主题变量桥接。所有阅读页面都挂在 .reading-app-surface 下，
+   自定义 CSS 可只改变量，不需要逐个页面重写。 */
+.reading-app-surface,
+.reading-app-surface * {
+  --reading-ui-radius: var(--ui-radius, 12px);
+  --reading-ui-radius-card: var(--ui-radius-card, 18px);
+}
+.reading-app-surface {
+  background: var(--reading-bg, var(--c-bg, #fffced));
+  color: var(--reading-text, var(--c-text, #5f5148));
+}
+.reading-app-surface .reading-hub-topbar,
+.reading-app-surface .reading-hub-section,
+.reading-app-surface .reading-hub-panel,
+.reading-app-surface .reading-hub-module,
+.reading-app-surface .reading-discovery-detail-card,
+.reading-app-surface .reading-discovery-intro,
+.reading-app-surface .reading-hub-css-card {
+  border-color: var(--reading-border, var(--c-card-border, rgba(80,55,20,.08)));
+}
+.reading-app-surface .reading-hub-topbar,
+.reading-app-surface .reading-hub-section,
+.reading-app-surface .reading-hub-panel,
+.reading-app-surface .reading-hub-module,
+.reading-app-surface .reading-hub-card,
+.reading-app-surface .reading-hub-result-card,
+.reading-app-surface .reading-discovery-intro,
+.reading-app-surface .reading-hub-css-card {
+  background: var(--reading-surface, var(--c-card, rgba(255,255,255,.82)));
+}
+.reading-app-surface .reading-hub-primary,
+.reading-app-surface .reading-discovery-read,
+.reading-app-surface .reading-hub-source-pills button.is-active {
+  background: var(--reading-accent, var(--c-icon-active, #e6bd4e)) !important;
+  color: var(--reading-accent-text, #2b241f) !important;
+}
+.reading-app-surface .reading-hub-big-searchbox,
+.reading-app-surface .reading-hub-search-bar,
+.reading-app-surface input,
+.reading-app-surface textarea,
+.reading-app-surface select {
+  background: var(--reading-input, var(--c-input, rgba(255,255,255,.72)));
+  border-color: var(--reading-input-border, var(--c-input-border, rgba(80,55,20,.1)));
+  color: var(--reading-text, var(--c-text, #5f5148));
+}
+.reading-app-surface .reading-hub-bottom-nav {
+  background: color-mix(in srgb, var(--reading-surface, var(--c-card, #fff)) 88%, transparent);
+  border-top-color: var(--reading-border, var(--c-card-border, rgba(80,55,20,.08)));
+  backdrop-filter: blur(var(--ui-blur, 16px)) saturate(var(--ui-saturate, 150%));
+  -webkit-backdrop-filter: blur(var(--ui-blur, 16px)) saturate(var(--ui-saturate, 150%));
+}
+.reading-app-surface .reading-page-content,
+.reading-app-surface .reading-page-surface--continuous {
+  background-color: var(--reading-bg, var(--c-bg, #fffced)) !important;
+  color: var(--reading-text, var(--c-text, #5f5148)) !important;
+}
+.reading-app-surface .reading-line {
+  color: var(--reading-text, var(--c-text, #5f5148)) !important;
+}
+
+/* v39 外观编辑器 */
+.reading-hub-css-card{margin-top:14px;padding:14px;border-radius:18px;border:1px solid var(--reading-border,rgba(80,55,20,.08));background:var(--reading-surface,rgba(255,255,255,.78));}
+.reading-hub-css-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+.reading-hub-css-card-head>div{min-width:0;}
+.reading-hub-css-card-head strong{display:block;font-size:14px;color:var(--reading-title,#2b241f);}
+.reading-hub-css-card-head span{display:block;margin-top:3px;font-size:10px;color:var(--reading-muted,#8b7e73);}
+.reading-hub-css-card-head button{border:1px solid var(--reading-border,rgba(80,55,20,.08));background:var(--reading-input,rgba(255,255,255,.72));color:var(--reading-text,#5f5148);border-radius:10px;padding:7px 10px;font-size:10px;}
+.reading-hub-css-editor{display:block;width:100%;min-height:330px;resize:vertical;border:1px solid var(--reading-input-border,rgba(80,55,20,.1));border-radius:14px;padding:12px;background:color-mix(in srgb,var(--reading-input,#fff) 88%,transparent);color:var(--reading-text,#5f5148);font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;tab-size:2;}
+.reading-hub-css-reference{margin:0;padding:12px;border-radius:12px;background:color-mix(in srgb,var(--reading-input,#fff) 72%,transparent);color:var(--reading-text,#5f5148);font:11px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow:auto;}
+.reading-hub-appearance-scope-note{margin-top:12px;padding:12px 13px;border-radius:13px;background:var(--reading-accent-soft,rgba(230,189,78,.12));color:var(--reading-muted,#8b7e73);font-size:11px;line-height:1.65;}
+
+
+/* v39：主题变量桥。聊天 APP 的 --c-* 变量成为阅读 APP 的统一主题源；
+   reading-* 变量只是兼容层，因此首页到阅读正文都能吃到同一套 CSS。 */
+.reading-app-surface {
+  --reading-bg: var(--c-bg, #fffced);
+  --reading-surface: var(--c-card, rgba(255,255,255,.82));
+  --reading-surface-soft: var(--c-bg-soft, #f7f1e7);
+  --reading-border: var(--c-card-border, rgba(80,55,20,.08));
+  --reading-input: var(--c-input, rgba(255,255,255,.72));
+  --reading-input-border: var(--c-input-border, rgba(80,55,20,.10));
+  --reading-text: var(--c-text, #5f5148);
+  --reading-title: var(--c-text-title, #2b241f);
+  --reading-muted: var(--c-icon, #8b7e73);
+  --reading-accent: var(--c-icon-active, #e6bd4e);
+  --reading-accent-soft: color-mix(in srgb, var(--reading-accent) 18%, transparent);
+  --reading-font-size: var(--reading-user-font-size, 16px);
+  --reading-text-color: var(--reading-user-text-color, var(--reading-text));
+  --reading-line-height: var(--reading-user-line-height, 1.8);
+}
+

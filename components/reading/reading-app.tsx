@@ -60,6 +60,30 @@ type Props = {
   onClose: () => void;
 };
 
+const READING_CUSTOM_CSS_KEY = "reading-custom-css-v1";
+
+const DEFAULT_READING_CUSTOM_CSS = `/* 阅读 APP 全局主题：参考聊天 APP 的 --c-* / --ui-* 体系
+   只修改变量，就能统一影响首页 / 书源 / 书架 / 详情 / 目录 / 阅读界面。 */
+.reading-app-surface {
+  --c-bg: #fffced;
+  --c-bg-soft: #f7f1e7;
+  --c-card: rgba(255,255,255,.82);
+  --c-card-border: rgba(80,55,20,.08);
+  --c-input: rgba(255,255,255,.72);
+  --c-input-border: rgba(80,55,20,.10);
+  --c-text: #5f5148;
+  --c-text-title: #2b241f;
+  --c-icon: #8b7e73;
+  --c-icon-active: #e6bd4e;
+  --c-line: rgba(80,55,20,.08);
+  --ui-radius: 12px;
+  --ui-radius-card: 18px;
+  --ui-blur: 16px;
+  --ui-saturate: 150%;
+}
+`;
+
+
 
 function getTitle(tab: Tab) {
   switch (tab) {
@@ -96,17 +120,31 @@ function detailValue(obj: unknown, keys: string[]): string {
   return "";
 }
 
+function compositeMetaText(obj: unknown): string {
+  const raw = detailValue(obj, ["tags", "tag", "book_tags", "labels", "label"]);
+  return raw;
+}
+
 function detailTags(obj: unknown): string {
-  const value = detailValue(obj, ["tags", "tag", "book_tags", "labels", "label"]);
+  const value = compositeMetaText(obj);
   if (Array.isArray((obj as any)?.tags)) return (obj as any).tags.join(" · ");
-  return value || "暂无标签";
+  if (!value) return "暂无标签";
+  const parts = value.split(/[，,|]/).map(x => x.trim()).filter(Boolean);
+  const filtered = parts.filter(part =>
+    !/^\d+(?:\.\d+)?\s*分$/.test(part) &&
+    !/^(?:连载|完结|已完本|更新中|finished|complete|serial)$/i.test(part) &&
+    !/^20\d{2}[\/-]\d{1,2}[\/-]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/.test(part)
+  );
+  return (filtered.length ? filtered : parts).join(" · ") || "暂无标签";
 }
 
 function detailStatus(obj: unknown): string {
   const record = obj && typeof obj === "object" ? obj as Record<string, unknown> : {};
   const value = detailValue(obj, ["status", "book_status", "novel_status", "state", "serial_status", "book_status_code"]);
-  if (/完结|已完本|finished|complete/i.test(value)) return "完结";
-  if (/连载|更新|serial/i.test(value)) return "连载";
+  const composite = compositeMetaText(obj);
+  const source = `${value},${composite}`;
+  if (/完结|已完本|finished|complete/i.test(source)) return "完结";
+  if (/连载|更新中|serial/i.test(source)) return "连载";
   if (value === "1") return "连载";
   if (value === "0") return "完结";
   if (String(record.book_search_visible).toLowerCase() === "false") return "下架";
@@ -127,12 +165,17 @@ function formatDetailTimestamp(value: string): string {
       }
     } catch {}
   }
-  return raw.replace(/T/, " ").replace(/\.\d+Z?$/, "");
+  return raw.replace(/T/, " ").replace(/\//g, "-").replace(/\.\d+Z?$/, "");
 }
 
 function detailRating(obj: unknown): string {
   const value = detailValue(obj, ["score", "rating", "rate", "book_score", "rating_score"]);
-  return value ? `${value}${/分$/.test(value) ? "" : "分"}` : "暂无评分";
+  if (value) {
+    const direct = value.match(/\d+(?:\.\d+)?/);
+    if (direct) return `${direct[0]}${/分/.test(value) ? "" : "分"}`;
+  }
+  const composite = compositeMetaText(obj).match(/(\d+(?:\.\d+)?)\s*分/);
+  return composite ? `${composite[1]}分` : "暂无评分";
 }
 
 function detailUpdatedAt(obj: unknown): string {
@@ -142,7 +185,9 @@ function detailUpdatedAt(obj: unknown): string {
     "latest_update_time", "latestUpdateTime", "latest_chapter_update_time",
     "last_chapter_update_time", "modify_time", "modifyTime", "update_date", "updateDate",
   ]);
-  return formatDetailTimestamp(value);
+  if (value) return formatDetailTimestamp(value);
+  const composite = compositeMetaText(obj).match(/(20\d{2}[\/-]\d{1,2}[\/-]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)/);
+  return composite ? formatDetailTimestamp(composite[1]) : "";
 }
 
 function detailWordCount(obj: unknown): string {
@@ -261,6 +306,7 @@ export default function ReadingApp({ onClose }: Props) {
   );
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [customFontFamily, setCustomFontFamily] = useState<string | undefined>();
+  const [customCss, setCustomCss] = useState(DEFAULT_READING_CUSTOM_CSS);
 
   const backgroundUrlRef = useRef<string | null>(null);
   const customFontUrlRef = useRef<string | null>(null);
@@ -309,6 +355,10 @@ export default function ReadingApp({ onClose }: Props) {
     });
 
     setAppearance(loadReadingAppearance());
+    try {
+      const savedCss = window.localStorage.getItem(READING_CUSTOM_CSS_KEY);
+      if (savedCss !== null) setCustomCss(savedCss);
+    } catch {}
     const installed = loadReadingSources();
     try {
       const savedModules = JSON.parse(window.localStorage.getItem("reading-home-modules-v2") || "[]");
@@ -416,13 +466,22 @@ export default function ReadingApp({ onClose }: Props) {
       appearance.fontFamily,
       customFontFamily,
     ),
-    "--reading-font-size": `${appearance.fontSize}px`,
-    "--reading-text-color": appearance.textColor,
-    "--reading-line-height": String(appearance.lineHeight),
+    "--reading-user-font-size": `${appearance.fontSize}px`,
+    "--reading-user-text-color": appearance.textColor,
+    "--reading-user-line-height": String(appearance.lineHeight),
     "--reading-bg-image": backgroundUrl
       ? `url("${backgroundUrl}")`
       : "none",
   } as CSSProperties;
+
+  const saveCustomCss = (value: string) => {
+    setCustomCss(value);
+    try { window.localStorage.setItem(READING_CUSTOM_CSS_KEY, value); } catch {}
+  };
+
+  const resetCustomCss = () => {
+    saveCustomCss(DEFAULT_READING_CUSTOM_CSS);
+  };
 
   const persistHomeModules = (next: HomeModule[]) => {
     setHomeModules(next);
@@ -707,6 +766,7 @@ export default function ReadingApp({ onClose }: Props) {
       className={`reading-app-surface reading-hub-root${activeBook ? " is-viewing" : ""}`}
       style={appearanceStyle}
     >
+      <style data-reading-custom-css>{customCss.replace(/<\/style/gi, "<\\/style")}</style>
       {activeBook ? (
         <div className="reading-hub-viewer">
           <button
@@ -999,41 +1059,57 @@ export default function ReadingApp({ onClose }: Props) {
                     );
                   })() : <div className="reading-hub-source-loading">详情加载中…</div>}
                 </div>}
-                {genericBook && <div className="reading-hub-detail-page"><button type="button" className="reading-hub-backlink" onClick={() => setGenericBook(null)}>← 返回搜索结果</button>{genericDetail ? <><div className="reading-hub-detail-card"><div className="reading-hub-detail-cover">{genericDetail.cover ? <img src={genericDetail.cover} alt="" /> : <BookOpen size={28} />}</div><div><h3>{genericDetail.title}</h3><p>{genericDetail.author||"未知作者"}</p><small>{genericDetail.desc||"暂无简介"}</small></div></div><button type="button" className="reading-hub-primary" disabled={!genericChapters.length} onClick={async()=>{const source=bookSources.find(x=>x.id===selectedSourceId);if(!source)return;const id=`source_${Date.now()}`;const coverSaved=await downloadCoverForBook(id,genericDetail.cover||genericBook?.cover);const book:Book={id,title:genericDetail.title,author:genericDetail.author,format:"txt",totalChapters:genericChapters.length,createdAt:new Date().toISOString(),hasCover:coverSaved,coverUrl:normalizeRemoteUrl(genericDetail.cover||genericBook?.cover, genericDetail.bookUrl)} as Book & { coverUrl?: string };await addBook(book);await saveChapters(id,genericChapters.map((c,i)=>({id:`${id}_ch${i}`,bookId:id,index:i,title:c.title,paragraphs:[]})));saveReadingRemoteBook(id,{sourceId:source.id,sourceName:source.name,book:{title:genericDetail.title,author:genericDetail.author,cover:normalizeRemoteUrl(genericDetail.cover, genericDetail.bookUrl),desc:genericDetail.desc,bookUrl:genericDetail.bookUrl},chapters:genericChapters,savedAt:new Date().toISOString()});setActiveBook(book);}}>加入书架并开始阅读</button><div className="reading-hub-chapter-list">{genericChapters.slice(0,120).map((c,i)=><div key={`${c.title}-${i}`}><span>{c.title}</span>{(c.isPay||c.isVip)&&<em>付费</em>}</div>)}</div></> : <div className="reading-hub-source-loading">详情加载中…</div>}</div>}
+                {genericBook && <div className="reading-hub-detail-page"><button type="button" className="reading-hub-backlink" onClick={() => setGenericBook(null)}>← 返回搜索结果</button>{genericDetail ? (() => {
+                  const cover = normalizeRemoteUrl(genericDetail.cover || genericBook.cover, genericDetail.bookUrl);
+                  const title = genericDetail.title || genericBook.title || "未命名";
+                  const author = genericDetail.author || genericBook.author || "未知作者";
+                  const desc = genericDetail.desc || genericBook.desc || "暂无简介";
+                  const tags = detailTags(genericDetail);
+                  const rating = detailRating(genericDetail);
+                  const status = detailStatus(genericDetail);
+                  const updatedAt = detailUpdatedAt(genericDetail) || detailUpdatedAt(genericBook) || "暂无";
+                  const wordCount = detailWordCount(genericDetail);
+                  const chapterCount = genericChapters.length;
+                  const saveGenericBook = async () => {
+                    const source = bookSources.find(x => x.id === selectedSourceId); if (!source) return;
+                    const id = `source_${Date.now()}`;
+                    const chapters = genericChapters;
+                    const coverSaved = await downloadCoverForBook(id, cover);
+                    const book: Book = { id, title, author, format: "txt", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
+                    await addBook(book);
+                    await saveChapters(id, chapters.map((c,i) => ({ id:`${id}_ch${i}`, bookId:id, index:i, title:c.title || `第${i+1}章`, paragraphs:[] as string[] })));
+                    saveReadingRemoteBook(id,{sourceId:source.id,sourceName:source.name,book:{title,author,cover,desc,bookUrl:genericDetail.bookUrl},chapters,savedAt:new Date().toISOString()});
+                    setActiveBook(book);
+                  };
+                  return <div className="reading-discovery-detail-card" style={cover ? { backgroundImage: `linear-gradient(180deg, rgba(255,250,247,.62), rgba(255,250,247,.96) 58%, rgba(255,250,247,.99)), url("${cover}")` } : undefined}>
+                    <div className="reading-discovery-detail-content">
+                      <div className="reading-discovery-book-head"><div className="reading-discovery-cover">{cover ? <img src={cover} alt="" /> : <BookOpen size={32} />}</div><div className="reading-discovery-book-main"><h2>{title}</h2><p>{author}</p><span>📚 {bookSources.find(x=>x.id===selectedSourceId)?.name || "书源"}</span></div></div>
+                      <div className="reading-discovery-meta-grid"><div><small>标签</small><strong>{tags}</strong></div><div><small>评分</small><strong>{rating}</strong></div><div><small>状态</small><strong>{status}</strong></div><div><small>最近更新</small><strong>{updatedAt}</strong></div><div><small>全书字数</small><strong>{wordCount}</strong></div><div><small>章节</small><strong>{chapterCount} 章</strong></div></div>
+                      <section className="reading-discovery-intro"><h3>简介</h3><p>{desc}</p></section>
+                      <div className="reading-discovery-actions reading-discovery-actions--compact"><button type="button" onClick={saveGenericBook}><span>🔖</span>放入书架</button><button type="button" onClick={()=>setSourceMessage(`目录共 ${chapterCount} 章`)}><span>☷</span>目录</button><button type="button" onClick={()=>setSourceDrawerOpen(true)}><span>&lt;&gt;</span>书源</button><button type="button" onClick={()=>setSourceMessage("阅读记录已保存在本地")}><span>⌁</span>记录</button></div>
+                      <div className="reading-discovery-current"><strong>在读 · {genericChapters[0]?.title || "暂无章节"}</strong><span>共 {chapterCount} 章</span></div>
+                      <section className="reading-discovery-intro reading-discovery-intro--source"><h3>来源信息</h3><p>源站：{bookSources.find(x=>x.id===selectedSourceId)?.name || "书源"}</p><p>作者：{author}</p></section>
+                      <button type="button" className="reading-hub-primary reading-discovery-read" disabled={!chapterCount || sourceLoading} onClick={saveGenericBook}>▣ 开始阅读</button>
+                    </div>
+                  </div>;
+                })() : <div className="reading-hub-source-loading">详情加载中…</div>}</div>}
               </section>
             )}
 
             {tab === "appearance" && (
-              <section className="reading-hub-panel">
+              <section className="reading-hub-panel reading-hub-appearance-page">
                 <div className="reading-hub-panel-head">
-                  <div>
-                    <h2>🎨 阅读外观</h2>
-                    <p>沿用现有 reading-appearance，不影响聊天 APP。</p>
-                  </div>
+                  <div><h2>🎨 外观</h2><p>一套 CSS 控制整个阅读 APP，包括首页、书源、书架、详情、目录和阅读界面。</p></div>
                 </div>
-
-                <div className="reading-hub-appearance-preview">
-                  <div className="reading-hub-preview-title">
-                    阅读界面预览
-                  </div>
-                  <div className="reading-hub-preview-text">
-                    这是阅读 APP 的独立样式区域。你可以继续使用现有的
-                    字体、字号、行距、文本颜色与背景图片设置。
-                  </div>
+                <div className="reading-hub-css-card">
+                  <div className="reading-hub-css-card-head"><div><strong>全局 CSS</strong><span>参考聊天 APP 的 --c-* / --ui-* 变量体系</span></div><button type="button" onClick={resetCustomCss}>恢复模板</button></div>
+                  <textarea className="reading-hub-css-editor" value={customCss} onChange={e => saveCustomCss(e.target.value)} spellCheck={false} placeholder="在这里输入你的 CSS…" />
                 </div>
-
-                <p className="reading-hub-appearance-help">
-                  外观的真正表单仍由现有 ReadingShelf /
-                  ReadingAppearanceDialog 管理，这里只做统一入口，避免重新造一套会和原存储冲突的设置。
-                </p>
-
-                <button
-                  type="button"
-                  className="reading-hub-primary"
-                  onClick={() => setTab("shelf")}
-                >
-                  前往书架修改阅读外观
-                </button>
+                <div className="reading-hub-css-card">
+                  <div className="reading-hub-css-card-head"><div><strong>可直接修改的核心变量</strong><span>后续换主题只需要改这一组变量</span></div></div>
+                  <pre className="reading-hub-css-reference">{`--c-bg              页面背景\n--c-bg-soft         次级背景\n--c-card            卡片 / 面板\n--c-card-border     卡片边框\n--c-input           输入框 / 次级按钮\n--c-input-border    输入框边框\n--c-text            正文文字\n--c-text-title      标题文字\n--c-icon            次要图标 / 弱文字\n--c-icon-active     主色 / 激活色\n--c-line            分割线\n--ui-radius         小控件圆角\n--ui-radius-card    卡片圆角\n--ui-blur           毛玻璃模糊\n--ui-saturate       毛玻璃饱和度`}</pre>
+                </div>
+                <div className="reading-hub-appearance-scope-note">CSS 挂载在 .reading-app-surface 下，因此阅读器进入阅读模式后仍然继承同一套主题变量；你可以直接针对 .reading-page-content、.reading-line、.reading-footer 等阅读器类名继续细调。</div>
               </section>
             )}
           </main>
