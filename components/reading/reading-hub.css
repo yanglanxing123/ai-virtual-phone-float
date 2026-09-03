@@ -894,6 +894,35 @@
   padding-bottom: calc(28px + env(safe-area-inset-bottom));
 }
 
+/* v41：功能界面与阅读界面使用独立的壁纸入口。
+   默认沿用现有阅读壁纸；以后外观 CSS 可以分别覆盖：
+   --reading-function-bg-image / --reading-viewer-bg-image。 */
+.reading-hub-root {
+  --reading-function-bg-image: var(--reading-bg-image, none);
+  --reading-viewer-bg-image: var(--reading-bg-image, none);
+  background-image: var(--reading-function-bg-image) !important;
+  background-position: center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  background-color: var(--reading-bg, #f0f0f0) !important;
+}
+
+/* 功能页不是阅读页：首页 / 书源 / 书架 / 外观都显示功能壁纸。 */
+.reading-hub-root:not(.is-viewing) {
+  background-image: var(--reading-function-bg-image, none) !important;
+}
+
+/* 真正阅读时只使用阅读壁纸入口，避免和功能页背景耦合。 */
+.reading-hub-root.is-viewing {
+  background: transparent !important;
+}
+.reading-hub-root.is-viewing .reading-hub-viewer {
+  background-image: var(--reading-viewer-bg-image, var(--reading-bg-image, none)) !important;
+  background-position: center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+}
+
 /* v39：聊天 APP 同款的可覆写主题变量桥接。所有阅读页面都挂在 .reading-app-surface 下，
    自定义 CSS 可只改变量，不需要逐个页面重写。 */
 .reading-app-surface,
@@ -1002,4 +1031,19 @@
   background-position: center !important;
   background-size: cover !important;
   background-repeat: no-repeat !important;
+}
+
+
+/* v41-final：覆盖后置主题桥，确保功能页壁纸不会被 --reading-bg 的纯色背景盖掉。
+   仅处理背景，不触碰 footer / flex / scroll。 */
+.reading-app-surface.reading-hub-root:not(.is-viewing) {
+  background-color: var(--reading-bg, #f0f0f0) !important;
+  background-image: var(--reading-function-bg-image, var(--reading-bg-image, none)) !important;
+  background-position: center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+}
+
+.reading-app-surface.reading-hub-root.is-viewing {
+  background: transparent !important;
 }
