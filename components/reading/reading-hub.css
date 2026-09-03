@@ -6,9 +6,9 @@
   inset: 0;
   overflow: hidden;
   color: var(--reading-text-color, #3b332d);
+  /* 功能页与阅读页壁纸彻底分离：功能页不使用阅读壁纸 */
   background:
-    linear-gradient(rgba(255, 253, 245, .94), rgba(255, 253, 245, .94)),
-    var(--reading-bg-image, none) center / cover no-repeat;
+    var(--reading-surface, var(--c-bg, #f4f4f4));
   font-family: var(--reading-font-family, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif);
 }
 
@@ -404,6 +404,15 @@
 .reading-hub-viewer {
   position: absolute;
   inset: 0;
+  /* 只有真正进入阅读界面后才显示用户设置的阅读壁纸 */
+  background: var(--reading-bg-image, none) center / cover no-repeat;
+}
+
+/* ReadingViewer 自身有一层 .reading-app-surface，必须透明才能看到阅读专用壁纸。
+   只覆盖背景，不改变阅读器的 flex / 滚动 / 尺寸结构。 */
+.reading-hub-viewer > .reading-app-surface {
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 .reading-hub-viewer-close {
@@ -976,3 +985,21 @@
   --reading-line-height: var(--reading-user-line-height, 1.8);
 }
 
+
+
+/* v40：壁纸作用域隔离 */
+.reading-app-surface.reading-hub-root:not(.is-viewing) {
+  background-image: none !important;
+}
+
+.reading-app-surface.reading-hub-root.is-viewing {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+.reading-hub-viewer {
+  background-image: var(--reading-bg-image, none) !important;
+  background-position: center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+}

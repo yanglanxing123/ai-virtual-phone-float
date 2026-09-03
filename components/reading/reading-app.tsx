@@ -432,6 +432,15 @@ export default function ReadingApp({ onClose }: Props) {
     };
   }, []);
 
+  // 进入书源页时不要主动唤起 iOS 键盘；搜索框仅在用户主动点击时获得焦点。
+  useEffect(() => {
+    if (tab !== "sources") return;
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+      active.blur();
+    }
+  }, [tab]);
+
   const handleSaveAppearance = async (
     nextAppearance: ReadingAppearance,
     options: {
@@ -472,6 +481,7 @@ export default function ReadingApp({ onClose }: Props) {
     "--reading-bg-image": backgroundUrl
       ? `url("${backgroundUrl}")`
       : "none",
+    "--reading-function-bg-image": "none",
   } as CSSProperties;
 
   const saveCustomCss = (value: string) => {
@@ -947,7 +957,7 @@ export default function ReadingApp({ onClose }: Props) {
 
                 <div className="reading-hub-big-searchbox">
                   <Search size={21} />
-                  <input value={sourceKeyword} onChange={(e) => setSourceKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget.parentElement?.querySelector("button") as HTMLButtonElement | null)?.click(); }} placeholder="输入书名、作者，或 书名@来源" autoFocus />
+                  <input value={sourceKeyword} onChange={(e) => setSourceKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget.parentElement?.querySelector("button") as HTMLButtonElement | null)?.click(); }} placeholder="输入书名、作者，或 书名@来源" />
                   <button type="button" disabled={sourceLoading || !sourceKeyword.trim() || !selectedSourceId} onClick={async () => {
                     const currentSource = bookSources.find((item) => item.id === selectedSourceId);
                     if (!currentSource) return;
