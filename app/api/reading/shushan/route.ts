@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dns from "node:dns/promises";
 import net from "node:net";
+import crypto from "node:crypto";
 
 export const runtime = "nodejs";
 
@@ -94,6 +95,8 @@ async function fetchUpstream(
     };
     let body: string | undefined;
     if (options.apiKey) headers["X-Api-Key"] = Buffer.from(options.apiKey, "utf8").toString("base64");
+    // 书山原书源全局 header：正文接口除 Api-Key 外还要求固定 Novel-Token。
+    headers["X-Novel-Token"] = NOVEL_TOKEN;
     if (options.deviceId) {
       // 书山原书源的 content 请求使用 X-Device-Type / X-Device-Id。
       headers["X-Device-Type"] = "ios";
@@ -118,6 +121,61 @@ async function fetchUpstream(
   } finally {
     clearTimeout(timer);
   }
+}
+
+
+function looksLikeReadableNovelText(value: string) {
+  const text = String(value || "").trim();
+  if (!text || text.length < 2) return false;
+  if (/^[A-Za-z0-9+/=\s]+$/.test(text) && !/[\u4e00-\u9fff]/.test(text)) return false;
+  return /[\u4e00-\u9fff]/.test(text) || /<\/?(?:p|div|br|h[1-6]|section|article)\b/i.test(text) || /[\u3002，。！？：；、“”‘’《》]/.test(text);
+}
+
+function tryDecodeShushanContent(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw || !/^[A-Za-z0-9+/]*={0,2}$/.test(raw) || raw.length % 4 !== 0) return raw;
+  let encrypted: Buffer;
+  try { encrypted = Buffer.from(raw, "base64"); } catch { return raw; }
+  if (!encrypted.length || encrypted.length % 16 !== 0) return raw;
+
+  const keyText = "G@tY3$jK7#mL2&pW8!";
+  const ivText = "C!eH4&sM6@wP9^zX1?";
+  const md5 = (text: string) => crypto.createHash("md5").update(text, "utf8").digest();
+  const sha256 = (text: string) => crypto.createHash("sha256").update(text, "utf8").digest();
+  const candidates: Array<{ key: Buffer; iv: Buffer }> = [
+    { key: Buffer.from(keyText, "utf8").subarray(0, 16), iv: Buffer.from(ivText, "utf8").subarray(0, 16) },
+    { key: Buffer.from(keyText, "utf8").subarray(-16), iv: Buffer.from(ivText, "utf8").subarray(-16) },
+    { key: md5(keyText), iv: md5(ivText) },
+    { key: md5(keyText), iv: Buffer.from(ivText, "utf8").subarray(0, 16) },
+    { key: sha256(keyText).subarray(0, 16), iv: sha256(ivText).subarray(0, 16) },
+  ];
+  for (const candidate of candidates) {
+    try {
+      const decipher = crypto.createDecipheriv("aes-128-cbc", candidate.key, candidate.iv);
+      const decoded = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8").trim();
+      if (looksLikeReadableNovelText(decoded)) return decoded;
+    } catch { /* try next compatibility key derivation */ }
+  }
+  return raw;
+}
+
+function extractSearchBooks(value: any): any[] {
+  const output: any[] = [];
+  const seen = new Set<string>();
+  const visit = (node: any, depth = 0) => {
+    if (depth > 7 || node == null) return;
+    if (Array.isArray(node)) { node.forEach(item => visit(item, depth + 1)); return; }
+    if (typeof node !== "object") return;
+    const title = node.title ?? node.book_name ?? node.bookName ?? node.name ?? node.novel_name;
+    const bookUrl = node.book_url ?? node.bookUrl ?? node.url ?? node.detail_url ?? node.bookUrl;
+    if (title && bookUrl) {
+      const key = `${String(title)}|${String(bookUrl)}|${String(node.source || "")}`;
+      if (!seen.has(key)) { seen.add(key); output.push(node); }
+    }
+    Object.values(node).forEach(child => visit(child, depth + 1));
+  };
+  visit(value);
+  return output;
 }
 
 function upstreamError(host: string, path: string, status: number, parsed: any, text: string) {
@@ -211,8 +269,7 @@ export async function POST(request: NextRequest) {
         if (source) query.set("source", source);
         const result = await fetchUpstream(host, `/search?${query.toString()}`, { apiKey });
         if (!result.response.ok) throw upstreamError(host, "/search", result.response.status, result.parsed, result.text);
-        const data = Array.isArray(result.parsed?.data) ? result.parsed.data :
-          Array.isArray(result.parsed) ? result.parsed : [];
+        const data = extractSearchBooks(result.parsed?.data ?? result.parsed);
         return { ok: true as const, data, host };
       }));
     }
