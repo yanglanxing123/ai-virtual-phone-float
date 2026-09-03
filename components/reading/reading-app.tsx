@@ -97,17 +97,9 @@ function detailValue(obj: unknown, keys: string[]): string {
 }
 
 function detailTags(obj: unknown): string {
-  const raw = (obj as any)?.tags ?? (obj as any)?.tag ?? (obj as any)?.book_tags ?? (obj as any)?.labels ?? (obj as any)?.label;
-  const values = Array.isArray(raw) ? raw.flatMap((item) => String(item ?? "").split(/[|,，、;；]+/)) : String(raw ?? "").split(/[|,，、;；]+/);
-  const cleaned = values
-    .map((item) => item.trim())
-    .filter(Boolean)
-    // 书源有时会把评分、连载状态和“最后更新时间”错误塞进 tags。
-    .filter((item) => !/^\d+(?:\.\d+)?分?$/.test(item))
-    .filter((item) => !/^(?:连载|连载中|完结|已完本|完本|finished|complete|serial)$/i.test(item))
-    .filter((item) => !/^\d{4}[-/.]\d{1,2}(?:[-/.]\d{1,2})?(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/.test(item))
-    .filter((item) => !/^\d{4}年(?:\d{1,2}月)?$/.test(item));
-  return [...new Set(cleaned)].join(" · ") || "暂无标签";
+  const value = detailValue(obj, ["tags", "tag", "book_tags", "labels", "label"]);
+  if (Array.isArray((obj as any)?.tags)) return (obj as any).tags.join(" · ");
+  return value || "暂无标签";
 }
 
 function detailStatus(obj: unknown): string {
@@ -123,19 +115,12 @@ function detailRating(obj: unknown): string {
 }
 
 function detailUpdatedAt(obj: unknown): string {
-  const direct = detailValue(obj, [
+  return detailValue(obj, [
     "update_time", "updated_at", "updateTime", "updatedAt",
     "last_update_time", "lastUpdateTime", "latest_update", "latestUpdate",
     "latest_update_time", "latestUpdateTime", "latest_chapter_update_time",
     "last_chapter_update_time", "modify_time", "modifyTime", "update_date", "updateDate",
-    "update", "latest", "lastUpdate",
-  ]);
-  if (direct) return direct;
-
-  // 部分书源把“最后更新时间”混进 tags，没有独立字段；把它识别出来放到“最近更新”。
-  const raw = (obj as any)?.tags ?? (obj as any)?.tag ?? (obj as any)?.book_tags ?? (obj as any)?.labels ?? (obj as any)?.label;
-  const values = Array.isArray(raw) ? raw.flatMap((item) => String(item ?? "").split(/[|,，、;；]+/)) : String(raw ?? "").split(/[|,，、;；]+/);
-  return values.map((item) => item.trim()).find((item) => /^(?:\d{4}[-/.]\d{1,2}(?:[-/.]\d{1,2})?(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{4}年\d{1,2}月\d{1,2}日(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)$/.test(item)) || "";
+  ]) || "";
 }
 
 function detailWordCount(obj: unknown): string {
@@ -578,7 +563,7 @@ export default function ReadingApp({ onClose }: Props) {
                 <>
                 <div className="reading-hub-hero"><div><span>DISCOVER</span><strong>首页</strong><p>书源数据可以直接组成首页模块，模块可自由添加和隐藏。</p></div><div className="reading-hub-home-hero-actions"><button type="button" onClick={()=>setTab("sources")}><Search size={16}/> 搜索</button><button type="button" onClick={()=>setSourceDrawerOpen(true)} aria-label="首页设置"><MoreVertical size={18}/></button></div></div>
                 <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>首页模块</h2><p>直接使用书源发现页：阅读榜、新书榜、分类榜等都可以单独添加。</p></div></div>
-                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={async()=>{const source=bookSources.find(x=>x.id===module.sourceId);if(!source)return;setSelectedSourceId(source.id);setSourceLoading(true);setSourceMessage("");setGenericBook(null);setGenericDetail(null);setGenericChapters([]);setSelectedSourceBook(null);setSourceDetail(null);setSourceChapters([]);try{if(source.adapter==="shushan"){const raw=book.raw&&typeof book.raw==="object"?book.raw as Record<string,unknown>:{};const shushanItem:ShushanSearchBook={...raw,title:book.title,author:book.author,cover:book.cover,desc:book.desc,source:String(book.source||raw.source||raw.source_name||raw.book_source||"小说"),book_url:book.bookUrl,latestChapterTitle:book.latestChapterTitle,wordCount:book.wordCount,tags:book.tags};let detail:ShushanSearchBook;const bid=book.bookId||String(raw.book_id_str||raw.book_id||raw.bookId||"");if(bid){const info=await getShushanBookInfo(loadShushanAccount().apiKey,bid);const payload:any=info.data;const arr=Array.isArray(payload)?payload:(Array.isArray(payload?.book_info)?payload.book_info:(Array.isArray(payload?.data)?payload.data:[payload]));detail=arr[0]||shushanItem;}else{const result=await getShushanDetail(loadShushanAccount().apiKey,shushanItem);detail=result.data;}setSelectedSourceBook(shushanItem);setSourceDetail(detail);const cat=await getShushanCatalog(loadShushanAccount().apiKey,detail);setSourceChapters(cat.data||[]);}else{setGenericBook(book);const detail=await getGenericDetail(source,book);setGenericDetail(detail);const chapters=await getGenericCatalog(source,detail);setGenericChapters(chapters);}}catch(error){setSourceMessage(error instanceof Error?error.message:"打开书籍失败");}finally{setSourceLoading(false);}}}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
+                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={async()=>{const source=bookSources.find(x=>x.id===module.sourceId);if(!source)return;setSelectedSourceId(source.id);setSourceLoading(true);setSourceMessage("");setGenericBook(null);setGenericDetail(null);setGenericChapters([]);setSelectedSourceBook(null);setSourceDetail(null);setSourceChapters([]);try{if(source.adapter==="shushan"){const raw=book.raw&&typeof book.raw==="object"?book.raw as Record<string,unknown>:{};const shushanItem:ShushanSearchBook={...raw,title:book.title,author:book.author,cover:book.cover,desc:book.desc,source:String(book.source||raw.source||raw.source_name||raw.book_source||"小说"),book_url:book.bookUrl,latestChapterTitle:book.latestChapterTitle,wordCount:book.wordCount,tags:book.tags};let detail:ShushanSearchBook;const bid=book.bookId||String(raw.book_id_str||raw.book_id||raw.bookId||"");if(bid){const info=await getShushanBookInfo(loadShushanAccount().apiKey,bid);const payload:any=info.data;const arr=Array.isArray(payload)?payload:(Array.isArray(payload?.book_info)?payload.book_info:(Array.isArray(payload?.data)?payload.data:[payload]));detail=arr[0] ? ({ ...shushanItem, ...arr[0] } as ShushanSearchBook) : shushanItem;}else{const result=await getShushanDetail(loadShushanAccount().apiKey,shushanItem);detail=result.data;}setSelectedSourceBook(shushanItem);setSourceDetail(detail);const cat=await getShushanCatalog(loadShushanAccount().apiKey,detail);setSourceChapters(cat.data||[]);}else{setGenericBook(book);const detail=await getGenericDetail(source,book);setGenericDetail(detail);const chapters=await getGenericCatalog(source,detail);setGenericChapters(chapters);}}catch(error){setSourceMessage(error instanceof Error?error.message:"打开书籍失败");}finally{setSourceLoading(false);}}}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
                 </div>
                 </>
                 )}
@@ -650,7 +635,7 @@ export default function ReadingApp({ onClose }: Props) {
                   <button key={`${item.source}-${item.book_url}-${index}`} type="button" className="reading-hub-result-card" onClick={async () => {
                     const source = bookSources.find((x) => x.id === selectedSourceId); if (!source) return;
                     setSelectedSourceBook(item); setSourceDetail(null); setSourceChapters([]); setSourceLoading(true); setSourceMessage("正在打开详情…");
-                    try { const result = await getShushanDetail(loadShushanAccount().apiKey, item); setSourceDetail(result.data); const cat = await getShushanCatalog(loadShushanAccount().apiKey, result.data); setSourceChapters(cat.data || []); setSourceMessage(`目录 ${cat.data?.filter((x) => !x.isVolume).length || 0} 章`); }
+                    try { const result = await getShushanDetail(loadShushanAccount().apiKey, item); const mergedDetail = { ...item, ...result.data } as ShushanSearchBook; setSourceDetail(mergedDetail); const cat = await getShushanCatalog(loadShushanAccount().apiKey, mergedDetail); setSourceChapters(cat.data || []); setSourceMessage(`目录 ${cat.data?.filter((x) => !x.isVolume).length || 0} 章`); }
                     catch (error) { setSourceMessage(error instanceof Error ? error.message : "获取详情失败"); }
                     finally { setSourceLoading(false); }
                   }}><div className="reading-hub-result-cover">{item.cover ? <img src={item.cover} alt="" /> : <BookOpen size={24} />}</div><div className="reading-hub-result-main"><strong>{item.title || "未命名"}</strong><span>{item.author || "未知作者"} · {item.source || "书山"}</span><small>{item.latestChapterTitle || item.desc || ""}</small></div><ChevronRight size={18} /></button>

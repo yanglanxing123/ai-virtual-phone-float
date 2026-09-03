@@ -268,9 +268,11 @@ type ReadingLayoutConfig = {
     shared: boolean;
     top: number;
     bottom: number;
+    left: number;
+    right: number;
 };
 
-const DEFAULT_READING_LAYOUT: ReadingLayoutConfig = { shared: true, top: 12, bottom: 18 };
+const DEFAULT_READING_LAYOUT: ReadingLayoutConfig = { shared: true, top: 12, bottom: 18, left: 18, right: 18 };
 const READING_LAYOUT_KEY = "reading-layout-config-v2";
 const READING_BOOK_LAYOUT_KEY = "reading-layout-book-v2";
 
@@ -294,7 +296,7 @@ function saveReadingLayout(bookId: string, value: ReadingLayoutConfig) {
             return;
         }
         const all = JSON.parse(window.localStorage.getItem(READING_BOOK_LAYOUT_KEY) || "{}");
-        all[bookId] = { top: value.top, bottom: value.bottom };
+        all[bookId] = { top: value.top, bottom: value.bottom, left: value.left, right: value.right };
         window.localStorage.setItem(READING_BOOK_LAYOUT_KEY, JSON.stringify(all));
         window.localStorage.setItem(READING_LAYOUT_KEY, JSON.stringify({ ...value, shared: false }));
     } catch {}
@@ -1267,7 +1269,7 @@ export function ReadingViewer({ book, onBack }: Props) {
             return;
         }
 
-        if (!isPdf && currentChapter) {
+        if (!isPdf && currentChapter && readingMode === "page") {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
             const x = e.clientX - rect.left;
             const w = rect.width;
@@ -1947,8 +1949,12 @@ export function ReadingViewer({ book, onBack }: Props) {
     };
 
     const handleTouchEnd = (e: React.TouchEvent) => {
-        const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
-        const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+        // 滑动模式完全禁止翻页；只有翻页模式允许左右手势。
+        if (isPdf || readingMode !== "page") return;
+        const touch = e.changedTouches[0];
+        if (!touch) return;
+        const dx = touch.clientX - touchStartRef.current.x;
+        const dy = touch.clientY - touchStartRef.current.y;
         if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
             navigateWithFlip(dx < 0 ? 'forward' : 'backward');
         }
@@ -2039,10 +2045,15 @@ export function ReadingViewer({ book, onBack }: Props) {
             {/* Reading content */}
             <div
                 ref={scrollRef}
-                className={`relative flex-1 min-h-0 px-4 ${isPdf || readingMode === "continuous" ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden"}`}
+                className={`relative flex-1 min-h-0 ${isPdf || readingMode === "continuous" ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden"}`}
                 style={{
                     paddingTop: "var(--reading-layout-top)",
                     paddingBottom: "var(--reading-layout-bottom)",
+                    paddingLeft: "var(--reading-layout-left)",
+                    paddingRight: "var(--reading-layout-right)",
+                    boxSizing: "border-box",
+                    scrollPaddingTop: "var(--reading-layout-top)",
+                    scrollPaddingBottom: "var(--reading-layout-bottom)",
                     minHeight: 0,
                     height: 0,
                     ...(readingMode === "continuous" ? {
@@ -2099,7 +2110,6 @@ export function ReadingViewer({ book, onBack }: Props) {
                         <div
                             className="reading-page-stage"
                             style={readingMode === "continuous" ? { height: "auto", minHeight: 0, flex: "none", overflow: "visible", touchAction: "pan-y" } : undefined}
-                            // 只有翻页模式接管左右滑动；连续滚动模式完全交给外层纵向滚动容器。
                             onTouchStart={readingMode === "page" ? handleTouchStart : undefined}
                             onTouchEnd={readingMode === "page" ? handleTouchEnd : undefined}
                         >
@@ -2483,7 +2493,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                         className={`ui-btn ${readingMode === "continuous" ? "reading-footer-btn-active" : ""}`}
                                         onPointerDown={(e) => e.stopPropagation()}
                                         onClick={(e) => { e.stopPropagation(); switchReadingMode("continuous"); }}
-                                    >连续滚动</button>
+                                    >滑动模式</button>
                                     <button
                                         type="button"
                                         aria-pressed={readingMode === "page"}
@@ -2506,9 +2516,17 @@ export function ReadingViewer({ book, onBack }: Props) {
                             <span>下边距：{readingLayout.bottom}px</span>
                             <input type="range" min="0" max="120" step="1" value={readingLayout.bottom} onChange={(e) => updateReadingLayout({ bottom: Number(e.target.value) })} />
                         </label>
+                        <label className="reading-settings-label">
+                            <span>左边距：{readingLayout.left}px</span>
+                            <input type="range" min="0" max="80" step="1" value={readingLayout.left} onChange={(e) => updateReadingLayout({ left: Number(e.target.value) })} />
+                        </label>
+                        <label className="reading-settings-label">
+                            <span>右边距：{readingLayout.right}px</span>
+                            <input type="range" min="0" max="80" step="1" value={readingLayout.right} onChange={(e) => updateReadingLayout({ right: Number(e.target.value) })} />
+                        </label>
                         <div className="reading-settings-inline-note">
                             <span>布局说明</span>
-                            <span>{readingLayout.shared ? "共享布局开启：所有开启共享布局的书使用同一组上下边距" : "当前书使用独立上下边距"}</span>
+                            <span>{readingLayout.shared ? "共享布局开启：所有开启共享布局的书使用同一组上下左右边距" : "当前书使用独立上下边距"}</span>
                         </div>
                     </div>
                 </ContentDialog>

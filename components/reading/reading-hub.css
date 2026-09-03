@@ -749,26 +749,16 @@
   overflow: visible !important;
 }
 
-/* v26：连续滚动 = 正文区域上下滑动。翻页模式才允许左右手势，避免 iOS 把纵向拖动截给翻页层。 */
-.reading-app-surface .reading-page-stage {
-  touch-action: pan-x;
+/* v27：滑动模式只允许纵向滚动；左右/上下边距直接作用于正文滚动区域。 */
+.reading-app-surface .reading-page-stage { touch-action: pan-x; }
+.reading-app-surface .reading-page-stage:has(.reading-page-surface--continuous) { touch-action: pan-y; }
+.reading-app-surface [data-ui="body"] {
+  box-sizing: border-box;
+  scroll-padding-top: var(--reading-layout-top, 0px);
+  scroll-padding-bottom: var(--reading-layout-bottom, 0px);
 }
-.reading-app-surface .reading-page-stage:has(.reading-page-surface--continuous) {
-  touch-action: pan-y;
-}
-.reading-app-surface .reading-page-surface--continuous {
-  flex: none !important;
-  width: 100% !important;
-  height: auto !important;
-  min-height: 100% !important;
-  max-height: none !important;
-  overflow: visible !important;
-}
+.reading-app-surface .reading-page-surface--continuous,
 .reading-app-surface .reading-page-surface--continuous .reading-page-content {
-  display: block !important;
-  width: 100% !important;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  overflow: visible !important;
+  width: 100%;
+  box-sizing: border-box;
 }
