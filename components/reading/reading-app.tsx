@@ -453,41 +453,72 @@ export default function ReadingApp({ onClose }: Props) {
                 {(selectedSourceBook && sourceDetail) || (genericBook && genericDetail) ? (
                   <div className="reading-hub-discovery-detail">
                     <button type="button" className="reading-hub-backlink" onClick={() => { setSelectedSourceBook(null); setSourceDetail(null); setSourceChapters([]); setGenericBook(null); setGenericDetail(null); setGenericChapters([]); setSourceMessage(""); }}>← 返回发现页</button>
-                    {selectedSourceBook && sourceDetail ? (
-                      <div className="reading-discovery-book-card">
-                        <div className="reading-discovery-book-head">
-                          <div className="reading-discovery-cover">{sourceDetail.cover || selectedSourceBook.cover ? <img src={sourceDetail.cover || selectedSourceBook.cover} alt="" /> : <BookOpen size={32} />}</div>
-                          <div className="reading-discovery-book-main">
-                            <h2>{sourceDetail.title || selectedSourceBook.title}</h2>
-                            <p>{sourceDetail.author || selectedSourceBook.author || "未知作者"}</p>
-                            <span>📚 {sourceDetail.source || selectedSourceBook.source || "书山聚合"}</span>
+                    {selectedSourceBook && sourceDetail ? (() => {
+                      const cover = normalizeRemoteUrl(sourceDetail.cover || selectedSourceBook.cover, sourceDetail.book_url);
+                      const title = sourceDetail.title || selectedSourceBook.title || "未命名";
+                      const author = sourceDetail.author || selectedSourceBook.author || "未知作者";
+                      const desc = sourceDetail.desc || selectedSourceBook.desc || "暂无简介";
+                      const tags = detailTags(sourceDetail);
+                      const rating = detailRating(sourceDetail);
+                      const status = detailStatus(sourceDetail);
+                      const updatedAt = detailUpdatedAt(sourceDetail);
+                      const wordCount = detailWordCount(sourceDetail);
+                      const chapterCount = sourceChapters.filter(x => !x.isVolume).length;
+                      const openRemoteBook = async () => {
+                        if (!chapterCount) {
+                          setSourceMessage("目录还没有加载成功，请先刷新发现页后重试");
+                          return;
+                        }
+                        const id = `shushan_${Date.now()}`;
+                        const chapters = sourceChapters.filter(x => !x.isVolume);
+                        const coverSaved = await downloadCoverForBook(id, cover);
+                        const rawBookId = (sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? (selectedSourceBook as any).bookid ?? (selectedSourceBook as any).book_id ?? (selectedSourceBook as any).bookId;
+                        const bookId = rawBookId == null ? "" : String(rawBookId);
+                        const book: Book = { id, title, author, format: "txt", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
+                        await addBook(book);
+                        await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
+                        saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, bookId, cover, desc, chapters });
+                        setActiveBook(book);
+                      };
+                      return (
+                        <div className="reading-discovery-detail-card" style={cover ? { backgroundImage: `linear-gradient(180deg, rgba(255,250,247,.58), rgba(255,250,247,.93) 54%, rgba(255,250,247,.99)), url("${cover}")` } : undefined}>
+                          <div className="reading-discovery-detail-content">
+                            <div className="reading-discovery-book-head">
+                              <div className="reading-discovery-cover">{cover ? <img src={cover} alt="" /> : <BookOpen size={32} />}</div>
+                              <div className="reading-discovery-book-main"><h2>{title}</h2><p>{author}</p><span>📚 {sourceDetail.source || selectedSourceBook.source || "书山聚合"}</span></div>
+                            </div>
+                            <div className="reading-discovery-meta-grid">
+                              <div><small>标签</small><strong>{tags}</strong></div>
+                              <div><small>评分</small><strong>{rating}</strong></div>
+                              <div><small>状态</small><strong>{status}</strong></div>
+                              <div><small>最近更新</small><strong>{updatedAt}</strong></div>
+                              <div><small>全书字数</small><strong>{wordCount}</strong></div>
+                              <div><small>章节</small><strong>{chapterCount} 章</strong></div>
+                            </div>
+                            <section className="reading-discovery-intro">
+                              <h3>简介</h3>
+                              <p>{desc}</p>
+                            </section>
+                            <div className="reading-discovery-actions reading-discovery-actions--compact">
+                              <button type="button" onClick={openRemoteBook}><span>🔖</span>放入书架</button>
+                              <button type="button" onClick={() => setSourceMessage(`目录共 ${chapterCount} 章`)}><span>☷</span>查看目录</button>
+                              <button type="button" onClick={() => setSourceDrawerOpen(true)}><span>&lt;&gt;</span>书源</button>
+                              <button type="button" onClick={() => setSourceMessage("阅读记录会在开始阅读后自动保存") }><span>⌁</span>阅读记录</button>
+                            </div>
+                            <div className="reading-discovery-current">
+                              <strong>在读 · 第1章 {sourceChapters[0]?.title || "暂无章节"}</strong>
+                              <span>共 {chapterCount} 章</span>
+                            </div>
+                            <section className="reading-discovery-intro reading-discovery-intro--source">
+                              <h3>来源信息</h3>
+                              <p>源站：{sourceDetail.source || selectedSourceBook.source || "书山聚合"}</p>
+                              <p>作者：{author}</p>
+                            </section>
+                            <button type="button" className="reading-hub-primary reading-discovery-read" disabled={!chapterCount || sourceLoading} onClick={openRemoteBook}>▣ 阅读</button>
                           </div>
                         </div>
-                        <div className="reading-discovery-stats">
-                          <div><small>标签</small><strong>{(sourceDetail as any).tags || (selectedSourceBook as any).tags || "—"}</strong></div>
-                          <div><small>字数</small><strong>{(sourceDetail as any).wordCount || (selectedSourceBook as any).wordCount || "—"}</strong></div>
-                          <div><small>状态</small><strong>{(sourceDetail as any).status || "连载"}</strong></div>
-                          <div><small>章节</small><strong>{sourceChapters.filter(x=>!x.isVolume).length}章</strong></div>
-                        </div>
-                        <div className="reading-discovery-actions">
-                          <button type="button" onClick={async()=>{const id=`shushan_${Date.now()}`;const chapters=sourceChapters.filter(x=>!x.isVolume);const cover=sourceDetail.cover||selectedSourceBook.cover;const coverSaved=await downloadCoverForBook(id,cover);const book:Book={id,title:sourceDetail.title||selectedSourceBook.title,author:sourceDetail.author||selectedSourceBook.author,format:"txt",totalChapters:chapters.length,createdAt:new Date().toISOString(),hasCover:coverSaved,coverUrl:normalizeRemoteUrl(cover,sourceDetail.book_url)} as Book & {coverUrl?:string};await addBook(book);await saveChapters(id,chapters.map((c,i)=>({id:`${id}_ch${i}`,bookId:id,index:i,title:c.title||`第${i+1}章`,paragraphs:[]})));saveRemoteBook(id,{source:sourceDetail.source,url:sourceDetail.book_url,name:sourceDetail.title||selectedSourceBook.title,apiKey:loadShushanAccount().apiKey,cover,desc:sourceDetail.desc,chapters});setActiveBook(book);}}><span>🔖</span>放入书架</button>
-                          <button type="button" onClick={()=>setSourceMessage(`目录共 ${sourceChapters.filter(x=>!x.isVolume).length} 章`)}><span>☷</span>查看目录</button>
-                          <button type="button" onClick={()=>setTab("sources")}><span>&lt;&gt;</span>书源</button>
-                          <button type="button" onClick={()=>setSourceMessage("阅读记录已保存在本地书架中") }><span>⌁</span>阅读记录</button>
-                        </div>
-                        <div className="reading-discovery-current">
-                          <strong>在读 · 第1章 {sourceChapters[0]?.title || "暂无章节"}</strong>
-                          <span>共 {sourceChapters.filter(x=>!x.isVolume).length} 章</span>
-                        </div>
-                        <div className="reading-discovery-source">
-                          <p>✨ 源站：{sourceDetail.source || selectedSourceBook.source || "书山聚合"}</p>
-                          <p>📕 书名：{sourceDetail.title || selectedSourceBook.title}</p>
-                          <p>👤 作者：{sourceDetail.author || selectedSourceBook.author || "未知作者"}</p>
-                          {sourceDetail.desc && <p>📝 简介：{sourceDetail.desc}</p>}
-                        </div>
-                        <button type="button" className="reading-hub-primary reading-discovery-read" onClick={async()=>{const id=`shushan_${Date.now()}`;const chapters=sourceChapters.filter(x=>!x.isVolume);const cover=sourceDetail.cover||selectedSourceBook.cover;const coverSaved=await downloadCoverForBook(id,cover);const book:Book={id,title:sourceDetail.title||selectedSourceBook.title,author:sourceDetail.author||selectedSourceBook.author,format:"txt",totalChapters:chapters.length,createdAt:new Date().toISOString(),hasCover:coverSaved,coverUrl:normalizeRemoteUrl(cover,sourceDetail.book_url)} as Book & {coverUrl?:string};await addBook(book);await saveChapters(id,chapters.map((c,i)=>({id:`${id}_ch${i}`,bookId:id,index:i,title:c.title||`第${i+1}章`,paragraphs:[]})));saveRemoteBook(id,{source:sourceDetail.source,url:sourceDetail.book_url,name:sourceDetail.title||selectedSourceBook.title,apiKey:loadShushanAccount().apiKey,cover,desc:sourceDetail.desc,chapters});setActiveBook(book);}}>▣ 阅读</button>
-                      </div>
-                    ) : genericBook && genericDetail ? (
+                      );
+                    })() : genericBook && genericDetail ? (
                       <div className="reading-discovery-book-card"><div className="reading-discovery-book-head"><div className="reading-discovery-cover">{genericDetail.cover||genericBook.cover?<img src={genericDetail.cover||genericBook.cover} alt=""/>:<BookOpen size={32}/>}</div><div className="reading-discovery-book-main"><h2>{genericDetail.title}</h2><p>{genericDetail.author||"未知作者"}</p><span>📚 {bookSources.find(x=>x.id===selectedSourceId)?.name||"书源"}</span></div></div><div className="reading-discovery-stats"><div><small>标签</small><strong>{genericDetail.tags||"—"}</strong></div><div><small>字数</small><strong>{genericDetail.wordCount||"—"}</strong></div><div><small>状态</small><strong>连载</strong></div><div><small>章节</small><strong>{genericChapters.length}章</strong></div></div><div className="reading-discovery-source"><p>📝 简介：{genericDetail.desc||"暂无简介"}</p></div></div>
                     ) : null}
                   </div>
@@ -626,7 +657,7 @@ export default function ReadingApp({ onClose }: Props) {
                               const book: Book = { id, title, author, format: "txt", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                               await addBook(book);
                               await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
-                              saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, cover, desc, chapters });
+                              saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, bookId: String((sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? ""), cover, desc, chapters });
                               setActiveBook(book);
                             }}><span>🔖</span>放入书架</button>
                             <button type="button" onClick={() => setSourceMessage(`目录共 ${chapterCount} 章`)}><span>☷</span>目录</button>
@@ -641,7 +672,7 @@ export default function ReadingApp({ onClose }: Props) {
                             const book: Book = { id, title, author, format: "txt", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                             await addBook(book);
                             await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
-                            saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, cover, desc, chapters });
+                            saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, bookId: String((sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? ""), cover, desc, chapters });
                             setActiveBook(book);
                           }}>▣ 开始阅读</button>
                         </div>

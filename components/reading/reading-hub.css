@@ -716,3 +716,10 @@
 .reading-page-surface--continuous{min-height:max-content}
 .reading-page-surface--continuous .reading-page-content{padding-bottom:36px}
 @media (max-width:480px){.reading-discovery-detail-content{padding:15px 13px 24px}.reading-discovery-meta-grid>div{padding:11px 10px}.reading-discovery-meta-grid strong{font-size:12px}.reading-discovery-intro p{font-size:12.5px}.reading-discovery-actions--compact button{min-height:60px}}
+
+
+/* v23：连续滚动是真正的正文纵向滚动，不受单页表面高度限制。 */
+.reading-page-surface--continuous{height:auto!important;min-height:100%!important;max-height:none!important;overflow:visible!important;display:block!important}
+.reading-page-surface--continuous .reading-page-content{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;padding-bottom:44px}
+.reading-page-surface--continuous .reading-page-stage{height:auto!important;min-height:0!important;overflow:visible!important}
+.reading-settings-actions .reading-footer-btn-active{background:var(--c-accent,#f4d77a)!important;color:#2b241f!important;border-color:transparent!important;font-weight:900!important;box-shadow:0 2px 8px rgba(80,55,20,.10)}

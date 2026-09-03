@@ -314,9 +314,14 @@ export function ReadingViewer({ book, onBack }: Props) {
         try { return window.localStorage.getItem(READING_MODE_KEY) === "continuous" ? "continuous" : "page"; } catch { return "page"; }
     });
     const switchReadingMode = (mode: "continuous" | "page") => {
+        // 连续滚动：正文容器本身负责上下滚动；翻页模式：恢复单页阅读。
         setReadingMode(mode);
         try { window.localStorage.setItem(READING_MODE_KEY, mode); } catch {}
-        if (mode === "page") scrollRef.current?.scrollTo(0, 0);
+        requestAnimationFrame(() => {
+            if (!scrollRef.current) return;
+            scrollRef.current.scrollTop = 0;
+            scrollRef.current.scrollLeft = 0;
+        });
     };
     const [chapters, setChapters] = useState<BookChapter[]>([]);
     const [chapterIndex, setChapterIndex] = useState(0);
@@ -2034,7 +2039,15 @@ export function ReadingViewer({ book, onBack }: Props) {
             {/* Reading content */}
             <div
                 ref={scrollRef}
-                className={`relative flex-1 min-h-0 px-4 ${isPdf || readingMode === "continuous" ? "overflow-auto" : "overflow-hidden"}`} style={{ paddingTop: "var(--reading-layout-top)", paddingBottom: "var(--reading-layout-bottom)" }}
+                className={`relative flex-1 min-h-0 px-4 ${isPdf || readingMode === "continuous" ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden"}`}
+                style={{
+                    paddingTop: "var(--reading-layout-top)",
+                    paddingBottom: "var(--reading-layout-bottom)",
+                    ...(readingMode === "continuous" ? {
+                        WebkitOverflowScrolling: "touch",
+                        overscrollBehaviorY: "contain",
+                    } : {}),
+                }}
                 data-ui="body"
                 onClick={handleReadingSurfaceClick}
             >
@@ -2452,8 +2465,20 @@ export function ReadingViewer({ book, onBack }: Props) {
                             <div className="reading-settings-group">
                                 <div className="reading-settings-heading"><span>阅读模式</span></div>
                                 <div className="reading-settings-actions">
-                                    <button type="button" className={`ui-btn ${readingMode === "continuous" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("continuous")}>连续滚动</button>
-                                    <button type="button" className={`ui-btn ${readingMode === "page" ? "reading-footer-btn-active" : ""}`} onClick={() => switchReadingMode("page")}>翻页模式</button>
+                                    <button
+                                        type="button"
+                                        aria-pressed={readingMode === "continuous"}
+                                        className={`ui-btn ${readingMode === "continuous" ? "reading-footer-btn-active" : ""}`}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => { e.stopPropagation(); switchReadingMode("continuous"); }}
+                                    >连续滚动</button>
+                                    <button
+                                        type="button"
+                                        aria-pressed={readingMode === "page"}
+                                        className={`ui-btn ${readingMode === "page" ? "reading-footer-btn-active" : ""}`}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => { e.stopPropagation(); switchReadingMode("page"); }}
+                                    >翻页模式</button>
                                 </div>
                             </div>
                         )}
