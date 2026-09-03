@@ -180,6 +180,47 @@ function extractCatalogChapters(value: any): any[] {
   return output;
 }
 
+function extractModuleBooks(value: any): any[] {
+  let root = value;
+  for (let i = 0; i < 4 && typeof root === "string"; i += 1) {
+    try { root = JSON.parse(root); } catch { break; }
+  }
+  const candidates: any[] = [];
+  const pushArray = (v: any) => { if (Array.isArray(v)) candidates.push(v); };
+  const d = root?.data;
+  pushArray(root?.book_info);
+  pushArray(root?.book_list);
+  pushArray(root?.list);
+  pushArray(root?.result);
+  pushArray(root?.records);
+  pushArray(d?.book_info);
+  pushArray(d?.book_list);
+  pushArray(d?.list);
+  pushArray(d?.result);
+  pushArray(d?.records);
+  pushArray(d?.publication_list);
+  pushArray(d?.cell_view?.book_data);
+  pushArray(d?.data);
+  if (Array.isArray(d)) candidates.push(d);
+  for (const arr of candidates) {
+    const books = arr.filter((item: any) => item && typeof item === "object" && (
+      item.title || item.book_name || item.bookName || item.novel_name || item.book_url || item.book_id || item.book_id_str
+    ));
+    if (books.length) return books;
+  }
+  return [];
+}
+
+function normalizeModuleData(value: any): any {
+  let root = value;
+  for (let i = 0; i < 4 && typeof root === "string"; i += 1) {
+    try { root = JSON.parse(root); } catch { break; }
+  }
+  const books = extractModuleBooks(root);
+  if (books.length) return books;
+  return root;
+}
+
 function extractSearchBooks(value: any): any[] {
   const output: any[] = [];
   const seen = new Set<string>();
@@ -318,6 +359,10 @@ export async function POST(request: NextRequest) {
         if (data == null) {
           try { data = JSON.parse(result.text); } catch { data = result.text; }
         }
+        // 书山原书源在这里会执行 normalizeResponse(result)，统一成书籍数组。
+        // 浏览器端不执行原书源 JS，所以服务端先做同等归一化；这样 style_top / type_style
+        // 即使返回多层 data、book_info、cell_view.book_data 或 JSON 套 JSON，也能直接展示。
+        data = normalizeModuleData(data);
         return { ok: true as const, data, host };
       }));
     }
