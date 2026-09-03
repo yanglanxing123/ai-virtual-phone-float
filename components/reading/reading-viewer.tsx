@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from "react";
-import { Bot, ChevronDown, ChevronRight, Languages, Menu, Minus, PenLine, SendHorizontal, X } from "lucide-react";
+import { BookOpenText, Bot, ChevronDown, ChevronRight, Languages, Menu, Minus, PenLine, SendHorizontal, X } from "lucide-react";
 import {
     loadChapters,
     loadProgress,
@@ -274,6 +274,7 @@ export function ReadingViewer({ book, onBack }: Props) {
     const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
     const [pdfTotalPages, setPdfTotalPages] = useState(0);
     const [txtPage, setTxtPage] = useState(0);
+    const [readingMode, setReadingMode] = useState<"continuous" | "page">("continuous");
     const [annotations, setAnnotations] = useState<ReadingAnnotation[]>([]);
     const [generating, setGenerating] = useState(false);
     const [companionId, setCompanionId] = useState<string | null>(null);
@@ -346,6 +347,14 @@ export function ReadingViewer({ book, onBack }: Props) {
     useEffect(() => {
         setAnnotationTranslationOverrides({});
     }, [book.id, chapterIndex, readingConfig.collapseBilingualTranslation]);
+
+    useEffect(() => {
+        if (isPdf) return;
+        try {
+            const saved = window.localStorage.getItem(`reading-mode:${book.id}`);
+            if (saved === "page" || saved === "continuous") setReadingMode(saved);
+        } catch { /* ignore */ }
+    }, [book.id, isPdf]);
 
     const companion = companionId ? (enrichedContacts.find(c => c.characterId === companionId)?.char || loadCharacters().find(c => c.id === companionId)) : null;
     const bilingualTranslationEnabled = readingConfig.bilingualTranslationEnabled === true;
@@ -760,6 +769,94 @@ export function ReadingViewer({ book, onBack }: Props) {
         });
     }, [showChat, chatExpanded, chatMessages.length, companionId]);
 
+    // iOS Safari: focusing the reading discussion input can pan the entire fixed phone surface upward.
+    // Lock the document only while this reading input owns focus, so the reading page and floating window stay put.
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof document === "undefined") return;
+        if (!/iPhone|iPad|iPod/i.test(navigator.userAgent)) return;
+
+        const mobileMq = window.matchMedia("(max-width: 500px) and (hover: none) and (pointer: coarse)");
+        if (!mobileMq.matches) return;
+
+        const body = document.body;
+        const original = {
+            position: body.style.position,
+            top: body.style.top,
+            left: body.style.left,
+            right: body.style.right,
+            width: body.style.width,
+        };
+        let locked = false;
+        let restoreScrollY = 0;
+        let raf = 0;
+
+        const isOurInput = (target: EventTarget | null) =>
+            target instanceof HTMLInputElement && !!target.closest(".reading-chat-float-input");
+
+        const forceScroll = () => {
+            if (!locked) return;
+            if (window.scrollY !== restoreScrollY) window.scrollTo(0, restoreScrollY);
+        };
+
+        const scheduleForceScroll = () => {
+            if (raf) cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(forceScroll);
+        };
+
+        const lock = () => {
+            if (locked) return;
+            locked = true;
+            restoreScrollY = window.scrollY || window.pageYOffset || 0;
+            body.style.position = "fixed";
+            body.style.top = `${-restoreScrollY}px`;
+            body.style.left = "0";
+            body.style.right = "0";
+            body.style.width = "100%";
+            scheduleForceScroll();
+        };
+
+        const unlock = () => {
+            if (!locked) return;
+            locked = false;
+            if (raf) cancelAnimationFrame(raf);
+            body.style.position = original.position;
+            body.style.top = original.top;
+            body.style.left = original.left;
+            body.style.right = original.right;
+            body.style.width = original.width;
+            window.scrollTo(0, restoreScrollY);
+        };
+
+        const onFocusIn = (event: FocusEvent) => {
+            if (isOurInput(event.target)) {
+                lock();
+                requestAnimationFrame(() => requestAnimationFrame(forceScroll));
+            }
+        };
+
+        const onFocusOut = () => {
+            window.setTimeout(() => {
+                if (!isOurInput(document.activeElement)) unlock();
+            }, 0);
+        };
+
+        document.addEventListener("focusin", onFocusIn, true);
+        document.addEventListener("focusout", onFocusOut, true);
+        window.addEventListener("scroll", scheduleForceScroll, { passive: true });
+        window.visualViewport?.addEventListener("resize", scheduleForceScroll);
+        window.visualViewport?.addEventListener("scroll", scheduleForceScroll);
+
+        return () => {
+            document.removeEventListener("focusin", onFocusIn, true);
+            document.removeEventListener("focusout", onFocusOut, true);
+            window.removeEventListener("scroll", scheduleForceScroll);
+            window.visualViewport?.removeEventListener("resize", scheduleForceScroll);
+            window.visualViewport?.removeEventListener("scroll", scheduleForceScroll);
+            if (raf) cancelAnimationFrame(raf);
+            unlock();
+        };
+    }, []);
+
     // Real-time sync: listen for chat message events from the chat app
     useEffect(() => {
         const handler = () => { refreshChatMessages(); };
@@ -1134,7 +1231,7 @@ export function ReadingViewer({ book, onBack }: Props) {
             return;
         }
 
-        if (!isPdf && currentChapter) {
+        if (!isPdf && currentChapter && readingMode === "page") {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
             const x = e.clientX - rect.left;
             const w = rect.width;
@@ -1689,6 +1786,23 @@ export function ReadingViewer({ book, onBack }: Props) {
         }
     }, [flipAnim, isPdf, txtPages, txtPage, txtTotalPages, chapterIndex, chapters.length]);
 
+    const switchReadingMode = useCallback((mode: "continuous" | "page") => {
+        if (isPdf || mode === readingMode) return;
+        const body = scrollRef.current;
+        if (mode === "page") {
+            if (body && txtPages.length > 1) {
+                const max = Math.max(1, body.scrollHeight - body.clientHeight);
+                const fraction = Math.max(0, Math.min(1, body.scrollTop / max));
+                setTxtPage(Math.round(fraction * (txtPages.length - 1)));
+            }
+        } else {
+            const fraction = txtPages.length > 1 ? txtPage / (txtPages.length - 1) : 0;
+            initialTxtScrollFractionRef.current = fraction;
+        }
+        setReadingMode(mode);
+        try { window.localStorage.setItem(`reading-mode:${book.id}`, mode); } catch { /* ignore */ }
+    }, [book.id, isPdf, readingMode, txtPage, txtPages.length]);
+
     const txtDisplayedPage = Math.min(txtPage + 1, txtTotalPages);
     const currentPageCount = isPdf ? Math.max(1, pdfTotalPages || 1) : Math.max(1, txtTotalPages);
     const txtBookSliderMax = Math.max(1, chapters.length);
@@ -1815,7 +1929,7 @@ export function ReadingViewer({ book, onBack }: Props) {
 
     // Continuous TXT reading: restore the previous approximate position and keep progress synced to scroll.
     useLayoutEffect(() => {
-        if (isPdf || !chaptersLoaded || !currentChapter || !scrollRef.current) return;
+        if (isPdf || readingMode !== "continuous" || !chaptersLoaded || !currentChapter || !scrollRef.current) return;
         const body = scrollRef.current;
         const fraction = initialTxtScrollFractionRef.current;
         if (fraction !== null) {
@@ -1825,10 +1939,10 @@ export function ReadingViewer({ book, onBack }: Props) {
             };
             requestAnimationFrame(() => requestAnimationFrame(apply));
         }
-    }, [chaptersLoaded, chapterIndex, currentChapter, isPdf]);
+    }, [chaptersLoaded, chapterIndex, currentChapter, isPdf, readingMode]);
 
     useEffect(() => {
-        if (isPdf || !chaptersLoaded || !currentChapter || !scrollRef.current) return;
+        if (isPdf || readingMode !== "continuous" || !chaptersLoaded || !currentChapter || !scrollRef.current) return;
         const body = scrollRef.current;
         const onScroll = () => {
             const max = Math.max(1, body.scrollHeight - body.clientHeight);
@@ -1840,14 +1954,21 @@ export function ReadingViewer({ book, onBack }: Props) {
         onScroll();
         body.addEventListener("scroll", onScroll, { passive: true });
         return () => body.removeEventListener("scroll", onScroll);
-    }, [captureVisibleParagraphs, chapterIndex, chaptersLoaded, currentChapter, isPdf]);
+    }, [captureVisibleParagraphs, chapterIndex, chaptersLoaded, currentChapter, isPdf, readingMode]);
 
     const handleTouchStart = (e: React.TouchEvent) => {
         touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     };
 
-    const handleTouchEnd = () => {
-        // Vertical swipe is intentionally left to native scrolling in continuous mode.
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        if (isPdf || readingMode !== "page") return;
+        const start = touchStartRef.current;
+        const touch = e.changedTouches[0];
+        if (!touch) return;
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
+        if (Math.abs(dy) < 35 || Math.abs(dy) < Math.abs(dx)) return;
+        navigateWithFlip(dy < 0 ? "forward" : "backward");
     };
 
     const activeReadingMenuMessage = readingMessageMenu
@@ -1982,8 +2103,15 @@ export function ReadingViewer({ book, onBack }: Props) {
                             onTouchStart={handleTouchStart}
                             onTouchEnd={handleTouchEnd}
                         >
-                            <div className="reading-continuous-surface" style={{ display: "block", height: "auto", minHeight: "max-content" }}>
-                                {chaptersLoaded ? renderTxtChapter(currentChapter, chapterIndex) : null}
+                            <div
+                                className={readingMode === "continuous" ? "reading-continuous-surface" : "reading-page-surface"}
+                                style={{ display: "block", height: "auto", minHeight: "max-content" }}
+                            >
+                                {chaptersLoaded ? (
+                                    readingMode === "continuous"
+                                        ? renderTxtChapter(currentChapter, chapterIndex)
+                                        : renderTxtPage(txtPage)
+                                ) : null}
                             </div>
                         </div>
 
@@ -2067,6 +2195,17 @@ export function ReadingViewer({ book, onBack }: Props) {
                             <PenLine size={22} strokeWidth={1.7} />
                             <span>写批注</span>
                         </button>
+                        {!isPdf && (
+                            <button
+                                type="button"
+                                className={`reading-footer-icon-btn ${readingMode === "page" ? "is-active" : ""}`}
+                                onClick={() => switchReadingMode(readingMode === "continuous" ? "page" : "continuous")}
+                                title={readingMode === "continuous" ? "切换到翻页模式" : "切换到连续滚动"}
+                            >
+                                <BookOpenText size={22} strokeWidth={1.7} />
+                                <span>{readingMode === "continuous" ? "翻页模式" : "连续滚动"}</span>
+                            </button>
+                        )}
                         <button
                             type="button"
                             className="reading-footer-icon-btn"
