@@ -358,10 +358,9 @@ export function ReadingViewer({ book, onBack }: Props) {
     const currentChapter = chapters[chapterIndex];
     const txtPagesChapterIndex = txtPages[0]?.find((item) => item.kind !== "gap")?.chapterIndex ?? txtPages[0]?.[0]?.chapterIndex;
     const txtPagesReadyForCurrentChapter = !isPdf && txtPages.length > 0 && txtPagesChapterIndex === chapterIndex;
-    const showTxtLoading = !isPdf && (
-        !chaptersLoaded ||
-        (chaptersLoaded && chapters.length > 0 && Boolean(currentChapter) && !txtPagesReadyForCurrentChapter)
-    );
+    // 分页计算属于排版过程，不能再作为“正文加载中”的条件。
+    // 远程书源正文由 remoteLoading 单独控制，否则 iOS 上一次排版时序抖动就会把加载层永久盖住。
+    const showTxtLoading = !isPdf && !chaptersLoaded;
 
     const readingContentRef = useRef<HTMLDivElement>(null);
 
@@ -610,6 +609,13 @@ export function ReadingViewer({ book, onBack }: Props) {
                         createDeviceId(),
                     );
                     let content = String(result.content || "");
+                    // 服务端 v16 已负责书山 AES 解码；这里保留一次轻量回退，防止旧部署返回普通 Base64。
+                    if (/^[A-Za-z0-9+/]*={0,2}$/.test(content.trim()) && content.trim().length % 4 === 0) {
+                        try {
+                            const decoded = atob(content.trim());
+                            if (/[{<一-鿿]/.test(decoded)) content = decoded;
+                        } catch { /* ignore */ }
+                    }
                     if (result.notice) content += `\n${result.notice}`;
                     if (result.sayBody) content += `\n【📢作者有话说】\n${result.sayBody}`;
                     paragraphs = htmlToParagraphs(content);
@@ -635,8 +641,9 @@ export function ReadingViewer({ book, onBack }: Props) {
                 if (!cancelled) {
                     const message = error instanceof Error ? error.message : "正文加载失败，请稍后重试。";
                     setRemoteError(message);
+                    // 失败时保留空正文，避免把错误文本永久写进章节导致后续无法重试。
                     const latest = await loadChapters(book.id);
-                    const next = latest.map((item) => item.index === chapterIndex ? { ...item, paragraphs: ["正文加载失败，请稍后重试。"] } : item);
+                    const next = latest.map((item) => item.index === chapterIndex ? { ...item, paragraphs: [] } : item);
                     await saveChapters(book.id, next);
                     setChapters(next);
                 }
