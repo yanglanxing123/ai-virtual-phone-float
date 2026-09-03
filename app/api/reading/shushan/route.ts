@@ -291,6 +291,19 @@ export async function POST(request: NextRequest) {
       }));
     }
 
+    if (action === "bookInfo") {
+      const bookId = String(input.bookId || "").trim();
+      if (!bookId || !/^\d+$/.test(bookId)) return NextResponse.json({ ok: false, error: "缺少有效 book_id" }, { status: 400 });
+      return NextResponse.json(await tryHosts(hosts, async (host) => {
+        const path = `/detail?book_id=${encodeURIComponent(bookId)}`;
+        const result = await fetchUpstream(host, path, { apiKey });
+        if (!result.response.ok) throw upstreamError(host, path, result.response.status, result.parsed, result.text);
+        const data = result.parsed?.data ?? result.parsed;
+        if (!data || (typeof data !== "object" && !Array.isArray(data))) throw new Error(`书山书籍详情返回无效数据 [${host}${path}]`);
+        return { ok: true as const, data, host };
+      }));
+    }
+
     if (action === "details") {
       const detail = jsonObject(input.detail);
       return NextResponse.json(await tryHosts(hosts, async (host) => {
