@@ -152,6 +152,14 @@ export async function searchShushan(apiKey: string, keyword: string, source?: st
   });
 }
 
+export async function getShushanBookInfo(apiKey: string, bookId: string) {
+  return shushanRequest<{ ok: true; data: ShushanDetail[] | ShushanDetail }>({
+    action: "bookInfo",
+    apiKey,
+    bookId,
+  });
+}
+
 export async function getShushanDetail(apiKey: string, item: ShushanSearchBook) {
   return shushanRequest<{ ok: true; data: ShushanDetail }>({
     action: "details",

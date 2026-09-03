@@ -7,6 +7,10 @@ export type GenericSourceBook = {
   cover?: string;
   desc?: string;
   latestChapterTitle?: string;
+  wordCount?: string | number;
+  tags?: string;
+  source?: string;
+  bookId?: string;
   bookUrl: string;
   raw?: unknown;
 };
