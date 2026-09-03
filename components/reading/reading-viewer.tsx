@@ -495,30 +495,44 @@ export function ReadingViewer({ book, onBack }: Props) {
     };
 
     const renderContinuousText = () => {
-        const items = txtPages.flat();
-        if (items.length === 0) return null;
+        if (!currentChapter || currentChapter.paragraphs.length === 0) return null;
+        const chapterAnnotations = annotations.filter((annotation) => annotation.chapterIndex === chapterIndex);
+        const annotationMap = new Map<number, ReadingAnnotation[]>();
+        for (const annotation of chapterAnnotations) {
+            const list = annotationMap.get(annotation.paragraphIndex) || [];
+            list.push(annotation);
+            annotationMap.set(annotation.paragraphIndex, list);
+        }
         return (
-            <div className="reading-page-content" ref={readingContentRef}>
-                {items.map((item, i) => (
-                    item.kind === "gap"
-                        ? <div key={i} className="reading-line-gap" data-paragraph-index={item.paragraphIndex} />
-                        : item.kind === "annotation"
-                            ? (
-                                <div key={item.annotation.id} className="reading-annotation reading-annotation-interactive" data-no-nav="true" data-paragraph-index={item.paragraphIndex}
-                                    onPointerDown={() => { longPressTimer.current = setTimeout(() => { setActiveMessageId(null); setActiveAnnotationId(item.annotation.id); }, 500); }}
-                                    onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                                    onPointerCancel={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                                    onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                                    onClick={(e) => { e.stopPropagation(); if (activeAnnotationId && activeAnnotationId !== item.annotation.id) setActiveAnnotationId(null); }}>
-                                    <span className="reading-annotation-name">{item.annotation.characterName}</span>
-                                    <ReadingAnnotationContent text={item.annotation.content} bilingualEnabled={bilingualTranslationEnabled} expanded={isAnnotationTranslationExpanded(item.annotation.id)} onToggle={() => handleAnnotationTranslationToggle(item.annotation.id)} />
-                                    {activeAnnotationId === item.annotation.id && <div className="ctx-menu reading-annotation-menu" onClick={(e) => e.stopPropagation()}>
-                                        <button onClick={() => { copyToClipboard(item.annotation.content); setActiveAnnotationId(null); }} className="ctx-menu-btn">复制</button>
-                                        <button onClick={() => { void handleDeleteReadingAnnotation(item.annotation.id); }} className="ctx-menu-btn ctx-menu-btn-danger">删除</button>
-                                    </div>}
-                                </div>
-                            )
-                            : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
+            <div className="reading-page-content reading-page-content--continuous" ref={readingContentRef}>
+                {currentChapter.paragraphs.map((paragraph, paragraphIndex) => (
+                    <div key={`p-${paragraphIndex}`}>
+                        {paragraph.split("\n").map((segment, segmentIndex, segments) => (
+                            <p
+                                key={`${paragraphIndex}-${segmentIndex}`}
+                                className={`reading-line${segmentIndex === 0 ? " reading-line-indent" : ""}${segmentIndex === segments.length - 1 ? " reading-line-seg-end" : ""}`}
+                                data-paragraph-index={paragraphIndex}
+                            >
+                                {segment || " "}
+                            </p>
+                        ))}
+                        {(annotationMap.get(paragraphIndex) || []).map((annotation) => (
+                            <div key={annotation.id} className="reading-annotation reading-annotation-interactive" data-no-nav="true" data-paragraph-index={paragraphIndex}
+                                onPointerDown={() => { longPressTimer.current = setTimeout(() => { setActiveMessageId(null); setActiveAnnotationId(annotation.id); }, 500); }}
+                                onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                                onPointerCancel={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                                onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                                onClick={(e) => { e.stopPropagation(); if (activeAnnotationId && activeAnnotationId !== annotation.id) setActiveAnnotationId(null); }}
+                            >
+                                <span className="reading-annotation-name">{annotation.characterName}</span>
+                                <ReadingAnnotationContent text={annotation.content} bilingualEnabled={bilingualTranslationEnabled} expanded={isAnnotationTranslationExpanded(annotation.id)} onToggle={() => handleAnnotationTranslationToggle(annotation.id)} />
+                                {activeAnnotationId === annotation.id && <div className="ctx-menu reading-annotation-menu" onClick={(e) => e.stopPropagation()}>
+                                    <button onClick={() => { copyToClipboard(annotation.content); setActiveAnnotationId(null); }} className="ctx-menu-btn">复制</button>
+                                    <button onClick={() => { void handleDeleteReadingAnnotation(annotation.id); }} className="ctx-menu-btn ctx-menu-btn-danger">删除</button>
+                                </div>}
+                            </div>
+                        ))}
+                    </div>
                 ))}
             </div>
         );
@@ -2050,14 +2064,17 @@ export function ReadingViewer({ book, onBack }: Props) {
                 style={{
                     paddingTop: readingMode === "continuous" ? 0 : "var(--reading-layout-top)",
                     paddingBottom: readingMode === "continuous" ? 0 : "var(--reading-layout-bottom)",
-                    paddingLeft: "var(--reading-layout-left)",
-                    paddingRight: "var(--reading-layout-right)",
+                    paddingLeft: readingMode === "continuous" ? 0 : "var(--reading-layout-left)",
+                    paddingRight: readingMode === "continuous" ? 0 : "var(--reading-layout-right)",
                     boxSizing: "border-box",
                     scrollPaddingTop: "var(--reading-layout-top)",
                     scrollPaddingBottom: "var(--reading-layout-bottom)",
                     minHeight: 0,
-                    height: 0,
+                    // 翻页模式需要用 0 高度让外层 flex 计算分页视口；滑动模式必须恢复正常高度，
+                    // 否则正文虽然已经渲染，滚动容器本身仍是 0px 高度，iOS 上会直接看到整页空白。
                     ...(readingMode === "continuous" ? {
+                        height: "auto",
+                        flex: "1 1 0%",
                         overflowY: "scroll",
                         overflowX: "hidden",
                         WebkitOverflowScrolling: "touch",
@@ -2070,6 +2087,12 @@ export function ReadingViewer({ book, onBack }: Props) {
                 data-ui="body"
                 onClick={handleReadingSurfaceClick}
             >
+                {readingMode === "continuous" && (
+                    <>
+                        <div className="reading-layout-mask reading-layout-mask--top" aria-hidden="true" />
+                        <div className="reading-layout-mask reading-layout-mask--bottom" aria-hidden="true" />
+                    </>
+                )}
                 {isPdf ? (
                     <>
                         {/* PDF native rendering */}
@@ -2118,7 +2141,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                 className={`reading-page-surface${readingMode === "continuous" ? " reading-page-surface--continuous" : ""}`}
                                 style={readingMode === "continuous" ? { height: "auto", minHeight: "100%", maxHeight: "none", overflow: "visible", display: "block" } : undefined}
                             >
-                                {txtPagesReadyForCurrentChapter ? (readingMode === "continuous" ? renderContinuousText() : renderTxtPage(txtPage)) : null}
+                                {readingMode === "continuous" ? renderContinuousText() : (txtPagesReadyForCurrentChapter ? renderTxtPage(txtPage) : null)}
                             </div>
                         </div>
 

@@ -795,8 +795,13 @@
 .reading-page-surface--continuous .reading-page-content{
   padding-top:var(--reading-layout-top,0px)!important;
   padding-bottom:calc(var(--reading-layout-bottom,0px) + 44px)!important;
-  padding-left:0!important;
-  padding-right:0!important;
+  padding-left:var(--reading-layout-left,18px)!important;
+  padding-right:var(--reading-layout-right,18px)!important;
+  box-sizing:border-box!important;
+}
+.reading-page-content--continuous .reading-line{
+  width:100%;
+  box-sizing:border-box;
 }
 
 /* v28-fix：保证左右边距变量即使未被旧 CSS 覆盖也有默认值。 */

@@ -137,30 +137,54 @@ function discoverSourceModules(source: ReadingBookSource): Array<{ title: string
     if (!t || !u || seen.has(`${t}|${u}`)) return;
     seen.add(`${t}|${u}`); items.push({ title: t, url: u });
   };
-  // 先保留书源明确写出的静态 push() 模块。
-  for (const m of text.matchAll(/push\(\s*[\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]/g)) {
-    push(m[1], m[2]);
-  }
-  // 书山的女/男频榜单是在 exploreUrl 的 JS 中动态生成的，不能只靠 push() 正则。
-  if (/vossc\.com|书山聚合|书山/.test(`${source.url} ${source.name}`)) {
-    const maleBlock = text.match(/let\s+categories\s*=\s*isMale\s*\?\s*\[([\s\S]*?)\]\s*:\s*\[([\s\S]*?)\]\s*;/);
+
+  // 书山原书源的 exploreUrl 是运行时 JS，网页端不会执行 Java/Legado JS。
+  // 这里直接把它的动态榜单模板还原成可请求的 HTTP 地址。
+  if (/vossc\.com|书山聚合|书山/i.test(`${source.url} ${source.name}`)) {
+    const maleBlock = text.match(/let\s+categories\s*=\s*isMale\s*\?\s*\[([\s\S]*?)\]\s*:\s*\[([\s\S]*?)\]\s*;/i);
     const parseCats = (block: string | undefined) => {
-      if (!block) return [];
-      return [...block.matchAll(/\{\s*id\s*:\s*(\d+)\s*,\s*name\s*:\s*[\"]([^'\"]+)['\"]\s*\}/g)].map(m => ({ id: m[1], name: m[2] }));
+      if (!block) return [] as Array<{ id: string; name: string }>;
+      return [...block.matchAll(/\{\s*id\s*:\s*(\d+)\s*,\s*name\s*:\s*(["'`])([^"'`]+)\2\s*\}/g)]
+        .map(m => ({ id: m[1], name: m[3] }));
     };
-    const male = parseCats(maleBlock?.[1]);
-    const female = parseCats(maleBlock?.[2]);
+    let male = parseCats(maleBlock?.[1]);
+    let female = parseCats(maleBlock?.[2]);
+
+    // 兼容已经被转义/压缩过的书源 JSON；即使动态 JS 被截断，也不能让发现页变空。
+    const fallbackFemale = [
+      ["1139", "古风世情"], ["8", "科幻末世"], ["746", "游戏体育"], ["1015", "女频衍生"],
+      ["248", "玄幻言情"], ["23", "种田"], ["79", "年代"], ["267", "现言脑洞"], ["246", "宫斗宅斗"],
+      ["539", "悬疑脑洞"], ["253", "古言脑洞"], ["24", "快穿"], ["749", "青春甜宠"], ["745", "星光璀璨"],
+      ["747", "女频悬疑"], ["750", "职场婚恋"], ["748", "豪门总裁"], ["1017", "民国言情"],
+    ].map(([id, name]) => ({ id, name }));
+    const fallbackMale = [
+      ["1141", "西方奇幻"], ["1140", "东方仙侠"], ["8", "科幻末世"], ["261", "都市日常"], ["124", "都市修真"],
+      ["1014", "都市高武"], ["273", "历史古代"], ["27", "战神赘婿"], ["263", "都市种田"], ["258", "传统玄幻"],
+      ["272", "历史脑洞"], ["262", "都市脑洞"], ["257", "玄幻脑洞"], ["751", "悬疑灵异"], ["504", "抗战谍战"],
+      ["746", "游戏体育"], ["718", "动漫衍生"], ["1016", "男频衍生"],
+    ].map(([id, name]) => ({ id, name }));
+    if (!female.length) female = fallbackFemale;
+    if (!male.length) male = fallbackMale;
+
     const shushanHost = /vossc\.com/i.test(source.url) ? source.url.replace(/\/$/, "") : SHUSHAN_HOSTS[0];
     const rankUrl = `${shushanHost}/style_top?rank_list_type=3&offset={{(page-1)*10}}&limit=10&category_id={{categoryId}}&gender={{genderCode}}&rankMold={{rankMold}}`;
-    // 解析不到动态数组时，仍保留书山发布页里最常用的分类，避免发现页变成空白。
-    const fallbackFemale = [{ id: "24", name: "快穿" }, { id: "79", name: "年代" }, { id: "23", name: "种田" }, { id: "248", name: "玄幻言情" }];
-    const fallbackMale = [{ id: "1141", name: "西方奇幻" }, { id: "1140", name: "东方仙侠" }, { id: "261", name: "都市日常" }, { id: "258", name: "传统玄幻" }];
-    // 用户要的是发现页里的细分榜单；把女频新书榜等动态按钮全部变成可添加模块。
-    for (const [genderCode, label, cats] of [["0", "女频", female.length ? female : fallbackFemale], ["1", "男频", male.length ? male : fallbackMale]] as const) {
+    for (const [genderCode, label, cats] of [["0", "女频", female], ["1", "男频", male]] as const) {
       for (const [rankMold, rankLabel] of [["2", "阅读榜"], ["1", "新书榜"]] as const) {
-        for (const cat of cats) push(`${label}${rankLabel} · ${cat.name}`, rankUrl.replace(/\{\{categoryId\}\}/g, cat.id).replace(/\{\{genderCode\}\}/g, genderCode).replace(/\{\{rankMold\}\}/g, rankMold), );
+        for (const cat of cats) {
+          const url = rankUrl
+            .replace(/\{\{categoryId\}\}/g, cat.id)
+            .replace(/\{\{genderCode\}\}/g, genderCode)
+            .replace(/\{\{rankMold\}\}/g, rankMold);
+          push(`${label}${rankLabel} · ${cat.name}`, url);
+        }
       }
     }
+    return items;
+  }
+
+  // 普通 Legado 书源：保留可直接识别的静态 push() 模块。
+  for (const m of text.matchAll(/push\(\s*(["'`])([^"'`]+)\1\s*,\s*(["'`])([^"'`]+)\3/g)) {
+    push(m[2], m[4]);
   }
   return items;
 }
@@ -271,17 +295,32 @@ export default function ReadingApp({ onClose }: Props) {
       const title = String(item?.title || "");
       return /vossc\.com/i.test(url) && (/女频|男频|榜|快穿|年代|玄幻|都市|分类/.test(title));
     });
-    if (savedModules.length === 0 || shouldRepairDiscoverModules) {
+    {
       const selected = installed.find(item => item.id === firstSourceId);
-      if (selected) {
+      if (selected && selected.adapter === "shushan") {
         const discovered = discoverSourceModules(selected);
-        const preferred = discovered.find(item => /女频新书榜\s*·\s*快穿/.test(item.title));
-        const defaults = discovered.filter(item => /女频(?:阅读榜|新书榜)\s*·/.test(item.title)).slice(0, 4);
-        const initial = [preferred, ...defaults].filter((item, i, arr) => item && arr.findIndex(x => x?.url === item.url) === i).slice(0, 5);
-        if (initial.length) {
-          const modules = initial.map((item, i) => ({ id: `${firstSourceId}_discover_${i}`, title: item!.title, url: item!.url, sourceId: firstSourceId, enabled: true }));
-          setHomeModules(modules);
-          try { window.localStorage.setItem("reading-home-modules-v2", JSON.stringify(modules)); } catch {}
+        const byTitle = new Map(discovered.map(item => [item.title, item.url]));
+        const isDiscoverTitle = (title: string) => /^(?:女频|男频)(?:阅读榜|新书榜)\s*·/.test(title);
+        const repaired = savedModules.map((item: any) => {
+          if (!item || typeof item !== "object") return item;
+          const title = String(item.title || "");
+          const freshUrl = byTitle.get(title);
+          if (!freshUrl || !isDiscoverTitle(title) || item.sourceId !== firstSourceId) return item;
+          return { ...item, url: freshUrl, enabled: item.enabled !== false };
+        });
+        const hasDiscover = repaired.some((item: any) => item && item.sourceId === firstSourceId && isDiscoverTitle(String(item.title || "")));
+        let finalModules = repaired as HomeModule[];
+        if (!hasDiscover) {
+          const preferred = discovered.find(item => /女频新书榜\s*·\s*快穿/.test(item.title));
+          const defaults = discovered.filter(item => /女频(?:阅读榜|新书榜)\s*·/.test(item.title)).slice(0, 4);
+          const initial = [preferred, ...defaults].filter((item, i, arr) => item && arr.findIndex(x => x?.url === item.url) === i).slice(0, 5);
+          const additions = initial.map((item, i) => ({ id: `${firstSourceId}_discover_${i}`, title: item!.title, url: item!.url, sourceId: firstSourceId, enabled: true }));
+          finalModules = [...additions, ...finalModules];
+        }
+        // 只有配置发生变化才写回，避免每次打开阅读 APP 都重置用户排序。
+        if (JSON.stringify(finalModules) !== JSON.stringify(savedModules)) {
+          setHomeModules(finalModules);
+          try { window.localStorage.setItem("reading-home-modules-v2", JSON.stringify(finalModules)); } catch {}
         }
       }
     }
@@ -381,7 +420,21 @@ export default function ReadingApp({ onClose }: Props) {
     try {
       const source = bookSources.find((item) => item.id === module.sourceId);
       if (!source) throw new Error("书源不存在");
-      const parsed = await fetchReadingSourceModule(source, module.url, 1);
+      let parsed: unknown;
+      if (source.adapter === "shushan" && /vossc\.com\/style_top|vossc\.com\/type_style/i.test(module.url)) {
+        const account = loadShushanAccount();
+        if (!account.apiKey) throw new Error("书山聚合需要先登录账号，请在书源页面完成登录");
+        const response = await fetch("/api/reading/shushan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "module", apiKey: account.apiKey, moduleUrl: module.url, host: source.url }),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.ok) throw new Error(data?.error || `榜单请求失败（${response.status}）`);
+        parsed = data.data;
+      } else {
+        parsed = await fetchReadingSourceModule(source, module.url, 1);
+      }
       const books = extractHomeBooks(parsed);
       setHomeModuleData((prev) => ({ ...prev, [module.id]: books }));
       if (!books.length) {
