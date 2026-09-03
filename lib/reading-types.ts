@@ -8,6 +8,8 @@ export type Book = {
     totalChapters: number;
     createdAt: string;
     hasCover?: boolean;
+    /** 远程书源封面直链；即使图片无法抓进 IndexedDB，书架也可以直接显示。 */
+    coverUrl?: string;
 };
 
 export type BookChapter = {
