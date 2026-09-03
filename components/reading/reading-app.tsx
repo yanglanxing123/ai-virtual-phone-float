@@ -215,6 +215,12 @@ export default function ReadingApp({ onClose }: Props) {
   const [genericBook, setGenericBook] = useState<GenericSourceBook | null>(null);
   const [genericDetail, setGenericDetail] = useState<GenericSourceDetail | null>(null);
   const [genericChapters, setGenericChapters] = useState<GenericSourceChapter[]>([]);
+  // 首页排行榜使用独立的详情状态，不复用“书源搜索页”状态，避免点击榜单书籍后被切回书源页。
+  const [homeDetailOpen, setHomeDetailOpen] = useState(false);
+  const [homeDetailBook, setHomeDetailBook] = useState<ShushanSearchBook | null>(null);
+  const [homeDetailChapters, setHomeDetailChapters] = useState<ShushanChapter[]>([]);
+  const [homeDetailLoading, setHomeDetailLoading] = useState(false);
+  const [homeDetailMessage, setHomeDetailMessage] = useState("");
   const [bookSources, setBookSources] = useState<ReadingBookSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string>("");
   const [editingSource, setEditingSource] = useState(false);
@@ -415,6 +421,164 @@ export default function ReadingApp({ onClose }: Props) {
     }
   };
 
+  const openHomeBookDetail = async (module: HomeModule, book: GenericSourceBook) => {
+    const source = bookSources.find((item) => item.id === module.sourceId);
+    if (!source) {
+      setHomeDetailMessage("书源不存在");
+      return;
+    }
+
+    setHomeDetailOpen(true);
+    setHomeDetailBook(null);
+    setHomeDetailChapters([]);
+    setHomeDetailMessage("");
+    setHomeDetailLoading(true);
+
+    try {
+      if (source.adapter !== "shushan") {
+        // 非书山榜单也保持独立详情页，不跳转到书源搜索页。
+        const detail = await getGenericDetail(source, book);
+        const chapters = await getGenericCatalog(source, detail);
+        const converted: ShushanSearchBook = {
+          title: detail.title || book.title,
+          author: detail.author || book.author,
+          cover: normalizeRemoteUrl(detail.cover || book.cover, detail.bookUrl || book.bookUrl),
+          desc: detail.desc || book.desc,
+          source: source.name,
+          book_url: detail.bookUrl || book.bookUrl,
+          wordCount: detail.wordCount,
+          tags: detail.tags,
+        };
+        setHomeDetailBook(converted);
+        setHomeDetailChapters(chapters.map((c) => ({
+          title: c.title,
+          url: c.url,
+          isPay: c.isPay,
+          isVip: c.isVip,
+          isVolume: c.isVolume,
+          cid: c.cid,
+        })));
+        return;
+      }
+
+      const raw = book.raw && typeof book.raw === "object" ? book.raw as Record<string, unknown> : {};
+      const bid = String(book.bookId || raw.book_id_str || raw.book_id || raw.bookId || "").trim();
+      const rawSource = String(book.source || raw.source || raw.source_name || raw.book_source || "").trim();
+      const inferredSource = /^\d{19}$/.test(bid) ? "番茄小说" : rawSource;
+      const shushanItem: ShushanSearchBook = {
+        ...raw,
+        title: book.title,
+        author: book.author,
+        cover: book.cover,
+        desc: book.desc,
+        source: inferredSource,
+        book_url: String(book.bookUrl || raw.book_url || raw.bookUrl || raw.detail_url || raw.detailUrl || raw.url || ""),
+        latestChapterTitle: book.latestChapterTitle,
+        wordCount: book.wordCount,
+        tags: book.tags,
+        bookid: bid || undefined,
+        book_id: bid || undefined,
+        bookId: bid || undefined,
+      };
+
+      const account = loadShushanAccount();
+      if (!account.apiKey) throw new Error("请先在书源中登录书山聚合");
+
+      let detail: ShushanSearchBook;
+      if (/^\d{19}$/.test(bid)) {
+        const info = await getShushanBookInfo(account.apiKey, bid);
+        const infoData = Array.isArray(info.data)
+          ? (info.data[0] || {})
+          : ((info.data && typeof info.data === "object") ? info.data : {});
+        const fanqieUrl = `https://api5-normal-sinfonlineb.fqnovel.com/reading/bookapi/multi-detail/v/?aid=1967&iid=1&version_code=999&book_id=${encodeURIComponent(bid)}`;
+        detail = ({
+          ...shushanItem,
+          ...infoData,
+          source: String((infoData as any)?.source || "番茄小说"),
+          book_url: String((infoData as any)?.book_url || (infoData as any)?.url || fanqieUrl),
+          bookid: String((infoData as any)?.bookid || (infoData as any)?.book_id || (infoData as any)?.bookId || bid),
+        } as ShushanSearchBook);
+      } else {
+        const result = await getShushanDetail(account.apiKey, shushanItem);
+        detail = ({
+          ...shushanItem,
+          ...(result.data || {}),
+          source: String((result.data as any)?.source || shushanItem.source),
+          book_url: String((result.data as any)?.book_url || (result.data as any)?.url || shushanItem.book_url),
+          bookid: String((result.data as any)?.bookid || (result.data as any)?.book_id || (result.data as any)?.bookId || shushanItem.bookid || ""),
+        } as ShushanSearchBook);
+      }
+
+      const catalog = await getShushanCatalog(account.apiKey, detail);
+      const chapters = Array.isArray(catalog.data) ? catalog.data : [];
+      setHomeDetailBook(detail);
+      setHomeDetailChapters(chapters);
+    } catch (error) {
+      setHomeDetailMessage(error instanceof Error ? error.message : "打开书籍失败");
+    } finally {
+      setHomeDetailLoading(false);
+    }
+  };
+
+  const closeHomeBookDetail = () => {
+    setHomeDetailOpen(false);
+    setHomeDetailBook(null);
+    setHomeDetailChapters([]);
+    setHomeDetailMessage("");
+  };
+
+  const saveHomeDetailBook = async (mode: "shelf" | "read") => {
+    if (!homeDetailBook) return;
+    const chapters = homeDetailChapters.filter((chapter) => !chapter.isVolume);
+    if (!chapters.length) {
+      setHomeDetailMessage("目录暂时没有加载成功，无法加入书架");
+      return;
+    }
+
+    const title = homeDetailBook.title || homeDetailBook.name || "未命名";
+    const author = homeDetailBook.author || "未知作者";
+    const cover = normalizeRemoteUrl(homeDetailBook.cover, homeDetailBook.book_url);
+    const id = `shushan_${Date.now()}`;
+    const coverSaved = await downloadCoverForBook(id, cover);
+    const book: Book = {
+      id,
+      title,
+      author,
+      format: "txt",
+      totalChapters: chapters.length,
+      createdAt: new Date().toISOString(),
+      hasCover: coverSaved,
+      coverUrl: cover,
+    } as Book & { coverUrl?: string };
+
+    await addBook(book);
+    await saveChapters(id, chapters.map((chapter, index) => ({
+      id: `${id}_ch${index}`,
+      bookId: id,
+      index,
+      title: chapter.title || `第${index + 1}章`,
+      paragraphs: [],
+    })));
+    const rawBookId = homeDetailBook.bookid ?? homeDetailBook.book_id ?? homeDetailBook.bookId;
+    saveRemoteBook(id, {
+      source: homeDetailBook.source || "书山聚合",
+      url: homeDetailBook.book_url,
+      name: title,
+      apiKey: loadShushanAccount().apiKey,
+      bookId: rawBookId == null ? "" : String(rawBookId),
+      cover,
+      desc: homeDetailBook.desc,
+      chapters,
+    });
+
+    if (mode === "read") {
+      setActiveBook(book);
+      closeHomeBookDetail();
+    } else {
+      setHomeDetailMessage("✅ 已加入书架");
+    }
+  };
+
   const refreshHomeModule = async (module: HomeModule) => {
     setHomeModuleLoading(module.id);
     try {
@@ -530,6 +694,39 @@ export default function ReadingApp({ onClose }: Props) {
             onBack={() => setActiveBook(null)}
           />
         </div>
+      ) : homeDetailOpen ? (
+        <div className="reading-hub-home-detail-page">
+          <button type="button" className="reading-hub-backlink" onClick={closeHomeBookDetail}>← 返回排行榜</button>
+          {!homeDetailBook ? (
+            <div className="reading-hub-source-loading">{homeDetailLoading ? "正在获取书籍详情与目录…" : (homeDetailMessage || "暂时无法打开这本书")}</div>
+          ) : (
+          <div className="reading-discovery-detail-card" style={homeDetailBook.cover ? { backgroundImage: `linear-gradient(180deg, rgba(255,250,247,.62), rgba(255,250,247,.96) 58%, rgba(255,250,247,.99)), url("${normalizeRemoteUrl(homeDetailBook.cover, homeDetailBook.book_url)}")` } : undefined}>
+            <div className="reading-discovery-detail-content">
+              <div className="reading-discovery-book-head">
+                <div className="reading-discovery-cover">{homeDetailBook.cover ? <img src={normalizeRemoteUrl(homeDetailBook.cover, homeDetailBook.book_url)} alt="" /> : <BookOpen size={32} />}</div>
+                <div className="reading-discovery-book-main"><h2>{homeDetailBook.title || homeDetailBook.name || "未命名"}</h2><p>{homeDetailBook.author || "未知作者"}</p><span>📚 {homeDetailBook.source || "书山聚合"}</span></div>
+              </div>
+              <div className="reading-discovery-meta-grid">
+                <div><small>标签</small><strong>{detailTags(homeDetailBook)}</strong></div>
+                <div><small>评分</small><strong>{detailRating(homeDetailBook)}</strong></div>
+                <div><small>状态</small><strong>{detailStatus(homeDetailBook)}</strong></div>
+                <div><small>最近更新</small><strong>{detailUpdatedAt(homeDetailBook) || "暂无"}</strong></div>
+                <div><small>全书字数</small><strong>{detailWordCount(homeDetailBook)}</strong></div>
+                <div><small>章节</small><strong>{homeDetailChapters.filter((x) => !x.isVolume).length} 章</strong></div>
+              </div>
+              <section className="reading-discovery-intro"><h3>简介</h3><p>{homeDetailBook.desc || "暂无简介"}</p></section>
+              {homeDetailMessage && <div className="reading-hub-source-help">{homeDetailMessage}</div>}
+              <div className="reading-discovery-actions reading-discovery-actions--compact">
+                <button type="button" disabled={homeDetailLoading || !homeDetailChapters.some((x) => !x.isVolume)} onClick={() => void saveHomeDetailBook("shelf")}><span>🔖</span>加入书架</button>
+                <button type="button" disabled={homeDetailLoading || !homeDetailChapters.some((x) => !x.isVolume)} onClick={() => void saveHomeDetailBook("read")}><span>▣</span>开始阅读</button>
+                <button type="button" onClick={() => setHomeDetailMessage(`目录共 ${homeDetailChapters.filter((x) => !x.isVolume).length} 章`)}><span>☷</span>查看目录</button>
+              </div>
+              {homeDetailLoading && <div className="reading-hub-source-loading">正在获取书籍详情与目录…</div>}
+              {!homeDetailLoading && homeDetailChapters.length > 0 && <div className="reading-hub-chapter-list">{homeDetailChapters.filter((x) => !x.isVolume).slice(0, 120).map((chapter, index) => <div key={`${chapter.title}-${index}`}><span>{chapter.title || `第${index + 1}章`}</span>{(chapter.isPay || chapter.isVip) && <em>付费</em>}</div>)}</div>}
+            </div>
+          </div>
+          )}
+        </div>
       ) : (
         <>
           <header className="reading-hub-topbar">
@@ -625,7 +822,7 @@ export default function ReadingApp({ onClose }: Props) {
                 ) : (
                 <>
                 <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>排行榜</h2><p>直接使用书源发现页：阅读榜、新书榜、分类榜等都可以单独添加。</p></div></div>
-                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={async()=>{const source=bookSources.find(x=>x.id===module.sourceId);if(!source)return;setSelectedSourceId(source.id);setSourceLoading(true);setSourceMessage("");setGenericBook(null);setGenericDetail(null);setGenericChapters([]);setSelectedSourceBook(null);setSourceDetail(null);setSourceChapters([]);try{if(source.adapter==="shushan"){const raw=book.raw&&typeof book.raw==="object"?book.raw as Record<string,unknown>:{};const bid=String(book.bookId||raw.book_id_str||raw.book_id||raw.bookId||"").trim();const rawSource=String(book.source||raw.source||raw.source_name||raw.book_source||"").trim();const inferredSource=/^\d{19}$/.test(bid)?"番茄小说":rawSource;const shushanItem:ShushanSearchBook={...raw,title:book.title,author:book.author,cover:book.cover,desc:book.desc,source:inferredSource,book_url:String(book.bookUrl||raw.book_url||raw.bookUrl||raw.detail_url||raw.detailUrl||raw.url||""),latestChapterTitle:book.latestChapterTitle,wordCount:book.wordCount,tags:book.tags,bookid:bid||undefined,book_id:bid||undefined,bookId:bid||undefined};const account=loadShushanAccount();let detail:ShushanSearchBook;if(/^\d{19}$/.test(bid)){const info=await getShushanBookInfo(account.apiKey,bid);const infoData=Array.isArray(info.data)?(info.data[0]||{}):((info.data&&typeof info.data==="object")?info.data:{});const fanqieUrl=`https://api5-normal-sinfonlineb.fqnovel.com/reading/bookapi/multi-detail/v/?aid=1967&iid=1&version_code=999&book_id=${encodeURIComponent(bid)}`;detail=({ ...shushanItem, ...infoData, source:String((infoData as any)?.source||"番茄小说"), book_url:String((infoData as any)?.book_url||(infoData as any)?.url||fanqieUrl), bookid:String((infoData as any)?.bookid||(infoData as any)?.book_id||(infoData as any)?.bookId||bid) } as ShushanSearchBook);}else{const result=await getShushanDetail(account.apiKey,shushanItem);detail=({ ...shushanItem, ...(result.data||{}), source:String((result.data as any)?.source||shushanItem.source), book_url:String((result.data as any)?.book_url||(result.data as any)?.url||shushanItem.book_url), bookid:String((result.data as any)?.bookid||(result.data as any)?.book_id||(result.data as any)?.bookId||shushanItem.bookid||"") } as ShushanSearchBook);}setSelectedSourceBook(shushanItem);setSourceDetail(detail);const cat=await getShushanCatalog(account.apiKey,detail);setSourceChapters(cat.data||[]);}else{setGenericBook(book);const detail=await getGenericDetail(source,book);setGenericDetail(detail);const chapters=await getGenericCatalog(source,detail);setGenericChapters(chapters);}}catch(error){setSourceMessage(error instanceof Error?error.message:"打开书籍失败");}finally{setSourceLoading(false);}}}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
+                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={() => { void openHomeBookDetail(module, book); }}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
                 </div>
                 </>
                 )}
