@@ -285,8 +285,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(await tryHosts(chooseHosts([preferredHost, parsedUrl.origin]), async (host) => {
         const result = await fetchUpstream(host, path, { apiKey });
         if (!result.response.ok) throw upstreamError(host, path, result.response.status, result.parsed, result.text);
-        let data = result.parsed;
-        if (data == null) { try { data = JSON.parse(result.text); } catch { data = result.text; } }
+        // 原书山书源的 java.ajax() 返回的是字符串，原规则会再 JSON.parse(result)。
+        // 这里也兼容“JSON 套 JSON”，否则发现页拿到字符串后前端无法提取书籍。
+        let data: any = result.parsed;
+        if (typeof data === "string") {
+          try { data = JSON.parse(data); } catch {}
+        }
+        if (typeof data === "string") {
+          try { data = JSON.parse(data); } catch {}
+        }
+        if (data == null) {
+          try { data = JSON.parse(result.text); } catch { data = result.text; }
+        }
         return { ok: true as const, data, host };
       }));
     }
