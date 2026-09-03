@@ -392,9 +392,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(await tryHosts(hosts, async (host) => {
         const result = await fetchUpstream(host, "/catalog", { method: "POST", body: catalog, apiKey });
         if (!result.response.ok) throw upstreamError(host, "/catalog", result.response.status, result.parsed, result.text);
-        // 不同书山节点/版本可能返回 data 数组，也可能包在 chapters/list/catalog 等对象里。
-        // 统一提取成章节数组，避免前端看到“0 章”。
-        const data = extractCatalogChapters(result.parsed?.data ?? result.parsed);
+        // 不同书山节点/版本的 /catalog 返回结构并不完全一致。
+        // 优先保留服务端明确返回的 data 数组：即使某些节点的章节字段命名很特殊，
+        // 也不能因为本地提取器不认识字段就把整本书错误地变成“0 章”。
+        let rawData: any = result.parsed?.data ?? result.parsed;
+        for (let i = 0; i < 3 && typeof rawData === "string"; i += 1) {
+          try { rawData = JSON.parse(rawData); } catch { break; }
+        }
+        const directList = Array.isArray(rawData)
+          ? rawData
+          : Array.isArray(rawData?.chapters) ? rawData.chapters
+          : Array.isArray(rawData?.chapter_list) ? rawData.chapter_list
+          : Array.isArray(rawData?.chapterList) ? rawData.chapterList
+          : Array.isArray(rawData?.list) ? rawData.list
+          : Array.isArray(rawData?.catalog) ? rawData.catalog
+          : null;
+        const data = directList && directList.length
+          ? directList.map((item: any, index: number) => ({
+              ...(item && typeof item === "object" ? item : {}),
+              title: String(item?.title ?? item?.chapter_title ?? item?.chapterName ?? item?.chapter_name ?? item?.name ?? `第${index + 1}章`),
+              isVolume: item?.isVolume === true || item?.is_volume === true,
+            }))
+          : extractCatalogChapters(rawData);
         return { ok: true as const, data, host };
       }));
     }
