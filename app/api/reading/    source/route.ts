@@ -63,6 +63,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "仅支持 HTTP/HTTPS" }, { status: 400 });
     }
 
+    // 书源封面等二进制资源也统一走服务端代理，避免 iOS Safari/CORS 导致
+    // IndexedDB 无法保存跨域图片。只允许图片/字体等小型静态资源。
+    if (body?.asset === true) {
+      await assertSafeTarget(target);
+      const controller = new AbortController();
+      const timeoutMs = Math.max(3000, Math.min(20000, Number(body?.timeoutMs) || 12000));
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(target.toString(), {
+          method: "GET",
+          headers: {
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Safari/605.1.15",
+          },
+          redirect: "follow",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          return NextResponse.json({ ok: false, error: `资源返回 HTTP ${response.status}` }, { status: 502 });
+        }
+        const contentType = response.headers.get("content-type") || "application/octet-stream";
+        if (!/^(image\/|font\/|application\/octet-stream)/i.test(contentType)) {
+          return NextResponse.json({ ok: false, error: "目标不是可保存的静态资源" }, { status: 415 });
+        }
+        const buffer = await response.arrayBuffer();
+        if (buffer.byteLength > 8 * 1024 * 1024) {
+          return NextResponse.json({ ok: false, error: "资源过大，未保存" }, { status: 413 });
+        }
+        return new NextResponse(buffer, {
+          status: 200,
+          headers: {
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=3600",
+          },
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     const method = String(body?.method || "GET").toUpperCase();
     const headers = cleanHeaders(body?.headers);
     if (!headers.Accept) headers.Accept = "text/html,application/json;q=0.9,*/*;q=0.8";
