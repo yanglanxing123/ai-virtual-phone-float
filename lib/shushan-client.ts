@@ -18,6 +18,9 @@ export type ShushanSearchBook = {
   wordCount?: string | number;
   tags?: string;
   tab?: string;
+  bookid?: string | number;
+  book_id?: string | number;
+  bookId?: string | number;
   [key: string]: unknown;
 };
 
@@ -41,6 +44,7 @@ export type ShushanRemoteBook = {
   url: string;
   name: string;
   apiKey: string;
+  bookId?: string;
   cover?: string;
   desc?: string;
   chapters?: ShushanChapter[];
@@ -170,11 +174,14 @@ export async function getShushanDetail(apiKey: string, item: ShushanSearchBook) 
       name: item.title,
       cover: item.cover,
       desc: item.desc,
+      bookid: item.bookid ?? item.book_id ?? item.bookId ?? "",
     },
   });
 }
 
 export async function getShushanCatalog(apiKey: string, detail: ShushanDetail) {
+  const rawBookId = detail.bookid ?? detail.book_id ?? detail.bookId;
+  const bookId = rawBookId == null ? "" : String(rawBookId).trim();
   return shushanRequest<{ ok: true; data: ShushanChapter[] }>({
     action: "catalog",
     apiKey,
@@ -183,6 +190,7 @@ export async function getShushanCatalog(apiKey: string, detail: ShushanDetail) {
       url: detail.book_url,
       name: detail.title || detail.name || "",
       tab: detail.tab || "novel",
+      bookid: bookId,
     },
   });
 }
