@@ -938,8 +938,6 @@ function useIosSafariKeyboardScrollLock() {
     const isChatEditable = (target: EventTarget | null): target is HTMLElement => {
       if (!(target instanceof HTMLElement)) return false;
       if (!isKeyboardEditableElement(target)) return false;
-      // The reading app has its own floating discussion window, so its
-      // composer must use the same iOS document lock as the main chat app.
       return !!target.closest(".chat-app, .reading-chat-float-input");
     };
 
