@@ -270,6 +270,23 @@ async function fetchSource(request: {
   return data as ProxyPayload & { setCookie?: string };
 }
 
+export async function fetchReadingSourceModule(source: ReadingBookSource, moduleUrl: string, page = 1): Promise<unknown> {
+  const state = loadReadingSourceState(source.id);
+  const vars = { ...(state.variables || {}), key: "", page: String(page), pageIndex: String(page), keyword: "" };
+  const templated = replaceVars(moduleUrl, vars);
+  const request = parseRequestUrl(templated, source.url);
+  if (!/^https?:/i.test(request.url)) throw new Error("首页模块地址不是有效的 HTTP/HTTPS 地址");
+  const options = request.options || {};
+  const payload = await fetchSource({
+    source,
+    url: request.url,
+    method: options.method || "GET",
+    headers: { ...parseHeaderRule(source, vars), ...(options.headers || {}) },
+    body: typeof options.body === "string" ? replaceVars(options.body, vars) : options.body,
+  });
+  return parsePayload(payload.text, payload.contentType);
+}
+
 function mergeCookies(existing: string | undefined, setCookie: string | undefined) {
   const map = new Map<string, string>();
   for (const item of (existing || "").split(/;\s*/).filter(Boolean)) {
@@ -837,7 +854,8 @@ export async function getGenericDetail(source: ReadingBookSource, book: GenericS
   const title = scalar(root, ruleString(rule, "name", "title")) || book.title;
   const author = scalar(root, ruleString(rule, "author")) || book.author;
   const desc = scalar(root, ruleString(rule, "intro", "desc", "content")) || book.desc;
-  const cover = scalar(root, ruleString(rule, "coverUrl", "cover")) || book.cover;
+  const coverRaw = scalar(root, ruleString(rule, "coverUrl", "cover")) || book.cover;
+  const cover = coverRaw ? joinUrl(payload.url || source.url, coverRaw) : undefined;
   const tocRule = ruleString(rule, "tocUrl", "catalogUrl");
   const tocUrl = tocRule ? joinUrl(payload.url || source.url, scalar(root, tocRule)) : book.bookUrl;
 
