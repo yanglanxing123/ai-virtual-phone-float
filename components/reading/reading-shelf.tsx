@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronLeft, Palette } from "lucide-react";
 import { loadBooks, addBook, deleteBook, saveChapters, loadProgress, saveRawFile, saveCover, loadCover } from "@/lib/reading-storage";
+import { getReadingRemoteBook } from "@/lib/reading-source";
 import { decodeTxtArrayBuffer, parseTxtContent, parseEpubFile, PDF_PAGES_PER_CHAPTER } from "@/lib/reading-parser";
 import type { Book, BookChapter } from "@/lib/reading-types";
 import type { ReadingAppearance } from "@/lib/reading-appearance";
@@ -142,6 +143,11 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                         coverMap[b.id] = url;
                         blobUrls.push(url);
                     }
+                }
+                // 远程书源通常是 TXT 虚拟书：即使封面没能抓进 IndexedDB，也保留原始封面直链。
+                if (!coverMap[b.id]) {
+                    const directCover = (b as Book & { coverUrl?: string }).coverUrl || getReadingRemoteBook(b.id)?.book?.cover;
+                    if (directCover) coverMap[b.id] = directCover;
                 }
             }
             setCoverUrls(coverMap);

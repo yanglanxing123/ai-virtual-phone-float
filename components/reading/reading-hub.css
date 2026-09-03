@@ -637,3 +637,11 @@
 .reading-hub-native-functions button.is-separator { justify-content:center; background:rgba(247,243,237,.7); color:#a0948a; font-size:12px; border-style:dashed; }
 .reading-hub-native-functions button:disabled { opacity:1; cursor:default; }
 .reading-hub-module-cover img, .reading-hub-result-cover img, .reading-hub-detail-cover img { display:block; width:100%; height:100%; object-fit:cover; }
+
+
+/* v17：远程书源发布页信息与发现页细分榜单 */
+.reading-hub-source-info{margin-top:14px;padding:14px;border:1px solid rgba(120,100,90,.12);border-radius:16px;background:rgba(255,250,245,.72)}
+.reading-hub-source-info pre{margin:10px 0 0;white-space:pre-wrap;word-break:break-word;font:inherit;font-size:12px;line-height:1.65;color:#766b65;max-height:240px;overflow:auto}
+.reading-hub-publish-link{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border:0;border-radius:10px;background:#ffe58f;color:#4e443d;font-weight:700}
+.reading-hub-home-source-items{max-height:520px;overflow:auto}
+.reading-hub-home-source-items button{max-width:100%}
