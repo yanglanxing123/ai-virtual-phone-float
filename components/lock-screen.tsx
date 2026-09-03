@@ -5,19 +5,20 @@ import { Camera, Delete, Flashlight, LockKeyhole, ChevronUp, Settings2 } from "l
 import { getThemeAssetMap, saveThemeAssetFromBlob, deleteThemeAsset, describeAssetSaveError } from "@/lib/theme-storage";
 
 const LOCK_SCREEN_SETTINGS_KEY = "ai_phone_lock_screen_settings_v1";
-const DEFAULT_LOCK_PASSWORD = "123456";
 
 export type LockScreenSettings = {
   wallpaperAssetId: string | null;
   wallpaperLibrary: string[];
   password: string;
+  passwordConfigured: boolean;
   passwordEnabled: boolean;
 };
 
 const DEFAULT_SETTINGS: LockScreenSettings = {
   wallpaperAssetId: null,
   wallpaperLibrary: [],
-  password: DEFAULT_LOCK_PASSWORD,
+  password: "",
+  passwordConfigured: false,
   passwordEnabled: true,
 };
 
@@ -29,10 +30,12 @@ function normalizeSettings(raw: unknown): LockScreenSettings {
   const id = typeof source.wallpaperAssetId === "string" && source.wallpaperAssetId.trim() ? source.wallpaperAssetId.trim() : null;
   if (id && !library.includes(id)) library.unshift(id);
   const rawPassword = typeof source.password === "string" ? source.password.replace(/\D/g, "").slice(0, 8) : "";
+  const configured = typeof source.passwordConfigured === "boolean" ? source.passwordConfigured : false;
   return {
     wallpaperAssetId: id,
     wallpaperLibrary: library,
-    password: rawPassword.length >= 4 ? rawPassword : DEFAULT_LOCK_PASSWORD,
+    password: rawPassword.length >= 4 ? rawPassword : "",
+    passwordConfigured: configured && rawPassword.length >= 4,
     passwordEnabled: typeof source.passwordEnabled === "boolean" ? source.passwordEnabled : true,
   };
 }
@@ -119,6 +122,7 @@ export function LockScreen({
   const [mode, setMode] = useState<"lock" | "passcode">("lock");
   const [now, setNow] = useState(() => new Date());
   const [entered, setEntered] = useState("");
+  const [setupConfirm, setSetupConfirm] = useState("");
   const [error, setError] = useState(false);
   const gestureRef = useRef<{ startY: number; active: boolean }>({ startY: 0, active: false });
 
@@ -153,7 +157,7 @@ export function LockScreen({
   const displayDate = useMemo(() => formatChineseDate(now), [now]);
 
   const unlock = () => {
-    if (!settings.passwordEnabled || entered === settings.password) {
+    if (!settings.passwordEnabled || (settings.passwordConfigured && entered === settings.password)) {
       setEntered("");
       setError(false);
       onUnlock();
@@ -179,22 +183,61 @@ export function LockScreen({
     }
   };
 
+  const finishPasswordSetup = (value: string) => {
+    if (value.length < 4) return;
+    if (!setupConfirm) {
+      setSetupConfirm(value);
+      setEntered("");
+      setError(false);
+      return;
+    }
+    if (value !== setupConfirm) {
+      setError(true);
+      setEntered("");
+      setSetupConfirm("");
+      window.setTimeout(() => setError(false), 520);
+      return;
+    }
+    const next = { ...settings, password: value, passwordConfigured: true, passwordEnabled: true };
+    writeLockScreenSettings(next);
+    setSettings(next);
+    setEntered("");
+    setSetupConfirm("");
+    setError(false);
+    onUnlock();
+  };
+
   const pressKey = (digit: string) => {
     if (entered.length >= 8) return;
     setError(false);
     const next = `${entered}${digit}`;
     setEntered(next);
-    if (next.length === settings.password.length) {
-      window.setTimeout(() => {
-        if (next === settings.password) {
-          onUnlock();
-        } else {
-          setError(true);
-          setEntered("");
-          window.setTimeout(() => setError(false), 520);
-        }
-      }, 80);
+    if (next.length >= 4 && next.length <= 8) {
+      if (!settings.passwordConfigured) {
+        // 首次设置密码：只有点击“继续”才进入确认，避免误触直接提交。
+        return;
+      }
+      if (next.length === settings.password.length) {
+        window.setTimeout(() => {
+          if (next === settings.password) {
+            onUnlock();
+          } else {
+            setError(true);
+            setEntered("");
+            window.setTimeout(() => setError(false), 520);
+          }
+        }, 80);
+      }
     }
+  };
+
+  const submitSetup = () => {
+    if (entered.length < 4 || entered.length > 8) {
+      setError(true);
+      window.setTimeout(() => setError(false), 520);
+      return;
+    }
+    finishPasswordSetup(entered);
   };
 
   return (
@@ -265,13 +308,13 @@ export function LockScreen({
                   }}
                 >
                   <LockKeyhole size={20} strokeWidth={2} style={{ opacity: .9 }} />
-                  <div style={{ marginTop: 12, fontSize: 16, fontWeight: 600 }}>请输入密码</div>
+                  <div style={{ marginTop: 12, fontSize: 16, fontWeight: 600 }}>{settings.passwordConfigured ? "请输入密码" : (setupConfirm ? "再次输入密码" : "设置锁屏密码")}</div>
                   <div style={{ marginTop: 15, display: "flex", gap: 10, minHeight: 10, animation: error ? "lockscreen-shake .42s ease" : undefined }}>
                     {Array.from({ length: settings.password.length }).map((_, index) => (
                       <span key={index} style={{ width: 9, height: 9, borderRadius: 50, background: index < entered.length ? "white" : "rgba(255,255,255,.34)", boxShadow: "0 0 8px rgba(255,255,255,.2)" }} />
                     ))}
                   </div>
-                  <div style={{ marginTop: 12, minHeight: 18, fontSize: 12, color: error ? "#ffb7b7" : "rgba(255,255,255,0)" }}>密码错误</div>
+                  <div style={{ marginTop: 12, minHeight: 18, fontSize: 12, color: error ? "#ffb7b7" : "rgba(255,255,255,0)" }}>{error ? (settings.passwordConfigured ? "密码错误" : "两次密码不一致") : ""}</div>
 
                   <div style={{ marginTop: "auto", width: "min(330px, 100%)", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
                     {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((digit, index) => (
@@ -287,8 +330,8 @@ export function LockScreen({
                   </div>
 
                   <div style={{ width: "100%", display: "flex", justifyContent: "space-between", marginTop: 15, fontSize: 12, opacity: .84 }}>
-                    <button type="button" onClick={() => setMode("lock")} style={{ background: "transparent", border: 0, color: "white", padding: 8 }}>返回锁屏</button>
-                    <span>密码 {settings.password.length} 位</span>
+                    <button type="button" onClick={() => { setMode("lock"); setEntered(""); setSetupConfirm(""); setError(false); }} style={{ background: "transparent", border: 0, color: "white", padding: 8 }}>返回锁屏</button>
+                    {!settings.passwordConfigured ? <button type="button" onClick={submitSetup} style={{ background: "transparent", border: 0, color: "white", padding: 8, fontWeight: 700 }}>继续</button> : <span>密码 {settings.password.length} 位</span>}
                   </div>
                   <div style={{ position: "absolute", bottom: 7, left: "50%", transform: "translateX(-50%)", width: 34, height: 4, borderRadius: 4, background: "rgba(255,255,255,.9)" }} />
                 </div>
@@ -369,7 +412,7 @@ export function LockScreenSettingsPage({ onNotice }: { onNotice: (text: string) 
       onNotice("密码至少需要 4 位数字");
       return;
     }
-    applySettings({ ...settings, password: clean });
+    applySettings({ ...settings, password: clean, passwordConfigured: true, passwordEnabled: true });
     onNotice("锁屏密码已更新");
   };
 
@@ -396,7 +439,7 @@ export function LockScreenSettingsPage({ onNotice }: { onNotice: (text: string) 
           <input value={draftPassword} onChange={e => setDraftPassword(e.target.value.replace(/\D/g, "").slice(0, 8))} inputMode="numeric" type="password" maxLength={8} style={{ flex: 1, height: 40, border: "1px solid var(--c-card-border)", borderRadius: 12, background: "var(--c-input)", padding: "0 12px", color: "var(--c-text-title)" }} />
           <button type="button" onClick={savePassword} style={{ border: 0, borderRadius: 12, padding: "0 14px", background: "var(--c-text-title)", color: "white", fontWeight: 700 }}>修改</button>
         </div>
-        <div style={{ marginTop: 7, fontSize: 11, color: "var(--c-icon)" }}>默认密码：123456，可修改为 4～8 位数字。</div>
+        <div style={{ marginTop: 7, fontSize: 11, color: "var(--c-icon)" }}>首次使用请先设置 4～8 位数字密码；设置后可在这里修改。</div>
       </div>
 
       <div className="flex flex-col items-center justify-center pt-2 pb-4 border-b border-black/5">
