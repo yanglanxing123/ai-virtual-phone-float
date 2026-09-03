@@ -782,16 +782,6 @@
   min-width:0;
   min-height:0;
 }
-.reading-layout-mask{
-  position:absolute;
-  left:0;
-  right:0;
-  z-index:30;
-  pointer-events:none;
-  background:var(--c-page-body-bg,#fffced);
-}
-.reading-layout-mask--top{top:0;height:var(--reading-layout-top,0px);}
-.reading-layout-mask--bottom{bottom:0;height:var(--reading-layout-bottom,0px);}
 .reading-page-surface--continuous .reading-page-content{
   padding-top:var(--reading-layout-top,0px)!important;
   padding-bottom:calc(var(--reading-layout-bottom,0px) + 44px)!important;
@@ -806,3 +796,61 @@
 
 /* v28-fix：保证左右边距变量即使未被旧 CSS 覆盖也有默认值。 */
 .reading-app-surface{--reading-layout-left:18px;--reading-layout-right:18px;}
+
+
+/* v31：滑动阅读布局最终修复
+ * - 底部栏恢复为阅读器 flex 布局的一部分，不再浮在正文上方；
+ * - 去掉固定白色遮罩，避免遮罩落在正文中间形成横向白块；
+ * - 滑动正文直接使用上下左右 padding，调边距不会侵入底部栏；
+ * - 连续正文不再强制 min-height:100%，避免第一页出现整块空白。
+ */
+.reading-app-surface {
+  --reading-layout-left: 18px;
+  --reading-layout-right: 18px;
+}
+.reading-app-surface .reading-content-frame {
+  position: relative;
+  display: flex;
+  flex: 1 1 0% !important;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.reading-app-surface .reading-footer {
+  position: relative !important;
+  inset: auto !important;
+  flex: 0 0 auto !important;
+  z-index: 50;
+}
+.reading-app-surface .reading-content-frame > [data-ui="body"] {
+  flex: 1 1 0% !important;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.reading-app-surface .reading-page-surface--continuous {
+  min-height: max-content !important;
+  height: auto !important;
+}
+.reading-app-surface .reading-page-surface--continuous .reading-page-content {
+  min-height: 0 !important;
+  height: auto !important;
+  padding-top: 0 !important;
+  padding-bottom: 44px !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+/* 边距属于滚动视口本身，正文不会再覆盖 footer。 */
+.reading-app-surface .reading-content-frame > [data-ui="body"] {
+  padding-top: var(--reading-layout-top) !important;
+  padding-bottom: var(--reading-layout-bottom) !important;
+  padding-left: var(--reading-layout-left) !important;
+  padding-right: var(--reading-layout-right) !important;
+  scroll-padding-top: var(--reading-layout-top);
+  scroll-padding-bottom: var(--reading-layout-bottom);
+}
+.reading-app-surface .reading-page-content--continuous .reading-line {
+  width: 100%;
+  box-sizing: border-box;
+}

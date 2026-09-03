@@ -2062,10 +2062,10 @@ export function ReadingViewer({ book, onBack }: Props) {
                 ref={scrollRef}
                 className={`relative flex-1 min-h-0 ${isPdf || readingMode === "continuous" ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden"}`}
                 style={{
-                    paddingTop: readingMode === "continuous" ? 0 : "var(--reading-layout-top)",
-                    paddingBottom: readingMode === "continuous" ? 0 : "var(--reading-layout-bottom)",
-                    paddingLeft: readingMode === "continuous" ? 0 : "var(--reading-layout-left)",
-                    paddingRight: readingMode === "continuous" ? 0 : "var(--reading-layout-right)",
+                    paddingTop: "var(--reading-layout-top)",
+                    paddingBottom: "var(--reading-layout-bottom)",
+                    paddingLeft: "var(--reading-layout-left)",
+                    paddingRight: "var(--reading-layout-right)",
                     boxSizing: "border-box",
                     scrollPaddingTop: "var(--reading-layout-top)",
                     scrollPaddingBottom: "var(--reading-layout-bottom)",
@@ -2087,12 +2087,6 @@ export function ReadingViewer({ book, onBack }: Props) {
                 data-ui="body"
                 onClick={handleReadingSurfaceClick}
             >
-                {readingMode === "continuous" && (
-                    <>
-                        <div className="reading-layout-mask reading-layout-mask--top" aria-hidden="true" />
-                        <div className="reading-layout-mask reading-layout-mask--bottom" aria-hidden="true" />
-                    </>
-                )}
                 {isPdf ? (
                     <>
                         {/* PDF native rendering */}
@@ -2168,12 +2162,6 @@ export function ReadingViewer({ book, onBack }: Props) {
 
                 {isPdf && <div className="h-[88px]" />}
             </div>
-            {!isPdf && readingMode === "continuous" && (
-                <>
-                    <div className="reading-layout-mask reading-layout-mask--top" aria-hidden="true" />
-                    <div className="reading-layout-mask reading-layout-mask--bottom" aria-hidden="true" />
-                </>
-            )}
             </div>
 
             {/* Immersive Page Number */}
