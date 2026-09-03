@@ -471,10 +471,35 @@ export async function POST(request: NextRequest) {
       const chapter = jsonObject(input.chapter);
       const deviceId = String(input.deviceId || "").trim();
       if (!deviceId) return NextResponse.json({ ok: false, error: "缺少设备标识" }, { status: 400 });
+
+      // 兼容旧书架中已经保存的 chapter.url JSON 参数，以及新版目录生成的参数。
+      // 这样即使旧数据没有重新下载目录，/content 也能恢复 book_id/item_id。
+      let normalizedChapter: Record<string, unknown> = { ...chapter };
+      const rawUrl = String(chapter.url || "");
+      try {
+        const encoded = JSON.parse(rawUrl);
+        if (encoded && typeof encoded === "object" && !Array.isArray(encoded)) {
+          normalizedChapter = { ...normalizedChapter, ...(encoded as Record<string, unknown>) };
+        }
+      } catch {}
+
+      const source = String(normalizedChapter.source || "");
+      const urlForParams = String(normalizedChapter.url || rawUrl);
+      if (["番茄小说", "番茄短剧", "番茄听书", "番茄畅听"].includes(source)) {
+        const bookId = String(normalizedChapter.book_id || normalizedChapter.bookid || "");
+        const itemId = String(normalizedChapter.item_id || "");
+        const bookMatch = urlForParams.match(/book_id=(\d{19})\b/);
+        const itemMatch = urlForParams.match(/item_id=(\d+)/);
+        if (bookId) normalizedChapter.book_id = bookId;
+        else if (bookMatch) normalizedChapter.book_id = bookMatch[1];
+        if (itemId) normalizedChapter.item_id = itemId;
+        else if (itemMatch) normalizedChapter.item_id = itemMatch[1];
+      }
+
       return NextResponse.json(await tryHosts(hosts, async (host) => {
         const result = await fetchUpstream(host, "/content", {
           method: "POST",
-          body: chapter,
+          body: normalizedChapter,
           apiKey,
           deviceId,
         });
