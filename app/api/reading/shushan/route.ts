@@ -159,6 +159,27 @@ function tryDecodeShushanContent(value: string) {
   return raw;
 }
 
+function extractCatalogChapters(value: any): any[] {
+  const output: any[] = [];
+  const seen = new Set<string>();
+  const visit = (node: any, depth = 0) => {
+    if (depth > 8 || node == null) return;
+    if (Array.isArray(node)) { node.forEach(item => visit(item, depth + 1)); return; }
+    if (typeof node !== "object") return;
+    const title = node.title ?? node.chapter_title ?? node.chapterName ?? node.name ?? node.chapter_name;
+    const cid = node.cid ?? node.chapter_id ?? node.chapterId ?? node.id;
+    const url = node.url ?? node.chapter_url ?? node.chapterUrl ?? "";
+    const isChapterLike = title != null && (cid != null || url);
+    if (isChapterLike) {
+      const key = `${String(cid ?? "")}|${String(url)}|${String(title)}`;
+      if (!seen.has(key)) { seen.add(key); output.push(node); }
+    }
+    Object.values(node).forEach(child => visit(child, depth + 1));
+  };
+  visit(value);
+  return output;
+}
+
 function extractSearchBooks(value: any): any[] {
   const output: any[] = [];
   const seen = new Set<string>();
@@ -330,7 +351,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(await tryHosts(hosts, async (host) => {
         const result = await fetchUpstream(host, "/catalog", { method: "POST", body: catalog, apiKey });
         if (!result.response.ok) throw upstreamError(host, "/catalog", result.response.status, result.parsed, result.text);
-        const data = Array.isArray(result.parsed?.data) ? result.parsed.data : [];
+        // 不同书山节点/版本可能返回 data 数组，也可能包在 chapters/list/catalog 等对象里。
+        // 统一提取成章节数组，避免前端看到“0 章”。
+        const data = extractCatalogChapters(result.parsed?.data ?? result.parsed);
         return { ok: true as const, data, host };
       }));
     }
