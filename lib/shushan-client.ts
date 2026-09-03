@@ -209,9 +209,25 @@ export async function getShushanChapterContent(
     url: catalog.url,
   };
 
-  const url = String(chapter.url || "");
-  const bookId = url.match(/book_id=(\d{19})\b/)?.[1] || null;
-  const itemId = url.match(/item_id=(\d+)/)?.[1] || null;
+  const rawChapterUrl = String(chapter.url || "");
+  // 书山目录适配器会把 buildChapterUrl 生成的参数序列化进 chapter.url。
+  // 这里必须先还原，否则发送到 /content 时 book_id/item_id 会变成 null，导致 503。
+  let chapterUrl = rawChapterUrl;
+  let encodedParams: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(rawChapterUrl);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      encodedParams = parsed as Record<string, unknown>;
+      chapterUrl = String(encodedParams.url || rawChapterUrl);
+      Object.assign(chapterParams, encodedParams);
+    }
+  } catch {}
+
+  const url = chapterUrl;
+  const bookId = String(encodedParams.book_id || encodedParams.bookid || "").match(/^(\d{19})$/)?.[1]
+    || url.match(/book_id=(\d{19})\b/)?.[1] || null;
+  const itemId = String(encodedParams.item_id || "").match(/^(\d+)$/)?.[1]
+    || url.match(/item_id=(\d+)/)?.[1] || null;
 
   if (["番茄小说", "番茄短剧", "番茄听书", "番茄畅听"].includes(source)) {
     chapterParams.book_id = bookId;
