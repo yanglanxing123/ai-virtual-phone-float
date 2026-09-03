@@ -150,7 +150,6 @@ export default function ReadingApp({ onClose }: Props) {
   const [sourceEditName, setSourceEditName] = useState("");
   const [sourceEditGroup, setSourceEditGroup] = useState("");
   const sourceFileInputRef = useRef<HTMLInputElement>(null);
-  const homeModuleAddRef = useRef<HTMLDivElement>(null);
 
   const [appearance, setAppearance] = useState<ReadingAppearance>(
     DEFAULT_READING_APPEARANCE,
@@ -408,19 +407,9 @@ export default function ReadingApp({ onClose }: Props) {
           <main className="reading-hub-content">
             {tab === "home" && (
               <section className="reading-hub-home">
-                <div className="reading-hub-hero"><div><span>DISCOVER</span><strong>首页</strong><p>书源数据可以直接组成首页模块，模块可自由添加和隐藏。</p></div><button type="button" onClick={()=>setTab("sources")}><Search size={16}/> 搜索</button></div>
+                <div className="reading-hub-hero"><div><span>DISCOVER</span><strong>首页</strong><p>书源数据可以直接组成首页模块，模块可自由添加和隐藏。</p></div><div className="reading-hub-home-hero-actions"><button type="button" onClick={()=>setTab("sources")}><Search size={16}/> 搜索</button><button type="button" onClick={()=>setSourceDrawerOpen(true)} aria-label="首页设置"><MoreVertical size={18}/></button></div></div>
                 <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>首页模块</h2><p>直接使用书源发现页：阅读榜、新书榜、分类榜等都可以单独添加。</p></div><button type="button" onClick={()=>homeModuleAddRef.current?.scrollIntoView({behavior:"smooth",block:"center"})}><Plus size={14}/> 添加模块</button></div>
                   <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={async()=>{setHomeModuleLoading(module.id);try{const source=bookSources.find(x=>x.id===module.sourceId);if(!source)throw new Error("书源不存在");const parsed=await fetchReadingSourceModule(source,module.url,1);setHomeModuleData(prev=>({...prev,[module.id]:extractHomeBooks(parsed)}));}catch(error){setHomeModuleData(prev=>({...prev,[module.id]:[]}));setSourceMessage(error instanceof Error?error.message:"首页模块加载失败");}finally{setHomeModuleLoading(null)}}}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={async()=>{const source=bookSources.find(x=>x.id===module.sourceId);if(!source)return;setSelectedSourceId(source.id);setTab("sources");setSourceLoading(true);setSourceMessage("正在打开榜单书籍…");setGenericBook(book);setGenericDetail(null);setGenericChapters([]);try{const detail=await getGenericDetail(source,book);setGenericDetail(detail);const chapters=await getGenericCatalog(source,detail);setGenericChapters(chapters);setSourceMessage(`目录 ${chapters.length} 章`);}catch(error){setSourceMessage(error instanceof Error?error.message:"打开书籍失败");}finally{setSourceLoading(false);}}}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
-                </div>
-                <div ref={homeModuleAddRef} className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>添加首页模块</h2><p>从已导入书源的 exploreUrl 自动发现可用模块</p></div></div>{bookSources.length===0?<div className="reading-hub-module-empty">还没有导入书源。</div>:bookSources.map(source=>{const items=discoverSourceModules(source);return <div key={source.id} className="reading-hub-home-source"><strong>{source.name}</strong><div className="reading-hub-home-source-items">{items.map(item=><button key={`${item.title}-${item.url}`} type="button" onClick={()=>{const id=`${source.id}_${item.title}`;const next=[...homeModules.filter(x=>x.id!==id),{id,title:item.title,url:item.url,sourceId:source.id,enabled:true}];persistHomeModules(next);setHomeModuleData(prev=>{const copy={...prev};delete copy[id];return copy;}); }}><Plus size={13}/>{item.title}</button>)}</div></div>})}</div>
-                <div className="reading-hub-section reading-hub-home-custom-editor">
-                  <div className="reading-hub-section-head"><div><h2>自定义首页模块</h2><p>不依赖 exploreUrl，也可以直接添加任意 HTTP/HTTPS JSON 页面。</p></div><button type="button" onClick={()=>setHomeModuleEditorOpen(v=>!v)}><Plus size={14}/> {homeModuleEditorOpen?"收起":"添加"}</button></div>
-                  {homeModuleEditorOpen && <div className="reading-hub-module-form">
-                    <label className="reading-hub-field"><span>模块名称</span><input value={homeModuleTitle} onChange={e=>setHomeModuleTitle(e.target.value)} placeholder="例如：我的推荐" /></label>
-                    <label className="reading-hub-field"><span>模块地址</span><input value={homeModuleUrl} onChange={e=>setHomeModuleUrl(e.target.value)} placeholder="https://example.com/api/list?page={{page}}" /></label>
-                    <label className="reading-hub-field"><span>使用书源</span><select value={homeModuleSourceId} onChange={e=>setHomeModuleSourceId(e.target.value)}>{bookSources.map(source=><option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
-                    <button type="button" className="reading-hub-primary" disabled={!homeModuleTitle.trim()||!/^https?:\/\//i.test(homeModuleUrl.trim())||!homeModuleSourceId} onClick={()=>{const id=`custom_${Date.now()}`;persistHomeModules([...homeModules,{id,title:homeModuleTitle.trim(),url:homeModuleUrl.trim(),sourceId:homeModuleSourceId,enabled:true}]);setHomeModuleTitle("");setHomeModuleUrl("");setHomeModuleEditorOpen(false);}}>保存模块</button>
-                  </div>}
                 </div>
               </section>
             )}
@@ -546,6 +535,33 @@ export default function ReadingApp({ onClose }: Props) {
             )}
           </main>
 
+          <input
+            ref={sourceFileInputRef}
+            type="file"
+            accept=".json,application/json,text/json"
+            className="reading-hub-hidden-file-input"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              event.currentTarget.value = "";
+              if (!file) return;
+              try {
+                const text = await file.text();
+                const parsed = JSON.parse(text);
+                const result = importReadingSources(parsed);
+                const next = result.sources;
+                setBookSources(next);
+                const first = next.find((item) => item.enabled)?.id || "";
+                if (!selectedSourceId && first) {
+                  setSelectedSourceId(first);
+                  setHomeModuleSourceId(first);
+                }
+                setSourceMessage(`已导入 ${result.added} 个书源${result.skipped ? `，跳过 ${result.skipped} 个` : ""}`);
+              } catch (error) {
+                setSourceMessage(error instanceof Error ? `书源导入失败：${error.message}` : "书源导入失败");
+              }
+            }}
+          />
+
           {sourceDrawerOpen && (
             <div className="reading-hub-drawer-backdrop" onClick={() => setSourceDrawerOpen(false)}>
               <aside className="reading-hub-drawer" onClick={(e) => e.stopPropagation()}>
@@ -578,6 +594,44 @@ export default function ReadingApp({ onClose }: Props) {
                   }}><LogIn size={16} /> 书源登录</button>
                   <button type="button" onClick={() => setTab("appearance")}><Palette size={16} /> 阅读外观</button>
                 </div>
+                <div className="reading-hub-drawer-section">
+                  <div className="reading-hub-drawer-title">首页发现</div>
+                  <label className="reading-hub-field reading-hub-drawer-source-select"><span>选择书源</span><select value={homeModuleSourceId} onChange={e=>setHomeModuleSourceId(e.target.value)}>{bookSources.map(source=><option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
+                  <div className="reading-hub-drawer-discovered">
+                    <div className="reading-hub-drawer-subtitle">发现页榜单</div>
+                    <div className="reading-hub-drawer-discovered-list">
+                      {(() => {
+                        const source = bookSources.find(x => x.id === homeModuleSourceId);
+                        const items = source ? discoverSourceModules(source) : [];
+                        return items.map(item => {
+                          const id = `${source!.id}_${item.title}`;
+                          const exists = homeModules.some(x => x.id === id);
+                          return <button key={`${item.title}-${item.url}`} type="button" className={exists ? "is-added" : ""} disabled={exists} onClick={() => { persistHomeModules([...homeModules, { id, title:item.title, url:item.url, sourceId:source!.id, enabled:true }]); setHomeModuleData(prev=>{const copy={...prev}; delete copy[id]; return copy;}); }}><Plus size={12}/><span>{item.title}</span>{exists && <em>已添加</em>}</button>;
+                        });
+                      })()}
+                    </div>
+                  </div>
+                  <button type="button" className="reading-hub-drawer-wide-action" onClick={() => { setTab("home"); setHomeModuleEditorOpen(v => !v); }}>＋ 自定义首页模块</button>
+                  <div className="reading-hub-drawer-module-list">
+                    {homeModules.map((module, index) => (
+                      <div key={module.id} className="reading-hub-drawer-module">
+                        <span>{module.title}</span>
+                        <div>
+                          <button type="button" onClick={() => { if (index <= 0) return; const next=[...homeModules]; [next[index-1],next[index]]=[next[index],next[index-1]]; persistHomeModules(next); }}>↑</button>
+                          <button type="button" onClick={() => { if (index >= homeModules.length-1) return; const next=[...homeModules]; [next[index],next[index+1]]=[next[index+1],next[index]]; persistHomeModules(next); }}>↓</button>
+                          <button type="button" onClick={() => { persistHomeModules(homeModules.filter(x => x.id !== module.id)); setHomeModuleData(prev => { const copy={...prev}; delete copy[module.id]; return copy; }); }}>×</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {homeModuleEditorOpen && <div className="reading-hub-module-form">
+                    <label className="reading-hub-field"><span>模块名称</span><input value={homeModuleTitle} onChange={e=>setHomeModuleTitle(e.target.value)} placeholder="例如：女频新书榜 · 快穿" /></label>
+                    <label className="reading-hub-field"><span>模块地址</span><input value={homeModuleUrl} onChange={e=>setHomeModuleUrl(e.target.value)} placeholder="https://..." /></label>
+                    <label className="reading-hub-field"><span>使用书源</span><select value={homeModuleSourceId} onChange={e=>setHomeModuleSourceId(e.target.value)}>{bookSources.map(source=><option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
+                    <button type="button" className="reading-hub-primary" disabled={!homeModuleTitle.trim()||!/^https?:\/\//i.test(homeModuleUrl.trim())||!homeModuleSourceId} onClick={()=>{const id=`custom_${Date.now()}`;persistHomeModules([...homeModules,{id,title:homeModuleTitle.trim(),url:homeModuleUrl.trim(),sourceId:homeModuleSourceId,enabled:true}]);setHomeModuleTitle("");setHomeModuleUrl("");setHomeModuleEditorOpen(false);}}>保存模块</button>
+                  </div>}
+                </div>
+
                 <div className="reading-hub-drawer-section">
                   <div className="reading-hub-drawer-title">我的书源</div>
                   {bookSources.map((source) => (

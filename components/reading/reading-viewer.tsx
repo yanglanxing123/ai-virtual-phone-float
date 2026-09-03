@@ -264,6 +264,42 @@ function ReadingAnnotationContent({
     );
 }
 
+type ReadingLayoutConfig = {
+    shared: boolean;
+    top: number;
+    bottom: number;
+};
+
+const DEFAULT_READING_LAYOUT: ReadingLayoutConfig = { shared: true, top: 12, bottom: 18 };
+const READING_LAYOUT_KEY = "reading-layout-config-v2";
+const READING_BOOK_LAYOUT_KEY = "reading-layout-book-v2";
+
+function loadReadingLayout(bookId: string): ReadingLayoutConfig {
+    if (typeof window === "undefined") return DEFAULT_READING_LAYOUT;
+    try {
+        const globalRaw = JSON.parse(window.localStorage.getItem(READING_LAYOUT_KEY) || "null");
+        const global = globalRaw && typeof globalRaw === "object" ? { ...DEFAULT_READING_LAYOUT, ...globalRaw } : DEFAULT_READING_LAYOUT;
+        if (global.shared) return global;
+        const all = JSON.parse(window.localStorage.getItem(READING_BOOK_LAYOUT_KEY) || "{}");
+        const book = all?.[bookId];
+        return book && typeof book === "object" ? { ...global, ...book, shared: false } : { ...global, shared: false };
+    } catch { return DEFAULT_READING_LAYOUT; }
+}
+
+function saveReadingLayout(bookId: string, value: ReadingLayoutConfig) {
+    if (typeof window === "undefined") return;
+    try {
+        if (value.shared) {
+            window.localStorage.setItem(READING_LAYOUT_KEY, JSON.stringify(value));
+            return;
+        }
+        const all = JSON.parse(window.localStorage.getItem(READING_BOOK_LAYOUT_KEY) || "{}");
+        all[bookId] = { top: value.top, bottom: value.bottom };
+        window.localStorage.setItem(READING_BOOK_LAYOUT_KEY, JSON.stringify(all));
+        window.localStorage.setItem(READING_LAYOUT_KEY, JSON.stringify({ ...value, shared: false }));
+    } catch {}
+}
+
 type Props = {
     book: Book;
     onBack: () => void;
@@ -300,7 +336,20 @@ export function ReadingViewer({ book, onBack }: Props) {
     const [annotationBatchInput, setAnnotationBatchInput] = useState(String(isPdf ? 5 : 50));
     const [annotationDialogMode, setAnnotationDialogMode] = useState<AnnotationDialogMode | null>(null);
     const [showReadingSettings, setShowReadingSettings] = useState(false);
+    const [readingLayout, setReadingLayout] = useState<ReadingLayoutConfig>(() => loadReadingLayout(book.id));
     const [showNavigationDialog, setShowNavigationDialog] = useState(false);
+
+    useEffect(() => {
+        setReadingLayout(loadReadingLayout(book.id));
+    }, [book.id]);
+
+    const updateReadingLayout = (patch: Partial<ReadingLayoutConfig>) => {
+        setReadingLayout(prev => {
+            const next = { ...prev, ...patch };
+            saveReadingLayout(book.id, next);
+            return next;
+        });
+    };
     const [pdfJumpPage, setPdfJumpPage] = useState<number | undefined>(undefined);
     const [chaptersLoaded, setChaptersLoaded] = useState(false);
     const [remoteLoading, setRemoteLoading] = useState(false);
@@ -1839,7 +1888,7 @@ export function ReadingViewer({ book, onBack }: Props) {
         : null;
 
     return (
-        <div className="reading-app-surface absolute inset-0 z-[100] flex flex-col bg-[var(--c-page-body-bg)]" data-immersive={immersive} style={{ paddingTop: "var(--page-header-safe-top, 48px)" }}>
+        <div className="reading-app-surface absolute inset-0 z-[100] flex flex-col bg-[var(--c-page-body-bg)]" data-immersive={immersive} style={{ paddingTop: "var(--page-header-safe-top, 48px)", "--reading-layout-top": `${readingLayout.top}px`, "--reading-layout-bottom": `${readingLayout.bottom}px` } as React.CSSProperties}>
             {/* Page flip overlay */}
             {flipAnim && (
                 <>
@@ -1919,7 +1968,7 @@ export function ReadingViewer({ book, onBack }: Props) {
             {/* Reading content */}
             <div
                 ref={scrollRef}
-                className={`relative flex-1 min-h-0 px-4 pt-1 pb-3 ${isPdf ? "overflow-auto" : "overflow-hidden"}`}
+                className={`relative flex-1 min-h-0 px-4 ${isPdf ? "overflow-auto" : "overflow-hidden"}`} style={{ paddingTop: "var(--reading-layout-top)", paddingBottom: "var(--reading-layout-bottom)" }}
                 data-ui="body"
                 onClick={handleReadingSurfaceClick}
             >
@@ -2056,6 +2105,14 @@ export function ReadingViewer({ book, onBack }: Props) {
                         >
                             <PenLine size={22} strokeWidth={1.7} />
                             <span>写批注</span>
+                        </button>
+                        <button
+                            type="button"
+                            className="reading-footer-icon-btn"
+                            onClick={() => setShowReadingInterface(true)}
+                        >
+                            <Settings2 size={22} strokeWidth={1.7} />
+                            <span>界面</span>
                         </button>
                         <button
                             type="button"
@@ -2318,13 +2375,29 @@ export function ReadingViewer({ book, onBack }: Props) {
             )}
             {showReadingSettings && (
                 <ContentDialog
-                    title="阅读双语翻译"
+                    title="阅读界面"
                     confirmLabel="完成"
                     cancelLabel="关闭"
                     onConfirm={() => setShowReadingSettings(false)}
                     onCancel={() => setShowReadingSettings(false)}
                 >
                     <div className="reading-settings-grid">
+                        <div className="reading-settings-inline-note">
+                            <span>共享布局</span>
+                            <Toggle checked={readingLayout.shared} onChange={(checked) => updateReadingLayout({ shared: checked })} />
+                        </div>
+                        <label className="reading-settings-label">
+                            <span>上边距：{readingLayout.top}px</span>
+                            <input type="range" min="0" max="80" step="1" value={readingLayout.top} onChange={(e) => updateReadingLayout({ top: Number(e.target.value) })} />
+                        </label>
+                        <label className="reading-settings-label">
+                            <span>下边距：{readingLayout.bottom}px</span>
+                            <input type="range" min="0" max="120" step="1" value={readingLayout.bottom} onChange={(e) => updateReadingLayout({ bottom: Number(e.target.value) })} />
+                        </label>
+                        <div className="reading-settings-inline-note">
+                            <span>布局说明</span>
+                            <span>{readingLayout.shared ? "共享布局开启：所有开启共享布局的书使用同一组上下边距" : "当前书使用独立上下边距"}</span>
+                        </div>
                         <div className="reading-settings-inline-note">
                             <span>启用阅读双语翻译</span>
                             <Toggle

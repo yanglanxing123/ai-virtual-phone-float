@@ -645,3 +645,31 @@
 .reading-hub-publish-link{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border:0;border-radius:10px;background:#ffe58f;color:#4e443d;font-weight:700}
 .reading-hub-home-source-items{max-height:520px;overflow:auto}
 .reading-hub-home-source-items button{max-width:100%}
+
+/* v18: 首页以发现榜单为主，管理项全部收进侧边栏 */
+.reading-hub-home-hero-actions{display:flex;align-items:center;gap:7px}
+.reading-hub-home-hero-actions button{border:1px solid rgba(80,55,20,.08);background:rgba(255,255,255,.7);border-radius:13px;min-height:34px;padding:0 11px;display:inline-flex;align-items:center;justify-content:center;gap:5px;color:inherit}
+.reading-hub-home-hero-actions button:last-child{width:36px;padding:0}
+.reading-hub-hidden-file-input{display:none!important}
+.reading-hub-drawer-wide-action{width:100%;min-height:40px;border:1px solid rgba(80,55,20,.08);border-radius:12px;background:rgba(255,255,255,.75);color:inherit;font-size:11px;font-weight:800}
+.reading-hub-drawer-module-list{display:grid;gap:6px;margin-top:8px}
+.reading-hub-drawer-module{display:grid;grid-template-columns:1fr auto;align-items:center;gap:7px;padding:8px 9px;border-radius:10px;background:rgba(255,255,255,.65);border:1px solid rgba(80,55,20,.06);font-size:10px}
+.reading-hub-drawer-module span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reading-hub-drawer-module div{display:flex;gap:3px}
+.reading-hub-drawer-module button{border:0;background:transparent;color:inherit;padding:2px 4px;font-size:11px}
+.reading-hub-home .reading-hub-section-head h2{font-size:18px}
+.reading-hub-home .reading-hub-module{background:rgba(255,255,255,.72);border:1px solid rgba(80,55,20,.07);border-radius:18px;padding:12px}
+.reading-hub-home .reading-hub-module-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.reading-hub-home .reading-hub-module-head strong{font-size:14px;font-weight:950}
+.reading-hub-home .reading-hub-module-actions button{border:0;background:transparent;color:inherit;opacity:.6;padding:3px 5px}
+.reading-hub-home .reading-hub-module-grid{gap:10px}
+.reading-hub-home .reading-hub-module-grid button{flex:0 0 108px;width:108px;border:0;background:transparent;color:inherit;text-align:left;padding:0}
+.reading-hub-home .reading-hub-module-cover{width:108px;height:145px;border-radius:12px;overflow:hidden;background:rgba(235,228,220,.7);display:flex;align-items:center;justify-content:center}
+.reading-hub-home .reading-hub-module-cover img{width:100%;height:100%;object-fit:cover}
+.reading-hub-drawer-source-select{margin:0 0 10px}
+.reading-hub-drawer-discovered{margin-top:8px}
+.reading-hub-drawer-discovered-list{display:grid;grid-template-columns:1fr 1fr;gap:5px;max-height:250px;overflow:auto;padding-right:2px}
+.reading-hub-drawer-discovered-list button{min-width:0;border:1px solid rgba(80,55,20,.06);background:rgba(255,255,255,.62);color:inherit;border-radius:9px;padding:7px 7px;display:flex;align-items:center;gap:4px;font-size:9px;text-align:left}
+.reading-hub-drawer-discovered-list button span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reading-hub-drawer-discovered-list button em{font-style:normal;opacity:.45;white-space:nowrap}
+.reading-hub-drawer-discovered-list button.is-added{opacity:.45}
