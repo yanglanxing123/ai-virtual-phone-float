@@ -103,10 +103,31 @@ function detailTags(obj: unknown): string {
 }
 
 function detailStatus(obj: unknown): string {
-  const value = detailValue(obj, ["status", "book_status", "novel_status", "state", "serial_status"]);
+  const record = obj && typeof obj === "object" ? obj as Record<string, unknown> : {};
+  const value = detailValue(obj, ["status", "book_status", "novel_status", "state", "serial_status", "book_status_code"]);
   if (/完结|已完本|finished|complete/i.test(value)) return "完结";
   if (/连载|更新|serial/i.test(value)) return "连载";
+  if (value === "1") return "连载";
+  if (value === "0") return "完结";
+  if (String(record.book_search_visible).toLowerCase() === "false") return "下架";
   return value || "连载";
+}
+
+function formatDetailTimestamp(value: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric) && numeric > 1000000000) {
+    try {
+      const ms = numeric < 10000000000 ? numeric * 1000 : numeric;
+      const date = new Date(ms);
+      if (!Number.isNaN(date.getTime())) {
+        const pad = (n: number) => String(n).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+    } catch {}
+  }
+  return raw.replace(/T/, " ").replace(/\.\d+Z?$/, "");
 }
 
 function detailRating(obj: unknown): string {
@@ -115,17 +136,24 @@ function detailRating(obj: unknown): string {
 }
 
 function detailUpdatedAt(obj: unknown): string {
-  return detailValue(obj, [
+  const value = detailValue(obj, [
     "update_time", "updated_at", "updateTime", "updatedAt",
     "last_update_time", "lastUpdateTime", "latest_update", "latestUpdate",
     "latest_update_time", "latestUpdateTime", "latest_chapter_update_time",
     "last_chapter_update_time", "modify_time", "modifyTime", "update_date", "updateDate",
-  ]) || "";
+  ]);
+  return formatDetailTimestamp(value);
 }
 
 function detailWordCount(obj: unknown): string {
-  const value = detailValue(obj, ["wordCount", "word_count", "words", "wordNum", "word_num", "length"]);
-  return value || "暂无";
+  const value = detailValue(obj, [
+    "wordCount", "word_count", "word_number", "wordNumber", "words", "wordNum", "word_num",
+    "WordsCount", "WordsNum", "total_word_count", "totalWordCount", "length",
+  ]);
+  if (!value) return "暂无";
+  const numeric = Number(value.replace(/[, ]/g, ""));
+  if (Number.isFinite(numeric) && numeric > 0) return `${Math.round(numeric).toLocaleString("zh-CN")} 字`;
+  return value;
 }
 
 function discoverSourceModules(source: ReadingBookSource): Array<{ title: string; url: string }> {
