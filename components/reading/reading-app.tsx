@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { BookOpen, Library, Search, Palette, X, Upload, Trash2 } from "lucide-react";
+import { BookOpen, Library, Search, Palette, X, Upload, Trash2, MoreVertical, LogIn, Plus, ChevronRight, RefreshCw } from "lucide-react";
 import { hydrateReadingStorage } from "@/lib/reading-storage";
 import { ReadingShelf } from "./reading-shelf";
 import { ReadingViewer } from "./reading-viewer";
@@ -30,11 +30,15 @@ import {
   type ShushanSearchBook,
 } from "@/lib/shushan-client";
 import { addBook, saveChapters } from "@/lib/reading-storage";
-import { importReadingSources, loadReadingSources, removeReadingSource, setReadingSourceEnabled, updateReadingSourceMeta, sourceCapabilities, saveReadingRemoteBook, clearReadingSourceState, type ReadingBookSource } from "@/lib/reading-source";
-import { getGenericCatalog, getGenericDetail, searchGenericSource, testGenericSource, type GenericSourceBook, type GenericSourceChapter, type GenericSourceDetail, type GenericSourceTestReport } from "@/lib/reading-source-engine";
+import { importReadingSources, loadReadingSources, removeReadingSource, setReadingSourceEnabled, updateReadingSourceMeta, saveReadingRemoteBook, clearReadingSourceState, loadReadingSourceState, saveReadingSourceState, type ReadingBookSource } from "@/lib/reading-source";
+import { getGenericCatalog, getGenericDetail, searchGenericSource, type GenericSourceBook, type GenericSourceChapter, type GenericSourceDetail } from "@/lib/reading-source-engine";
 import "./reading-hub.css";
 
 type Tab = "home" | "shelf" | "sources" | "appearance";
+
+type HomeModule = { id: string; title: string; url: string; sourceId: string; enabled: boolean; };
+
+type LoginField = { name: string; type: string; action?: string };
 
 type Props = {
   onClose: () => void;
@@ -58,14 +62,17 @@ export default function ReadingApp({ onClose }: Props) {
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState<Tab>("home");
   const [activeBook, setActiveBook] = useState<Book | null>(null);
-  const [sourceAccount, setSourceAccount] = useState<ShushanAccount>({ email: "", password: "", apiKey: "", saved: false });
   const [sourceKeyword, setSourceKeyword] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [sourceResults, setSourceResults] = useState<ShushanSearchBook[]>([]);
   const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceMessage, setSourceMessage] = useState("");
-  const [sourceTestLoading, setSourceTestLoading] = useState(false);
-  const [sourceTestReport, setSourceTestReport] = useState<GenericSourceTestReport | null>(null);
+  const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false);
+  const [sourceLoginOpen, setSourceLoginOpen] = useState(false);
+  const [loginFields, setLoginFields] = useState<Record<string, string>>({});
+  const [homeModules, setHomeModules] = useState<HomeModule[]>([]);
+  const [homeModuleLoading, setHomeModuleLoading] = useState<string | null>(null);
+  const [homeModuleData, setHomeModuleData] = useState<Record<string, GenericSourceBook[]>>({});
   const [selectedSourceBook, setSelectedSourceBook] = useState<ShushanSearchBook | null>(null);
   const [sourceDetail, setSourceDetail] = useState<ShushanSearchBook | null>(null);
   const [sourceChapters, setSourceChapters] = useState<ShushanChapter[]>([]);
@@ -79,6 +86,7 @@ export default function ReadingApp({ onClose }: Props) {
   const [sourceEditName, setSourceEditName] = useState("");
   const [sourceEditGroup, setSourceEditGroup] = useState("");
   const sourceFileInputRef = useRef<HTMLInputElement>(null);
+  const homeModuleAddRef = useRef<HTMLDivElement>(null);
 
   const [appearance, setAppearance] = useState<ReadingAppearance>(
     DEFAULT_READING_APPEARANCE,
@@ -133,8 +141,11 @@ export default function ReadingApp({ onClose }: Props) {
     });
 
     setAppearance(loadReadingAppearance());
-    setSourceAccount(loadShushanAccount());
     const installed = loadReadingSources();
+    try {
+      const savedModules = JSON.parse(window.localStorage.getItem("reading-home-modules-v2") || "[]");
+      if (Array.isArray(savedModules)) setHomeModules(savedModules);
+    } catch {}
     setBookSources(installed);
     setSelectedSourceId(installed.find((item) => item.adapter === "shushan" && item.enabled)?.id || installed[0]?.id || "");
 
@@ -256,87 +267,11 @@ export default function ReadingApp({ onClose }: Props) {
           <main className="reading-hub-content">
             {tab === "home" && (
               <section className="reading-hub-home">
-                <div className="reading-hub-hero">
-                  <div>
-                    <span>WELCOME BACK</span>
-                    <strong>想读点什么？</strong>
-                    <p>书架、书源和阅读外观统一放在这里管理。</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTab("sources")}
-                  >
-                    <Search size={16} />
-                    查找书籍
-                  </button>
+                <div className="reading-hub-hero"><div><span>DISCOVER</span><strong>首页</strong><p>书源数据可以直接组成首页模块，模块可自由添加和隐藏。</p></div><button type="button" onClick={()=>setTab("sources")}><Search size={16}/> 搜索</button></div>
+                <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>首页模块</h2><p>例如书山的巅峰榜单、热搜榜单、爆更榜单</p></div><button type="button" onClick={()=>homeModuleAddRef.current?.scrollIntoView({behavior:"smooth",block:"center"})}><Plus size={14}/> 添加模块</button></div>
+                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><button type="button" onClick={async()=>{setHomeModuleLoading(module.id);try{const res=await fetch("/api/reading/source",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:module.url.replace(/\{\{page[^}]*\}\}/g,"0")})});const data=await res.json();const raw=data?.text||"";let parsed:any=null;try{parsed=JSON.parse(raw)}catch{};const list:any[]=[];const visit=(v:any,depth=0)=>{if(depth>4||v==null)return;if(Array.isArray(v)){for(const x of v)visit(x,depth+1);return}if(typeof v!=="object")return;const title=v.title||v.book_name||v.bookName||v.name||v.book_title;if(title){list.push({title:String(title),author:v.author||v.author_name,cover:v.cover||v.cover_url||v.image_url,desc:v.desc||v.abstract||v.description,latestChapterTitle:v.latest_chapter_title,bookUrl:v.book_url||v.bookUrl||String(v.book_id||"") ,raw:v});}for(const x of Object.values(v))if(typeof x==="object")visit(x,depth+1)};visit(parsed);setHomeModuleData(prev=>({...prev,[module.id]:list.slice(0,20)}));}catch{setHomeModuleData(prev=>({...prev,[module.id]:[]}))}finally{setHomeModuleLoading(null)}}}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={async()=>{setSourceKeyword(book.title);const source=bookSources.find(x=>x.id===module.sourceId);if(!source)return;setSelectedSourceId(source.id);setTab("sources");}}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
                 </div>
-
-                <div className="reading-hub-section">
-                  <div className="reading-hub-section-head">
-                    <div>
-                      <h2>最近阅读</h2>
-                      <p>继续使用原有阅读记录</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setTab("shelf")}
-                    >
-                      查看书架
-                    </button>
-                  </div>
-                  <div className="reading-hub-placeholder">
-                    <BookOpen size={22} />
-                    <span>
-                      最近阅读直接使用现有阅读存储；打开书架后会保留原来的章节和进度。
-                    </span>
-                  </div>
-                </div>
-
-                <div className="reading-hub-grid">
-                  <button
-                    type="button"
-                    className="reading-hub-card"
-                    onClick={() => setTab("sources")}
-                  >
-                    <span className="reading-hub-card-icon">
-                      <Search size={18} />
-                    </span>
-                    <strong>书源搜索</strong>
-                    <small>书山聚合 / 登录后搜索</small>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="reading-hub-card"
-                    onClick={() => setTab("appearance")}
-                  >
-                    <span className="reading-hub-card-icon">
-                      <Palette size={18} />
-                    </span>
-                    <strong>阅读外观</strong>
-                    <small>字体、背景、字号和行距</small>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="reading-hub-card"
-                    onClick={() => setTab("shelf")}
-                  >
-                    <span className="reading-hub-card-icon">
-                      <Library size={18} />
-                    </span>
-                    <strong>我的书架</strong>
-                    <small>使用现有 ReadingShelf</small>
-                  </button>
-
-                  <div className="reading-hub-card is-disabled">
-                    <span className="reading-hub-card-icon">
-                      <BookOpen size={18} />
-                    </span>
-                    <strong>分类排行榜</strong>
-                    <small>等待书源数据接入</small>
-                  </div>
-                </div>
+                <div ref={homeModuleAddRef} className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>添加首页模块</h2><p>从已导入书源的 exploreUrl 自动发现可用模块</p></div></div>{bookSources.length===0?<div className="reading-hub-module-empty">还没有导入书源。</div>:bookSources.map(source=>{const text=String((source.raw as any)?.exploreUrl||"");const items:Array<{title:string;url:string}>=[];for(const m of text.matchAll(/push\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]/g)){items.push({title:m[1],url:m[2]})}return <div key={source.id} className="reading-hub-home-source"><strong>{source.name}</strong><div className="reading-hub-home-source-items">{items.slice(0,12).map(item=><button key={`${item.title}-${item.url}`} type="button" onClick={()=>{const id=`${source.id}_${item.title}`;const next=[...homeModules.filter(x=>x.id!==id),{id,title:item.title,url:item.url,sourceId:source.id,enabled:true}];setHomeModules(next);try{window.localStorage.setItem("reading-home-modules-v2",JSON.stringify(next))}catch{} }}><Plus size={13}/>{item.title}</button>)}</div></div>})}</div>
               </section>
             )}
 
@@ -353,231 +288,74 @@ export default function ReadingApp({ onClose }: Props) {
             )}
 
             {tab === "sources" && (
-              <section className="reading-hub-panel">
-                <div className="reading-hub-panel-head">
+              <section className="reading-hub-search-page">
+                <div className="reading-hub-search-hero">
                   <div>
-                    <h2>📚 书源</h2>
-                    <p>像阅读类 App 一样导入 JSON 书源；已识别的书源会自动绑定对应适配器。</p>
+                    <span>BOOK SEARCH</span>
+                    <h2>搜索你想看的书</h2>
+                    <p>{bookSources.filter((item) => item.enabled).length} 个已启用书源 · 结果优先展示</p>
                   </div>
-                </div>
-
-                <input
-                  ref={sourceFileInputRef}
-                  type="file"
-                  accept=".json,application/json"
-                  multiple
-                  hidden
-                  onChange={async (e) => {
-                    const files = Array.from(e.target.files || []);
-                    if (!files.length) return;
-                    let added = 0;
-                    let skipped = 0;
-                    try {
-                      for (const file of files) {
-                        const parsed = JSON.parse(await file.text());
-                        const result = importReadingSources(parsed);
-                        added += result.added;
-                        skipped += result.skipped;
-                      }
-                      const next = loadReadingSources();
-                      setBookSources(next);
-                      setSelectedSourceId((current) => current || next[0]?.id || "");
-                      setSourceMessage(`✅ 导入完成：新增 ${added} 个书源${skipped ? `，跳过 ${skipped} 个无效项目` : ""}`);
-                    } catch (error) {
-                      setSourceMessage(error instanceof Error ? `❌ 导入失败：${error.message}` : "❌ 导入失败");
-                    } finally {
-                      e.target.value = "";
-                    }
-                  }}
-                />
-
-                <div className="reading-hub-source-toolbar">
-                  <button type="button" className="reading-hub-primary" onClick={() => sourceFileInputRef.current?.click()}>
-                    <Upload size={15} /> 导入书源 JSON
+                  <button type="button" className="reading-hub-icon-btn" onClick={() => setSourceDrawerOpen(true)} aria-label="书源管理">
+                    <MoreVertical size={20} />
                   </button>
-                  <span className="reading-hub-source-tip">支持阅读/Legado 风格单个对象或数组；JS/Java 规则暂不直接执行。</span>
                 </div>
 
-                <div className="reading-hub-source-list">
-                  {bookSources.length === 0 ? (
-                    <div className="reading-hub-source-empty">还没有书源。先导入你手里的书源 JSON，例如「📚书山聚合」。</div>
-                  ) : bookSources.map((source) => (
-                    <div key={source.id} className={`reading-hub-source-item${selectedSourceId === source.id ? " is-active" : ""}`}>
-                      <button type="button" className="reading-hub-source-main" onClick={() => { setSelectedSourceId(source.id); setEditingSource(false); setSourceEditName(source.name); setSourceEditGroup(source.group || ""); setSourceMessage(""); setSourceTestReport(null); setGenericResults([]); setGenericBook(null); setGenericDetail(null); setGenericChapters([]); setSourceResults([]); setSelectedSourceBook(null); setSourceDetail(null); setSourceChapters([]); }}>
-                        <strong>{source.name}</strong>
-                        <span>{source.group || "未分组"} · {source.adapter === "shushan" ? "✅ 已适配" : "🧩 通用解析器"}</span>
-                      </button>
-                      <label className="reading-hub-source-switch">
-                        <input type="checkbox" checked={source.enabled} onChange={(e) => { setReadingSourceEnabled(source.id, e.target.checked); setBookSources(loadReadingSources()); }} />
-                        <span>启用</span>
-                      </label>
-                      <button type="button" className="reading-hub-source-delete" aria-label={`删除${source.name}`} onClick={() => { removeReadingSource(source.id); const next = loadReadingSources(); setBookSources(next); if (selectedSourceId === source.id) setSelectedSourceId(next[0]?.id || ""); }}>
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
+                <div className="reading-hub-source-pills">
+                  {bookSources.filter((item) => item.enabled).map((source) => (
+                    <button key={source.id} type="button" className={selectedSourceId === source.id ? "is-active" : ""} onClick={() => {
+                      setSelectedSourceId(source.id); setGenericResults([]); setSourceResults([]); setGenericBook(null); setGenericDetail(null); setGenericChapters([]); setSelectedSourceBook(null); setSourceDetail(null); setSourceChapters([]); setSourceMessage("");
+                    }}>{source.name}</button>
                   ))}
                 </div>
 
-                <div className="reading-hub-source-divider" />
+                <div className="reading-hub-big-searchbox">
+                  <Search size={21} />
+                  <input value={sourceKeyword} onChange={(e) => setSourceKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget.parentElement?.querySelector("button") as HTMLButtonElement | null)?.click(); }} placeholder="输入书名、作者，或 书名@来源" autoFocus />
+                  <button type="button" disabled={sourceLoading || !sourceKeyword.trim() || !selectedSourceId} onClick={async () => {
+                    const currentSource = bookSources.find((item) => item.id === selectedSourceId);
+                    if (!currentSource) return;
+                    setSourceLoading(true); setSourceMessage(""); setGenericResults([]); setSourceResults([]);
+                    try {
+                      const raw = sourceKeyword.trim();
+                      if (currentSource.adapter === "shushan") {
+                        const [keyword, inlineSource] = raw.split("@");
+                        const account = loadShushanAccount();
+                        if (!account.apiKey) throw new Error("请从右上角「书源管理」打开书源自带登录");
+                        const result = await searchShushan(account.apiKey, keyword.trim(), inlineSource?.trim() || "", 1);
+                        setSourceResults(result.data || []); setSourceMessage(result.data?.length ? `找到 ${result.data.length} 本相关书籍` : "没有找到结果");
+                      } else {
+                        const result = await searchGenericSource(currentSource, raw.replace(/@.+$/, ""), 1);
+                        setGenericResults(result); setSourceMessage(result.length ? `找到 ${result.length} 本相关书籍` : "没有找到结果");
+                      }
+                    } catch (error) { setSourceMessage(error instanceof Error ? error.message : "搜索失败"); }
+                    finally { setSourceLoading(false); }
+                  }}>{sourceLoading ? "搜索中…" : "搜索"}</button>
+                </div>
 
-                {bookSources.find((item) => item.id === selectedSourceId) && (() => {
-                  const selected = bookSources.find((item) => item.id === selectedSourceId)!;
-                  return (
-                    <div className="reading-hub-source-settings">
-                      <div className="reading-hub-source-settings-head">
-                        <div>
-                          <strong>⚙️ 书源管理</strong>
-                          <small>{selected.url || "本地适配器"}</small>
-                        </div>
-                        <button type="button" className="reading-hub-secondary" onClick={() => {
-                          setEditingSource((value) => {
-                            const next = !value;
-                            if (next) { setSourceEditName(selected.name); setSourceEditGroup(selected.group || ""); }
-                            return next;
-                          });
-                        }}>{editingSource ? "取消编辑" : "编辑信息"}</button>
-                      </div>
-                      {editingSource && (
-                        <div className="reading-hub-source-edit">
-                          <label className="reading-hub-field"><span>书源名称</span><input value={sourceEditName} onChange={(e) => setSourceEditName(e.target.value)} placeholder="例如：番茄小说" /></label>
-                          <label className="reading-hub-field"><span>分组</span><input value={sourceEditGroup} onChange={(e) => setSourceEditGroup(e.target.value)} placeholder="例如：小说 / 聚合书源" /></label>
-                          <div className="reading-hub-inline-actions">
-                            <button type="button" className="reading-hub-primary" onClick={() => {
-                              const updated = updateReadingSourceMeta(selected.id, { name: sourceEditName, group: sourceEditGroup });
-                              const next = loadReadingSources();
-                              setBookSources(next);
-                              setEditingSource(false);
-                              setSourceMessage(updated ? "✅ 书源信息已保存" : "保存失败");
-                            }}>保存修改</button>
-                            <button type="button" className="reading-hub-secondary" onClick={() => { clearReadingSourceState(selected.id); setSourceMessage("已清除该书源的 Cookie / 会话状态"); }}>清除登录状态</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                {sourceMessage && <p className="reading-hub-source-status">{sourceMessage}</p>}
 
-                {bookSources.find((item) => item.id === selectedSourceId)?.adapter === "shushan" ? (
-                  <>
-                    <div className="reading-hub-source-selected">当前书源：<strong>{bookSources.find((item) => item.id === selectedSourceId)?.name}</strong></div>
-                    <div className="reading-hub-source-note">
-                      这是从你导入的书山 JSON 自动识别出来的适配器。账号、搜索、详情、目录和正文仍走现有书山接口层；书源 JSON 本身只负责描述来源，不在浏览器里执行整套 Legado Java 脚本。
-                    </div>
+                {sourceResults.length > 0 && !selectedSourceBook && <div className="reading-hub-result-list">{sourceResults.map((item, index) => (
+                  <button key={`${item.source}-${item.book_url}-${index}`} type="button" className="reading-hub-result-card" onClick={async () => {
+                    const source = bookSources.find((x) => x.id === selectedSourceId); if (!source) return;
+                    setSelectedSourceBook(item); setSourceDetail(null); setSourceChapters([]); setSourceLoading(true); setSourceMessage("正在打开详情…");
+                    try { const result = await getShushanDetail(loadShushanAccount().apiKey, item); setSourceDetail(result.data); const cat = await getShushanCatalog(loadShushanAccount().apiKey, result.data); setSourceChapters(cat.data || []); setSourceMessage(`目录 ${cat.data?.filter((x) => !x.isVolume).length || 0} 章`); }
+                    catch (error) { setSourceMessage(error instanceof Error ? error.message : "获取详情失败"); }
+                    finally { setSourceLoading(false); }
+                  }}><div className="reading-hub-result-cover">{item.cover ? <img src={item.cover} alt="" /> : <BookOpen size={24} />}</div><div className="reading-hub-result-main"><strong>{item.title || "未命名"}</strong><span>{item.author || "未知作者"} · {item.source || "书山"}</span><small>{item.latestChapterTitle || item.desc || ""}</small></div><ChevronRight size={18} /></button>
+                ))}</div>}
 
-                    <label className="reading-hub-field">
-                      <span>邮箱 / 账号</span>
-                      <input value={sourceAccount.email} onChange={(e) => setSourceAccount((prev) => ({ ...prev, email: e.target.value, saved: false }))} autoComplete="username" inputMode="email" placeholder="请输入书山账号" />
-                    </label>
-                    <label className="reading-hub-field">
-                      <span>密码</span>
-                      <input type="password" value={sourceAccount.password} onChange={(e) => setSourceAccount((prev) => ({ ...prev, password: e.target.value, saved: false }))} autoComplete="current-password" placeholder="请输入密码" />
-                    </label>
-                    <div className="reading-hub-inline-actions">
-                      <button type="button" className="reading-hub-primary" disabled={sourceLoading} onClick={async () => {
-                        const email = sourceAccount.email.trim();
-                        const password = sourceAccount.password;
-                        if (!email || !password) { setSourceMessage("请先填写邮箱和密码"); return; }
-                        setSourceLoading(true); setSourceMessage("正在登录书山…");
-                        try {
-                          const result = await (await import("@/lib/shushan-client")).loginShushan(email, password);
-                          const next: ShushanAccount = { email, password, apiKey: result.apiKey, saved: true, nickname: result.user?.nickname, isMember: result.user?.is_member === true };
-                          setSourceAccount(next); saveShushanAccount(next);
-                          setSourceMessage(`${result.user?.is_member ? "👑 会员" : "✅"} 登录成功${result.user?.nickname ? ` · ${result.user.nickname}` : ""}`);
-                        } catch (error) { setSourceMessage(error instanceof Error ? error.message : "登录失败"); } finally { setSourceLoading(false); }
-                      }}>{sourceLoading ? "处理中…" : sourceAccount.saved ? "✓ 已登录 · 重新登录" : "✓ 登录并保存"}</button>
-                      <button type="button" className="reading-hub-secondary" onClick={() => { clearShushanAccount(); setSourceAccount({ email: "", password: "", apiKey: "", saved: false }); setSourceResults([]); setSelectedSourceBook(null); setSourceDetail(null); setSourceChapters([]); setSourceMessage("已退出书山"); }}>退出登录</button>
-                    </div>
-                    {sourceMessage && <p className="reading-hub-source-status">{sourceMessage}</p>}
+                {sourceResults.length === 0 && genericResults.length > 0 && !genericBook && <div className="reading-hub-result-list">{genericResults.map((item, index) => (
+                  <button key={`${item.bookUrl}-${index}`} type="button" className="reading-hub-result-card" onClick={async () => {
+                    const source = bookSources.find((x) => x.id === selectedSourceId); if (!source) return;
+                    setGenericBook(item); setGenericDetail(null); setGenericChapters([]); setSourceLoading(true); setSourceMessage("正在打开详情…");
+                    try { const detail = await getGenericDetail(source, item); setGenericDetail(detail); const chapters = await getGenericCatalog(source, detail); setGenericChapters(chapters); setSourceMessage(`目录 ${chapters.length} 章`); }
+                    catch (error) { setSourceMessage(error instanceof Error ? error.message : "获取详情失败"); }
+                    finally { setSourceLoading(false); }
+                  }}><div className="reading-hub-result-cover">{item.cover ? <img src={item.cover} alt="" /> : <BookOpen size={24} />}</div><div className="reading-hub-result-main"><strong>{item.title}</strong><span>{item.author || "未知作者"}</span><small>{item.latestChapterTitle || item.desc || ""}</small></div><ChevronRight size={18} /></button>
+                ))}</div>}
 
-                    <div className="reading-hub-source-divider" />
-                    <div className="reading-hub-searchbox">
-                      <Search size={17} />
-                      <input disabled={!sourceAccount.saved || sourceLoading} value={sourceKeyword} onChange={(e) => setSourceKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { const button = e.currentTarget.parentElement?.querySelector("button"); (button as HTMLButtonElement | null)?.click(); } }} placeholder={sourceAccount.saved ? "输入书名；也支持 书名@番茄小说" : "请先登录书山"} />
-                      <button type="button" disabled={!sourceAccount.saved || sourceLoading || !sourceKeyword.trim()} onClick={async () => {
-                        if (!sourceAccount.apiKey || !sourceKeyword.trim()) return;
-                        const raw = sourceKeyword.trim(); const [keyword, inlineSource] = raw.split("@");
-                        setSourceLoading(true); setSourceMessage("");
-                        try { const result = await searchShushan(sourceAccount.apiKey, keyword.trim(), inlineSource?.trim() || sourceFilter, 1); setSourceResults(result.data || []); setSourceMessage(result.data?.length ? `找到 ${result.data.length} 本相关书籍` : "没有找到结果"); }
-                        catch (error) { setSourceResults([]); setSourceMessage(error instanceof Error ? error.message : "搜索失败"); }
-                        finally { setSourceLoading(false); }
-                      }}>搜索</button>
-                    </div>
-                    <label className="reading-hub-field reading-hub-source-filter"><span>指定来源（可留空）</span><input value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} placeholder="例如：番茄小说，七猫" /></label>
-                    {sourceResults.length > 0 && <div className="reading-hub-book-results">{sourceResults.map((item, index) => <button key={`${item.source}-${item.book_url}-${index}`} type="button" className="reading-hub-book-result" onClick={() => { setSelectedSourceBook(item); setSourceDetail(null); setSourceChapters([]); }}><div className="reading-hub-book-cover">{item.cover ? <img src={item.cover} alt="" /> : <BookOpen size={20} />}</div><div className="reading-hub-book-result-copy"><strong>{item.title || "未命名"}</strong><span>{item.author || "未知作者"} · {item.source || "书山"}</span><small>{item.latestChapterTitle || item.desc || "点击查看详情"}</small></div></button>)}</div>}
-                    {selectedSourceBook && <div className="reading-hub-source-detail">
-                      <div className="reading-hub-detail-head"><button type="button" onClick={() => setSelectedSourceBook(null)}>← 返回搜索结果</button><strong>{selectedSourceBook.title}</strong></div>
-                      {!sourceDetail ? <button type="button" className="reading-hub-primary" disabled={sourceLoading} onClick={async () => {
-                        if (!sourceAccount.apiKey) return; setSourceLoading(true); setSourceMessage("正在读取书籍详情…");
-                        try { const result = await getShushanDetail(sourceAccount.apiKey, selectedSourceBook); setSourceDetail(result.data); const cat = await getShushanCatalog(sourceAccount.apiKey, result.data); setSourceChapters(cat.data || []); setSourceMessage(`目录 ${cat.data?.length || 0} 章`); }
-                        catch (error) { setSourceMessage(error instanceof Error ? error.message : "获取详情失败"); } finally { setSourceLoading(false); }
-                      }}>查看详情与目录</button> : <>
-                        <div className="reading-hub-detail-card"><div className="reading-hub-detail-cover">{sourceDetail.cover ? <img src={sourceDetail.cover} alt="" /> : <BookOpen size={28} />}</div><div><h3>{sourceDetail.title || selectedSourceBook.title}</h3><p>{sourceDetail.author || "未知作者"} · {sourceDetail.source || "书山"}</p><small>{sourceDetail.desc || "暂无简介"}</small></div></div>
-                        <button type="button" className="reading-hub-primary" disabled={sourceChapters.length === 0 || sourceLoading} onClick={async () => {
-                          if (!sourceDetail || !sourceAccount.apiKey) return; const id = `shushan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; const book: Book = { id, title: sourceDetail.title || selectedSourceBook.title, author: sourceDetail.author || selectedSourceBook.author, format: "txt", totalChapters: sourceChapters.filter(ch => !ch.isVolume).length, createdAt: new Date().toISOString(), hasCover: false }; const chapters = sourceChapters.filter(ch => !ch.isVolume).map((chapter, index) => ({ id: `${id}_ch${index}`, bookId: id, index, title: chapter.title || `第${index + 1}章`, paragraphs: [] as string[] }));
-                          setSourceLoading(true); try { await addBook(book); await saveChapters(id, chapters); saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: sourceDetail.title || selectedSourceBook.title, apiKey: sourceAccount.apiKey, cover: sourceDetail.cover, desc: sourceDetail.desc, chapters: sourceChapters.filter(ch => !ch.isVolume) }); setSourceMessage("✅ 已加入书架，正在打开阅读器"); setActiveBook(book); } catch (error) { setSourceMessage(error instanceof Error ? error.message : "加入书架失败"); } finally { setSourceLoading(false); }
-                        }}>➕ 加入书架并开始阅读</button>
-                        <div className="reading-hub-chapter-list">{sourceChapters.slice(0, 120).map((chapter, index) => <div key={`${chapter.title}-${index}`} className={chapter.isPay || chapter.isVip ? "is-pay" : ""}><span>{chapter.title || `第${index + 1}章`}</span>{(chapter.isPay || chapter.isVip) && <em>付费</em>}</div>)}{sourceChapters.length > 120 && <small>已显示前 120 章，阅读时按需加载正文。</small>}</div>
-                      </>}
-                    </div>}
-                  </>
-                ) : selectedSourceId ? (() => {
-                  const currentSource = bookSources.find((item) => item.id === selectedSourceId);
-                  if (!currentSource) return null;
-                  const caps = sourceCapabilities(currentSource);
-                  return (
-                    <div>
-                      <div className="reading-hub-source-selected">当前书源：<strong>{currentSource.name}</strong></div>
-                      <div className="reading-hub-source-note">{caps.mode === "通用规则" ? "这个书源可以直接使用通用 HTTP/CSS/JSON/XPath 规则。" : caps.safeJs ? "这个书源含有少量可安全转换的 JS 规则；能识别的会自动兼容，其余脚本不会直接执行。" : "这个书源含有 JS/Java 规则；通用引擎不会直接执行陌生脚本，测试器会标出需要兼容适配的步骤。"}</div>
-                      <div className="reading-hub-source-testbar">
-                        <button type="button" className="reading-hub-secondary" disabled={sourceTestLoading || !sourceKeyword.trim()} onClick={async () => {
-                          setSourceTestLoading(true); setSourceTestReport(null); setSourceMessage("");
-                          try { const report = await testGenericSource(currentSource, sourceKeyword.trim()); setSourceTestReport(report); setSourceMessage("书源测试完成"); }
-                          catch (error) { setSourceMessage(error instanceof Error ? error.message : "书源测试失败"); }
-                          finally { setSourceTestLoading(false); }
-                        }}>{sourceTestLoading ? "测试中…" : "🧪 测试书源"}</button>
-                      </div>
-                      {sourceTestReport && <div className="reading-hub-source-testreport">
-                        <div className="reading-hub-source-testhead"><strong>自动检测：{sourceTestReport.mode}</strong><span>{sourceTestReport.hasJs ? (sourceCapabilities(currentSource).safeJs ? "含可安全转换 JS" : "含 JS/Java") : "纯规则"}</span></div>
-                        {sourceTestReport.steps.map((step) => <div key={`${step.key}-${step.message}`} className={`reading-hub-source-teststep is-${step.status}`}><span>{step.status === "ok" ? "✅" : step.status === "warn" ? "⚠️" : "❌"}</span><strong>{step.key === "search" ? "搜索" : step.key === "detail" ? "详情" : step.key === "catalog" ? "目录" : "正文"}</strong><small>{step.message}</small></div>)}
-                      </div>}
-                      <div className="reading-hub-searchbox">
-                        <Search size={17} />
-                        <input value={sourceKeyword} onChange={(e) => setSourceKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget.parentElement?.querySelector("button") as HTMLButtonElement | null)?.click(); }} placeholder="输入书名搜索" />
-                        <button type="button" disabled={sourceLoading || !sourceKeyword.trim()} onClick={async () => {
-                          setSourceLoading(true); setSourceMessage("");
-                          try { const result = await searchGenericSource(currentSource, sourceKeyword.trim(), 1); setGenericResults(result); setGenericBook(null); setGenericDetail(null); setGenericChapters([]); setSourceMessage(result.length ? `找到 ${result.length} 本相关书籍` : "没有找到结果"); }
-                          catch (error) { setGenericResults([]); setSourceMessage(error instanceof Error ? error.message : "通用搜索失败"); }
-                          finally { setSourceLoading(false); }
-                        }}>搜索</button>
-                      </div>
-                      {sourceMessage && <p className="reading-hub-source-status">{sourceMessage}</p>}
-                      {genericResults.length > 0 && !genericBook && <div className="reading-hub-book-results">{genericResults.map((item, index) => (
-                        <button key={`${item.bookUrl}-${index}`} type="button" className="reading-hub-book-result" onClick={() => setGenericBook(item)}>
-                          <div className="reading-hub-book-cover">{item.cover ? <img src={item.cover} alt="" /> : <BookOpen size={20} />}</div>
-                          <div className="reading-hub-book-result-copy"><strong>{item.title}</strong><span>{item.author || "未知作者"}</span><small>{item.latestChapterTitle || item.desc || "点击查看详情"}</small></div>
-                        </button>
-                      ))}</div>}
-                      {genericBook && <div className="reading-hub-source-detail">
-                        <div className="reading-hub-detail-head"><button type="button" onClick={() => { setGenericBook(null); setGenericDetail(null); setGenericChapters([]); }}>← 返回搜索结果</button><strong>{genericBook.title}</strong></div>
-                        {!genericDetail ? <button type="button" className="reading-hub-primary" disabled={sourceLoading} onClick={async () => {
-                          setSourceLoading(true); setSourceMessage("正在读取详情与目录…");
-                          try { const detail = await getGenericDetail(currentSource, genericBook); setGenericDetail(detail); const chapters = await getGenericCatalog(currentSource, detail); setGenericChapters(chapters); setSourceMessage(`目录 ${chapters.length} 章`); }
-                          catch (error) { setSourceMessage(error instanceof Error ? error.message : "获取详情失败"); } finally { setSourceLoading(false); }
-                        }}>查看详情与目录</button> : <>
-                          <div className="reading-hub-detail-card"><div className="reading-hub-detail-cover">{genericDetail.cover ? <img src={genericDetail.cover} alt="" /> : <BookOpen size={28} />}</div><div><h3>{genericDetail.title}</h3><p>{genericDetail.author || "未知作者"}</p><small>{genericDetail.desc || "暂无简介"}</small></div></div>
-                          <button type="button" className="reading-hub-primary" disabled={!genericChapters.length} onClick={async () => {
-                            const id = `source_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-                            const book: Book = { id, title: genericDetail.title, author: genericDetail.author, format: "txt", totalChapters: genericChapters.length, createdAt: new Date().toISOString(), hasCover: false };
-                            const chapters = genericChapters.map((chapter, index) => ({ id: `${id}_ch${index}`, bookId: id, index, title: chapter.title || `第${index + 1}章`, paragraphs: [] as string[] }));
-                            try { await addBook(book); await saveChapters(id, chapters); saveReadingRemoteBook(id, { sourceId: currentSource.id, sourceName: currentSource.name, book: { title: genericDetail.title, author: genericDetail.author, cover: genericDetail.cover, desc: genericDetail.desc, bookUrl: genericDetail.bookUrl }, chapters, savedAt: new Date().toISOString() }); setActiveBook(book); setSourceMessage("✅ 已加入书架，正在打开阅读器"); }
-                            catch (error) { setSourceMessage(error instanceof Error ? error.message : "加入书架失败"); }
-                          }}>➕ 加入书架并开始阅读</button>
-                          <div className="reading-hub-chapter-list">{genericChapters.slice(0, 120).map((chapter, index) => <div key={`${chapter.title}-${index}`} className={chapter.isPay || chapter.isVip ? "is-pay" : ""}><span>{chapter.title}</span>{(chapter.isPay || chapter.isVip) && <em>付费</em>}</div>)}</div>
-                        </>}
-                      </div>}
-                    </div>
-                  );
-                })() : null}
+                {selectedSourceBook && <div className="reading-hub-detail-page"><button type="button" className="reading-hub-backlink" onClick={() => setSelectedSourceBook(null)}>← 返回搜索结果</button>{sourceDetail ? <><div className="reading-hub-detail-card"><div className="reading-hub-detail-cover">{sourceDetail.cover ? <img src={sourceDetail.cover} alt="" /> : <BookOpen size={28} />}</div><div><h3>{sourceDetail.title || selectedSourceBook.title}</h3><p>{sourceDetail.author || "未知作者"} · {sourceDetail.source || "书山"}</p><small>{sourceDetail.desc || "暂无简介"}</small></div></div><button type="button" className="reading-hub-primary" disabled={!sourceChapters.length || sourceLoading} onClick={async () => { const id=`shushan_${Date.now()}`; const book:Book={id,title:sourceDetail.title||selectedSourceBook.title,author:sourceDetail.author||selectedSourceBook.author,format:"txt",totalChapters:sourceChapters.filter(x=>!x.isVolume).length,createdAt:new Date().toISOString(),hasCover:false}; const chapters=sourceChapters.filter(x=>!x.isVolume).map((c,i)=>({id:`${id}_ch${i}`,bookId:id,index:i,title:c.title||`第${i+1}章`,paragraphs:[] as string[]})); await addBook(book); await saveChapters(id,chapters); saveRemoteBook(id,{source:sourceDetail.source,url:sourceDetail.book_url,name:sourceDetail.title||selectedSourceBook.title,apiKey:loadShushanAccount().apiKey,cover:sourceDetail.cover,desc:sourceDetail.desc,chapters:sourceChapters.filter(x=>!x.isVolume)}); setActiveBook(book); }}>加入书架并开始阅读</button><div className="reading-hub-chapter-list">{sourceChapters.slice(0,120).filter(x=>!x.isVolume).map((c,i)=><div key={`${c.title}-${i}`}><span>{c.title}</span>{(c.isPay||c.isVip)&&<em>付费</em>}</div>)}</div></> : <div className="reading-hub-source-loading">详情加载中…</div>}</div>}
+                {genericBook && <div className="reading-hub-detail-page"><button type="button" className="reading-hub-backlink" onClick={() => setGenericBook(null)}>← 返回搜索结果</button>{genericDetail ? <><div className="reading-hub-detail-card"><div className="reading-hub-detail-cover">{genericDetail.cover ? <img src={genericDetail.cover} alt="" /> : <BookOpen size={28} />}</div><div><h3>{genericDetail.title}</h3><p>{genericDetail.author||"未知作者"}</p><small>{genericDetail.desc||"暂无简介"}</small></div></div><button type="button" className="reading-hub-primary" disabled={!genericChapters.length} onClick={async()=>{const source=bookSources.find(x=>x.id===selectedSourceId);if(!source)return;const id=`source_${Date.now()}`;const book:Book={id,title:genericDetail.title,author:genericDetail.author,format:"txt",totalChapters:genericChapters.length,createdAt:new Date().toISOString()};await addBook(book);await saveChapters(id,genericChapters.map((c,i)=>({id:`${id}_ch${i}`,bookId:id,index:i,title:c.title,paragraphs:[]})));saveReadingRemoteBook(id,{sourceId:source.id,sourceName:source.name,book:{title:genericDetail.title,author:genericDetail.author,cover:genericDetail.cover,desc:genericDetail.desc,bookUrl:genericDetail.bookUrl},chapters:genericChapters,savedAt:new Date().toISOString()});setActiveBook(book);}}>加入书架并开始阅读</button><div className="reading-hub-chapter-list">{genericChapters.slice(0,120).map((c,i)=><div key={`${c.title}-${i}`}><span>{c.title}</span>{(c.isPay||c.isVip)&&<em>付费</em>}</div>)}</div></> : <div className="reading-hub-source-loading">详情加载中…</div>}</div>}
               </section>
             )}
 
@@ -615,6 +393,145 @@ export default function ReadingApp({ onClose }: Props) {
               </section>
             )}
           </main>
+
+          {sourceDrawerOpen && (
+            <div className="reading-hub-drawer-backdrop" onClick={() => setSourceDrawerOpen(false)}>
+              <aside className="reading-hub-drawer" onClick={(e) => e.stopPropagation()}>
+                <div className="reading-hub-drawer-head">
+                  <strong>书源</strong>
+                  <button type="button" onClick={() => setSourceDrawerOpen(false)}><X size={18} /></button>
+                </div>
+                <div className="reading-hub-drawer-actions">
+                  <button type="button" onClick={() => sourceFileInputRef.current?.click()}><Upload size={16} /> 导入书源</button>
+                  <button type="button" onClick={() => {
+                    const source = bookSources.find((x) => x.id === selectedSourceId);
+                    if (!source) return;
+                    try {
+                      const parsed = JSON.parse(String((source.raw as any).loginUi || "[]"));
+                      const fields = (Array.isArray(parsed) ? parsed : [])
+                        .filter((x: any) => x && x.type !== "button")
+                        .map((x: any) => ({ name: String(x.name || "账号"), type: String(x.type || "text") }));
+                      const init: Record<string, string> = {};
+                      for (const field of fields) init[field.name] = "";
+                      if (source.adapter === "shushan") {
+                        const account = loadShushanAccount();
+                        if (fields.some((x: LoginField) => x.name === "邮箱")) init["邮箱"] = account.email;
+                        if (fields.some((x: LoginField) => x.name === "密码")) init["密码"] = account.password;
+                      }
+                      setLoginFields(init);
+                      setSourceLoginOpen(true);
+                    } catch {
+                      setSourceMessage("该书源登录配置无法读取");
+                    }
+                  }}><LogIn size={16} /> 书源登录</button>
+                  <button type="button" onClick={() => setTab("appearance")}><Palette size={16} /> 阅读外观</button>
+                </div>
+                <div className="reading-hub-drawer-section">
+                  <div className="reading-hub-drawer-title">我的书源</div>
+                  {bookSources.map((source) => (
+                    <div key={source.id} className="reading-hub-drawer-source">
+                      <button type="button" onClick={() => {
+                        setSelectedSourceId(source.id);
+                        setSourceDrawerOpen(false);
+                        setSourceMessage("");
+                        setSourceResults([]); setGenericResults([]);
+                        setSelectedSourceBook(null); setGenericBook(null);
+                        setSourceDetail(null); setGenericDetail(null);
+                        setSourceChapters([]); setGenericChapters([]);
+                      }}>
+                        <strong>{source.name}</strong>
+                        <small>{source.group || "未分组"} · {source.enabled ? "已启用" : "已停用"}</small>
+                      </button>
+                      <input type="checkbox" checked={source.enabled} onChange={(e) => {
+                        setReadingSourceEnabled(source.id, e.target.checked);
+                        setBookSources(loadReadingSources());
+                      }} />
+                    </div>
+                  ))}
+                </div>
+                <div className="reading-hub-drawer-section">
+                  <div className="reading-hub-drawer-title">当前书源设置</div>
+                  {selectedSourceId && <div className="reading-hub-drawer-meta">
+                    <label className="reading-hub-field"><span>书源名称</span><input value={sourceEditName || (bookSources.find((x) => x.id === selectedSourceId)?.name || "")} onChange={(e) => setSourceEditName(e.target.value)} /></label>
+                    <label className="reading-hub-field"><span>分组</span><input value={sourceEditGroup || (bookSources.find((x) => x.id === selectedSourceId)?.group || "")} onChange={(e) => setSourceEditGroup(e.target.value)} /></label>
+                    <div className="reading-hub-inline-actions"><button type="button" className="reading-hub-primary" onClick={() => { const updated=updateReadingSourceMeta(selectedSourceId,{name:sourceEditName,group:sourceEditGroup}); setBookSources(loadReadingSources()); setSourceMessage(updated?"✅ 书源信息已保存":"保存失败"); }}>保存修改</button><button type="button" className="reading-hub-secondary" onClick={() => { clearReadingSourceState(selectedSourceId); clearShushanAccount(); setSourceMessage("已清除当前书源登录状态"); }}>清除登录状态</button></div>
+                  </div>}
+                  {selectedSourceId && (() => {
+                    const selected = bookSources.find((x) => x.id === selectedSourceId);
+                    if (!selected) return null;
+                    let controls: Array<{ name: string; action: string }> = [];
+                    try {
+                      const parsed = JSON.parse(String((selected.raw as any)?.loginUi || "[]"));
+                      controls = (Array.isArray(parsed) ? parsed : []).filter((x: any) => x && x.type === "button" && String(x.name || "").trim()).map((x: any) => ({ name: String(x.name), action: String(x.action || "") }));
+                    } catch {}
+                    const runNative = async (action: string) => {
+                      if (selected.adapter !== "shushan") { setSourceMessage("该书源的按钮动作需要对应兼容适配器。"); return; }
+                      const account = loadShushanAccount();
+                      const host = selected.url || "https://v1.vossc.com";
+                      const open = (url: string) => { try { window.open(url, "_blank", "noopener,noreferrer"); } catch { window.location.href = url; } };
+                      if (/^key\(\)/i.test(action)) return open(`${host}/user_login`);
+                      if (/^user_center\(\)/i.test(action)) return open(`${host}/user_center`);
+                      if (/^version\(\)/i.test(action)) return open(`${host}/version?id=5.37`);
+                      if (/^password\(\)/i.test(action)) return open(`${host}/forgot_password`);
+                      if (/^fb\(\)/i.test(action)) return open("https://fb.shushan.vip");
+                      if (/^user_logout\(\)/i.test(action)) { clearShushanAccount(); setSourceAccount({ email: "", password: "", apiKey: "", saved: false }); setSourceResults([]); setSourceDetail(null); setSelectedSourceBook(null); setSourceChapters([]); setSourceMessage("已按书源动作退出登录"); return; }
+                      if (/^boy\(\)/i.test(action) || /^girl\(\)/i.test(action)) {
+                        const gender = /^boy/i.test(action) ? "boy" : "girl"; saveReadingSourceState(selected.id, { variables: { ...(loadReadingSourceState(selected.id).variables || {}), gender }, updatedAt: new Date().toISOString() }); setSourceMessage(gender === "boy" ? "已切换男频" : "已切换女频"); return;
+                      }
+                      if (/^type[1-4]\(\)/i.test(action)) { const type = action.match(/^type([1-4])/i)?.[1] || "1"; saveReadingSourceState(selected.id, { variables: { ...(loadReadingSourceState(selected.id).variables || {}), type }, updatedAt: new Date().toISOString() }); setSourceMessage(`已切换模式：${["", "小说", "听书", "漫画", "视频"][Number(type)]}`); return; }
+                      setSourceMessage("这个原生按钮已显示，但当前没有安全的直接执行器；不会运行陌生 JavaScript。");
+                    };
+                    return controls.length ? <div className="reading-hub-native-functions"><div className="reading-hub-drawer-subtitle">书源原生功能</div>{controls.slice(0, 16).map((item) => <button type="button" key={`${item.name}-${item.action}`} onClick={() => void runNative(item.action)}><span>{item.name}</span><ChevronRight size={14}/></button>)}</div> : null;
+                  })()}
+                </div>
+              </aside>
+            </div>
+          )}
+
+          {sourceLoginOpen && (
+            <div className="reading-hub-login-modal" onClick={() => setSourceLoginOpen(false)}>
+              <div className="reading-hub-login-card" onClick={(e) => e.stopPropagation()}>
+                <div className="reading-hub-drawer-head">
+                  <strong>{bookSources.find((x) => x.id === selectedSourceId)?.name || "书源"} · 登录</strong>
+                  <button type="button" onClick={() => setSourceLoginOpen(false)}><X size={18} /></button>
+                </div>
+                {Object.entries(loginFields).map(([name, value]) => (
+                  <label key={name} className="reading-hub-field">
+                    <span>{name}</span>
+                    <input
+                      type={/密码|password/i.test(name) ? "password" : "text"}
+                      value={value}
+                      onChange={(e) => setLoginFields((prev) => ({ ...prev, [name]: e.target.value }))}
+                    />
+                  </label>
+                ))}
+                <button type="button" className="reading-hub-primary" onClick={async () => {
+                  const source = bookSources.find((x) => x.id === selectedSourceId);
+                  if (!source) return;
+                  if (source.adapter !== "shushan") {
+                    setSourceMessage("这个书源的登录动作包含专用脚本；当前安全兼容层不会在浏览器直接执行未知 Java。");
+                    setSourceLoginOpen(false);
+                    return;
+                  }
+                  const email = loginFields["邮箱"] || Object.values(loginFields)[0] || "";
+                  const password = loginFields["密码"] || Object.values(loginFields)[1] || "";
+                  if (!email || !password) { setSourceMessage("请填写登录信息"); return; }
+                  setSourceLoading(true);
+                  try {
+                    const result = await (await import("@/lib/shushan-client")).loginShushan(email, password);
+                    const next = { email, password, apiKey: result.apiKey, saved: true, nickname: result.user?.nickname, isMember: result.user?.is_member === true };
+                    saveShushanAccount(next);
+                    setSourceMessage("✅ 书源登录成功");
+                    setSourceLoginOpen(false);
+                  } catch (error) {
+                    setSourceMessage(error instanceof Error ? error.message : "登录失败");
+                  } finally {
+                    setSourceLoading(false);
+                  }
+                }}>登录并保存</button>
+              </div>
+            </div>
+          )}
 
           <nav
             className="reading-hub-bottom-nav"
