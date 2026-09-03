@@ -150,9 +150,13 @@ function discoverSourceModules(source: ReadingBookSource): Array<{ title: string
     };
     const male = parseCats(maleBlock?.[1]);
     const female = parseCats(maleBlock?.[2]);
-    const rankUrl = `${source.url.replace(/\/$/, "")}/style_top?rank_list_type=3&offset={{(page-1)*10}}&limit=10&category_id={{categoryId}}&gender={{genderCode}}&rankMold={{rankMold}}`;
+    const shushanHost = /vossc\.com/i.test(source.url) ? source.url.replace(/\/$/, "") : SHUSHAN_HOSTS[0];
+    const rankUrl = `${shushanHost}/style_top?rank_list_type=3&offset={{(page-1)*10}}&limit=10&category_id={{categoryId}}&gender={{genderCode}}&rankMold={{rankMold}}`;
+    // 解析不到动态数组时，仍保留书山发布页里最常用的分类，避免发现页变成空白。
+    const fallbackFemale = [{ id: "24", name: "快穿" }, { id: "79", name: "年代" }, { id: "23", name: "种田" }, { id: "248", name: "玄幻言情" }];
+    const fallbackMale = [{ id: "1141", name: "西方奇幻" }, { id: "1140", name: "东方仙侠" }, { id: "261", name: "都市日常" }, { id: "258", name: "传统玄幻" }];
     // 用户要的是发现页里的细分榜单；把女频新书榜等动态按钮全部变成可添加模块。
-    for (const [genderCode, label, cats] of [["0", "女频", female], ["1", "男频", male]] as const) {
+    for (const [genderCode, label, cats] of [["0", "女频", female.length ? female : fallbackFemale], ["1", "男频", male.length ? male : fallbackMale]] as const) {
       for (const [rankMold, rankLabel] of [["2", "阅读榜"], ["1", "新书榜"]] as const) {
         for (const cat of cats) push(`${label}${rankLabel} · ${cat.name}`, rankUrl.replace(/\{\{categoryId\}\}/g, cat.id).replace(/\{\{genderCode\}\}/g, genderCode).replace(/\{\{rankMold\}\}/g, rankMold), );
       }
@@ -262,7 +266,12 @@ export default function ReadingApp({ onClose }: Props) {
       savedModules = Array.isArray(rawModules) ? rawModules : [];
     } catch {}
     // 首次使用时给一个真正来自发现页的细分榜单示例；之后完全由用户管理。
-    if (savedModules.length === 0) {
+    const shouldRepairDiscoverModules = savedModules.length > 0 && savedModules.every((item: any) => {
+      const url = String(item?.url || "");
+      const title = String(item?.title || "");
+      return /vossc\.com/i.test(url) && (/女频|男频|榜|快穿|年代|玄幻|都市|分类/.test(title));
+    });
+    if (savedModules.length === 0 || shouldRepairDiscoverModules) {
       const selected = installed.find(item => item.id === firstSourceId);
       if (selected) {
         const discovered = discoverSourceModules(selected);
@@ -397,10 +406,11 @@ export default function ReadingApp({ onClose }: Props) {
       if (depth > 6 || v == null) return;
       if (Array.isArray(v)) { for (const item of v) visit(item, depth + 1); return; }
       if (typeof v !== "object") return;
-      const title = v.title ?? v.book_name ?? v.bookName ?? v.name ?? v.book_title ?? v.novel_name;
-      const bookId = String(v.book_id_str ?? v.book_id ?? v.bookId ?? "");
-      const bookUrl = v.book_url ?? v.bookUrl ?? v.detail_url ?? (bookId ? "" : (v.url ?? ""));
-      if (title && (bookUrl || bookId || v.author || v.cover || v.cover_url || v.image_url || v.thumb_url || v.thumbUri || v.audio_thumb_uri)) {
+      const title = v.title ?? v.book_name ?? v.bookName ?? v.name ?? v.book_title ?? v.novel_name ?? v.original_book_name;
+      const bookId = String(v.book_id_str ?? v.book_id ?? v.bookId ?? v.series_id ?? "");
+      const rawBookUrl = v.book_url ?? v.bookUrl ?? v.detail_url ?? v.detailUrl ?? v.url ?? "";
+      const bookUrl = String(rawBookUrl || "");
+      if (title && (bookUrl || bookId || v.author || v.author_name || v.cover || v.cover_url || v.image_url || v.thumb_url || v.thumbUri || v.audio_thumb_uri)) {
         const key = `${String(title)}|${String(bookUrl)}|${bookId}`;
         if (!seen.has(key)) {
           seen.add(key);

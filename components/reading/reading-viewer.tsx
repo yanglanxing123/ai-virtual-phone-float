@@ -1965,7 +1965,7 @@ export function ReadingViewer({ book, onBack }: Props) {
         : null;
 
     return (
-        <div className="reading-app-surface absolute inset-0 z-[100] flex flex-col bg-[var(--c-page-body-bg)]" data-immersive={immersive} style={{ paddingTop: "var(--page-header-safe-top, 48px)", "--reading-layout-top": `${readingLayout.top}px`, "--reading-layout-bottom": `${readingLayout.bottom}px` } as React.CSSProperties}>
+        <div className="reading-app-surface absolute inset-0 z-[100] flex flex-col bg-[var(--c-page-body-bg)]" data-immersive={immersive} style={{ paddingTop: "var(--page-header-safe-top, 48px)", "--reading-layout-top": `${readingLayout.top}px`, "--reading-layout-bottom": `${readingLayout.bottom}px`, "--reading-layout-left": `${readingLayout.left}px`, "--reading-layout-right": `${readingLayout.right}px` } as React.CSSProperties}>
             {/* Page flip overlay */}
             {flipAnim && (
                 <>
@@ -2043,12 +2043,13 @@ export function ReadingViewer({ book, onBack }: Props) {
             )}
 
             {/* Reading content */}
+            <div className="reading-content-frame">
             <div
                 ref={scrollRef}
                 className={`relative flex-1 min-h-0 ${isPdf || readingMode === "continuous" ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden"}`}
                 style={{
-                    paddingTop: "var(--reading-layout-top)",
-                    paddingBottom: "var(--reading-layout-bottom)",
+                    paddingTop: readingMode === "continuous" ? 0 : "var(--reading-layout-top)",
+                    paddingBottom: readingMode === "continuous" ? 0 : "var(--reading-layout-bottom)",
                     paddingLeft: "var(--reading-layout-left)",
                     paddingRight: "var(--reading-layout-right)",
                     boxSizing: "border-box",
@@ -2143,6 +2144,13 @@ export function ReadingViewer({ book, onBack }: Props) {
                 )}
 
                 {isPdf && <div className="h-[88px]" />}
+            </div>
+            {!isPdf && readingMode === "continuous" && (
+                <>
+                    <div className="reading-layout-mask reading-layout-mask--top" aria-hidden="true" />
+                    <div className="reading-layout-mask reading-layout-mask--bottom" aria-hidden="true" />
+                </>
+            )}
             </div>
 
             {/* Immersive Page Number */}
