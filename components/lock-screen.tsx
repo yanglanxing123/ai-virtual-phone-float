@@ -5,21 +5,22 @@ import { Camera, Delete, Flashlight, LockKeyhole, ChevronUp, Settings2 } from "l
 import { getThemeAssetMap, saveThemeAssetFromBlob, deleteThemeAsset, describeAssetSaveError } from "@/lib/theme-storage";
 
 const LOCK_SCREEN_SETTINGS_KEY = "ai_phone_lock_screen_settings_v1";
+const DEFAULT_LOCK_PASSWORD = "";
 
 export type LockScreenSettings = {
   wallpaperAssetId: string | null;
   wallpaperLibrary: string[];
   password: string;
-  passwordConfigured: boolean;
   passwordEnabled: boolean;
+  passwordConfigured: boolean;
 };
 
 const DEFAULT_SETTINGS: LockScreenSettings = {
   wallpaperAssetId: null,
   wallpaperLibrary: [],
-  password: "",
-  passwordConfigured: false,
+  password: DEFAULT_LOCK_PASSWORD,
   passwordEnabled: true,
+  passwordConfigured: false,
 };
 
 function normalizeSettings(raw: unknown): LockScreenSettings {
@@ -30,13 +31,13 @@ function normalizeSettings(raw: unknown): LockScreenSettings {
   const id = typeof source.wallpaperAssetId === "string" && source.wallpaperAssetId.trim() ? source.wallpaperAssetId.trim() : null;
   if (id && !library.includes(id)) library.unshift(id);
   const rawPassword = typeof source.password === "string" ? source.password.replace(/\D/g, "").slice(0, 8) : "";
-  const configured = typeof source.passwordConfigured === "boolean" ? source.passwordConfigured : false;
   return {
     wallpaperAssetId: id,
     wallpaperLibrary: library,
     password: rawPassword.length >= 4 ? rawPassword : "",
-    passwordConfigured: configured && rawPassword.length >= 4,
     passwordEnabled: typeof source.passwordEnabled === "boolean" ? source.passwordEnabled : true,
+    // 只有用户明确完成过设置才视为已有密码；兼容旧版本误写入的默认 123456。
+    passwordConfigured: source.passwordConfigured === true && rawPassword.length >= 4,
   };
 }
 
@@ -119,10 +120,9 @@ export function LockScreen({
 }) {
   const [settings, setSettings] = useState<LockScreenSettings>(() => readLockScreenSettings());
   const [wallpaper, setWallpaper] = useState<string | null>(initialWallpaper);
-  const [mode, setMode] = useState<"lock" | "passcode">("lock");
+  const [mode, setMode] = useState<"lock" | "passcode" | "setup" | "setupConfirm">("lock");
   const [now, setNow] = useState(() => new Date());
   const [entered, setEntered] = useState("");
-  const [setupConfirm, setSetupConfirm] = useState("");
   const [error, setError] = useState(false);
   const gestureRef = useRef<{ startY: number; active: boolean }>({ startY: 0, active: false });
 
@@ -151,6 +151,7 @@ export function LockScreen({
   useEffect(() => {
     if (!ready) return;
     if (!settings.passwordEnabled) setMode("lock");
+    else if (!settings.passwordConfigured) setMode("setup");
   }, [ready, settings.passwordEnabled]);
 
   const displayTime = formatTime(now);
@@ -178,33 +179,9 @@ export function LockScreen({
     const delta = event.clientY - gestureRef.current.startY;
     gestureRef.current.active = false;
     if (delta < -56 && mode === "lock") {
-      if (settings.passwordEnabled) setMode("passcode");
+      if (settings.passwordEnabled) setMode(settings.passwordConfigured ? "passcode" : "setup");
       else onUnlock();
     }
-  };
-
-  const finishPasswordSetup = (value: string) => {
-    if (value.length < 4) return;
-    if (!setupConfirm) {
-      setSetupConfirm(value);
-      setEntered("");
-      setError(false);
-      return;
-    }
-    if (value !== setupConfirm) {
-      setError(true);
-      setEntered("");
-      setSetupConfirm("");
-      window.setTimeout(() => setError(false), 520);
-      return;
-    }
-    const next = { ...settings, password: value, passwordConfigured: true, passwordEnabled: true };
-    writeLockScreenSettings(next);
-    setSettings(next);
-    setEntered("");
-    setSetupConfirm("");
-    setError(false);
-    onUnlock();
   };
 
   const pressKey = (digit: string) => {
@@ -212,32 +189,62 @@ export function LockScreen({
     setError(false);
     const next = `${entered}${digit}`;
     setEntered(next);
-    if (next.length >= 4 && next.length <= 8) {
-      if (!settings.passwordConfigured) {
-        // 首次设置密码：只有点击“继续”才进入确认，避免误触直接提交。
-        return;
-      }
-      if (next.length === settings.password.length) {
+
+    if (mode === "setup") {
+      // 设置密码阶段只收集第一遍密码，满 4 位后进入确认阶段。
+      if (next.length >= 4) {
         window.setTimeout(() => {
-          if (next === settings.password) {
-            onUnlock();
-          } else {
-            setError(true);
-            setEntered("");
-            window.setTimeout(() => setError(false), 520);
-          }
-        }, 80);
+          window.sessionStorage.setItem("ai_phone_lock_setup_draft", next);
+          setEntered("");
+          setMode("setupConfirm");
+        }, 120);
       }
+      return;
+    }
+
+    if (mode === "setupConfirm") {
+      // 第二遍确认交给 confirmPassword 单独处理，避免误触发旧密码校验。
+      return;
+    }
+
+    if (next.length === settings.password.length) {
+      window.setTimeout(() => {
+        if (next === settings.password) {
+          setEntered("");
+          onUnlock();
+        } else {
+          setError(true);
+          setEntered("");
+          window.setTimeout(() => setError(false), 520);
+        }
+      }, 80);
     }
   };
 
-  const submitSetup = () => {
-    if (entered.length < 4 || entered.length > 8) {
+  const confirmPassword = () => {
+    // setup 阶段的第一遍密码暂存在 sessionStorage，刷新前不会污染正式密码。
+    const first = window.sessionStorage.getItem("ai_phone_lock_setup_draft") || "";
+    if (mode === "setup") return;
+    if (entered.length < 4) return;
+
+    if (first && entered === first) {
+      const next = {
+        ...settings,
+        password: entered,
+        passwordConfigured: true,
+        passwordEnabled: true,
+      };
+      writeLockScreenSettings(next);
+      setSettings(next);
+      window.sessionStorage.removeItem("ai_phone_lock_setup_draft");
+      setEntered("");
+      onUnlock();
+    } else {
       setError(true);
+      setEntered("");
+      window.sessionStorage.removeItem("ai_phone_lock_setup_draft");
       window.setTimeout(() => setError(false), 520);
-      return;
     }
-    finishPasswordSetup(entered);
   };
 
   return (
@@ -308,13 +315,15 @@ export function LockScreen({
                   }}
                 >
                   <LockKeyhole size={20} strokeWidth={2} style={{ opacity: .9 }} />
-                  <div style={{ marginTop: 12, fontSize: 16, fontWeight: 600 }}>{settings.passwordConfigured ? "请输入密码" : (setupConfirm ? "再次输入密码" : "设置锁屏密码")}</div>
+                  <div style={{ marginTop: 12, fontSize: 16, fontWeight: 600 }}>
+                    {mode === "setup" ? "设置锁屏密码" : mode === "setupConfirm" ? "再次输入密码" : "请输入密码"}
+                  </div>
                   <div style={{ marginTop: 15, display: "flex", gap: 10, minHeight: 10, animation: error ? "lockscreen-shake .42s ease" : undefined }}>
-                    {Array.from({ length: settings.password.length }).map((_, index) => (
+                    {Array.from({ length: mode === "setup" ? Math.max(entered.length, 4) : mode === "setupConfirm" ? Math.max(entered.length, 4) : settings.password.length }).map((_, index) => (
                       <span key={index} style={{ width: 9, height: 9, borderRadius: 50, background: index < entered.length ? "white" : "rgba(255,255,255,.34)", boxShadow: "0 0 8px rgba(255,255,255,.2)" }} />
                     ))}
                   </div>
-                  <div style={{ marginTop: 12, minHeight: 18, fontSize: 12, color: error ? "#ffb7b7" : "rgba(255,255,255,0)" }}>{error ? (settings.passwordConfigured ? "密码错误" : "两次密码不一致") : ""}</div>
+                  <div style={{ marginTop: 12, minHeight: 18, fontSize: 12, color: error ? "#ffb7b7" : "rgba(255,255,255,0)" }}>密码错误</div>
 
                   <div style={{ marginTop: "auto", width: "min(330px, 100%)", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
                     {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((digit, index) => (
@@ -322,16 +331,34 @@ export function LockScreen({
                         <button
                           key={`${digit}-${index}`}
                           type="button"
-                          onClick={() => digit === "⌫" ? setEntered(v => v.slice(0, -1)) : pressKey(digit)}
+                          onClick={() => {
+                            if (digit === "⌫") setEntered(v => v.slice(0, -1));
+                            else if (mode === "setupConfirm") {
+                              if (entered.length < 8) setEntered(v => `${v}${digit}`);
+                            } else pressKey(digit);
+                          }}
                           style={{ height: 67, borderRadius: 34, border: "0", background: "rgba(255,255,255,.18)", color: "white", fontSize: digit === "⌫" ? 21 : 26, fontWeight: 400, backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.12)" }}
                         >{digit === "⌫" ? <Delete size={21} strokeWidth={1.8} /> : digit}</button>
                       ) : <div key="empty" />
                     ))}
                   </div>
 
+                  {mode === "setupConfirm" && (
+                    <button
+                      type="button"
+                      onClick={confirmPassword}
+                      disabled={entered.length < 4}
+                      style={{
+                        marginTop: 12, width: "min(330px, 100%)", height: 42, borderRadius: 21,
+                        border: 0, background: entered.length >= 4 ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.25)",
+                        color: entered.length >= 4 ? "#111" : "rgba(255,255,255,.55)", fontWeight: 700
+                      }}
+                    >确认密码</button>
+                  )}
+
                   <div style={{ width: "100%", display: "flex", justifyContent: "space-between", marginTop: 15, fontSize: 12, opacity: .84 }}>
-                    <button type="button" onClick={() => { setMode("lock"); setEntered(""); setSetupConfirm(""); setError(false); }} style={{ background: "transparent", border: 0, color: "white", padding: 8 }}>返回锁屏</button>
-                    {!settings.passwordConfigured ? <button type="button" onClick={submitSetup} style={{ background: "transparent", border: 0, color: "white", padding: 8, fontWeight: 700 }}>继续</button> : <span>密码 {settings.password.length} 位</span>}
+                    <button type="button" onClick={() => setMode("lock")} style={{ background: "transparent", border: 0, color: "white", padding: 8 }}>返回锁屏</button>
+                    <span>密码 {settings.password.length} 位</span>
                   </div>
                   <div style={{ position: "absolute", bottom: 7, left: "50%", transform: "translateX(-50%)", width: 34, height: 4, borderRadius: 4, background: "rgba(255,255,255,.9)" }} />
                 </div>
@@ -412,7 +439,7 @@ export function LockScreenSettingsPage({ onNotice }: { onNotice: (text: string) 
       onNotice("密码至少需要 4 位数字");
       return;
     }
-    applySettings({ ...settings, password: clean, passwordConfigured: true, passwordEnabled: true });
+    applySettings({ ...settings, password: clean });
     onNotice("锁屏密码已更新");
   };
 
@@ -439,7 +466,7 @@ export function LockScreenSettingsPage({ onNotice }: { onNotice: (text: string) 
           <input value={draftPassword} onChange={e => setDraftPassword(e.target.value.replace(/\D/g, "").slice(0, 8))} inputMode="numeric" type="password" maxLength={8} style={{ flex: 1, height: 40, border: "1px solid var(--c-card-border)", borderRadius: 12, background: "var(--c-input)", padding: "0 12px", color: "var(--c-text-title)" }} />
           <button type="button" onClick={savePassword} style={{ border: 0, borderRadius: 12, padding: "0 14px", background: "var(--c-text-title)", color: "white", fontWeight: 700 }}>修改</button>
         </div>
-        <div style={{ marginTop: 7, fontSize: 11, color: "var(--c-icon)" }}>首次使用请先设置 4～8 位数字密码；设置后可在这里修改。</div>
+        <div style={{ marginTop: 7, fontSize: 11, color: "var(--c-icon)" }}>默认密码：123456，可修改为 4～8 位数字。</div>
       </div>
 
       <div className="flex flex-col items-center justify-center pt-2 pb-4 border-b border-black/5">
