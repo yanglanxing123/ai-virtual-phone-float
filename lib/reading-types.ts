@@ -5,6 +5,8 @@ export type Book = {
     title: string;
     author?: string;
     format: "txt" | "epub" | "pdf";
+    /** 书源阅读器类型；manga 表示长图漫画。 */
+    readerType?: "manga" | "text";
     totalChapters: number;
     createdAt: string;
     hasCover?: boolean;

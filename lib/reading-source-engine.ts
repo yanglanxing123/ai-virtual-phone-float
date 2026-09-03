@@ -275,6 +275,12 @@ async function fetchSource(request: {
 }
 
 export async function fetchReadingSourceModule(source: ReadingBookSource, moduleUrl: string, page = 1): Promise<unknown> {
+  // 楠楠漫画的 exploreUrl 本身就是标准 Legado「发现页模块」数组，
+  // 每个模块只是一个带 POST 参数的请求地址；直接复用漫画源自己的 ruleExplore。
+  if (isNanmComicSource(source)) {
+    return fetchNanmExploreModule(source, moduleUrl, page);
+  }
+
   const state = loadReadingSourceState(source.id);
   const vars = { ...(state.variables || {}), key: "", page: String(page), pageIndex: String(page), keyword: "" };
   const templated = replaceVars(moduleUrl, vars);
@@ -716,6 +722,129 @@ export function sourceCapabilities(source: ReadingBookSource) {
 }
 
 
+
+function isNanmComicSource(source: ReadingBookSource) {
+  const raw = source.raw as any;
+  return raw?.bookSourceType === 2 || /楠楠漫画|nnmh\.info/i.test(`${source.name} ${source.url}`);
+}
+
+function normalizeNanmCover(value: unknown, base: string) {
+  const url = joinUrl(base, asText(value));
+  return url || undefined;
+}
+
+async function decryptNanmEncryptedData(encoded: string): Promise<string> {
+  const normalized = encoded.trim().replace(/\\/g, "");
+  const binary = atob(normalized.replace(/-/g, "+").replace(/_/g, "/"));
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  if (bytes.byteLength <= 16) throw new Error("漫画正文密文长度异常");
+  const iv = bytes.slice(0, 16);
+  const ciphertext = bytes.slice(16);
+  const keyBytes = new TextEncoder().encode("tH1rU6qZ4vU1sK7pN1wO7mX4bY6dQ9gX");
+  if (!globalThis.crypto?.subtle) throw new Error("当前浏览器不支持漫画正文解密");
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-CBC" }, false, ["decrypt"]);
+  const plainBuffer = await crypto.subtle.decrypt({ name: "AES-CBC", iv }, key, ciphertext);
+  const plain = new Uint8Array(plainBuffer);
+  if (!plain.length) return "[]";
+  const pad = plain[plain.length - 1];
+  const end = pad >= 1 && pad <= 16 && pad <= plain.length ? plain.length - pad : plain.length;
+  return new TextDecoder("utf-8").decode(plain.slice(0, end));
+}
+
+async function fetchNanmExploreModule(source: ReadingBookSource, moduleUrl: string, page: number): Promise<unknown> {
+  const state = loadReadingSourceState(source.id);
+  const vars = { ...(state.variables || {}), key: "", page: String(page), pageIndex: String(page), keyword: "" };
+  const templated = replaceVars(moduleUrl, vars);
+  const request = parseRequestUrl(templated, source.url);
+  const options = request.options || {};
+  const payload = await fetchSource({
+    source,
+    url: request.url,
+    method: options.method || "GET",
+    headers: { ...parseHeaderRule(source, vars), ...(options.headers || {}) },
+    body: typeof options.body === "string" ? replaceVars(options.body, vars) : options.body,
+  });
+  return parsePayload(payload.text, payload.contentType);
+}
+
+async function getNanmSearch(source: ReadingBookSource, keyword: string, page: number): Promise<GenericSourceBook[]> {
+  const raw = source.raw as any;
+  const searchUrlRule = ruleString(raw, "searchUrl");
+  if (!searchUrlRule) throw new Error("漫画书源没有配置 searchUrl");
+  const state = loadReadingSourceState(source.id);
+  const vars = { ...(state.variables || {}), key: keyword, page: String(page), pageIndex: String(page), keyword };
+  const templated = replaceVars(searchUrlRule, vars);
+  const request = parseRequestUrl(templated, source.url);
+  const options = request.options || {};
+  const payload = await fetchSource({
+    source,
+    url: request.url,
+    method: options.method || "GET",
+    headers: { ...parseHeaderRule(source, vars), ...(options.headers || {}) },
+    body: typeof options.body === "string" ? replaceVars(options.body, vars) : options.body,
+  });
+  const root = parsePayload(payload.text, payload.contentType);
+  const list = manyValues(root, "$.info[*]");
+  return list.map((item: any) => {
+    const title = asText(item?.title).trim() || "未命名";
+    const author = asText(item?.author).trim() || undefined;
+    const cover = normalizeNanmCover(item?.cover_pic, payload.url || source.url);
+    const desc = asText(item?.summary).trim() || undefined;
+    const id = asText(item?.id).trim();
+    const bookUrl = id ? joinUrl(payload.url || source.url, `/home/book/index/id/${id}/`) : "";
+    return { title, author, cover, desc, latestChapterTitle: asText(item?.maxepisodes).trim() || undefined, bookUrl, raw: item };
+  }).filter((book) => !!book.bookUrl);
+}
+
+async function getNanmDetail(source: ReadingBookSource, book: GenericSourceBook): Promise<GenericSourceDetail> {
+  const payload = await fetchSource({ source, url: joinUrl(source.url, book.bookUrl), headers: parseHeaderRule(source) });
+  const root = parsePayload(payload.text, payload.contentType);
+  const title = scalar(root, ".cover-box .container .title@text") || book.title;
+  const author = scalar(root, ".author@text") || book.author;
+  const coverRaw = scalar(root, ".cover-box .bg img@src") || book.cover;
+  const desc = scalar(root, ".article .body@text") || book.desc;
+  const tags = manyValues(root, ".label .item a").map(textOf).filter(Boolean).join(",");
+  return {
+    ...book,
+    title,
+    author,
+    cover: coverRaw ? normalizeNanmCover(coverRaw, payload.url || source.url) : undefined,
+    desc,
+    intro: desc,
+    bookUrl: book.bookUrl,
+    tocUrl: book.bookUrl,
+    tags,
+    raw: { title, author, cover: coverRaw, desc, tags, sourceUrl: book.bookUrl },
+  };
+}
+
+async function getNanmCatalog(source: ReadingBookSource, detail: GenericSourceDetail): Promise<GenericSourceChapter[]> {
+  const payload = await fetchSource({ source, url: joinUrl(source.url, detail.bookUrl), headers: parseHeaderRule(source) });
+  const root = parsePayload(payload.text, payload.contentType);
+  const items = manyValues(root, "#html_box .item");
+  return items.map((item) => ({
+    title: scalar(item, "a@text") || "未命名章节",
+    url: joinUrl(payload.url || source.url, scalar(item, "a@href")),
+    raw: item,
+  })).filter((chapter) => !!chapter.url);
+}
+
+async function getNanmContent(source: ReadingBookSource, chapter: GenericSourceChapter): Promise<string> {
+  const payload = await fetchSource({ source, url: joinUrl(source.url, chapter.url), headers: parseHeaderRule(source) });
+  const match = payload.text.match(/var\s+encryptedData\s*=\s*["']([^"']+)["']/i);
+  if (!match?.[1]) throw new Error("漫画正文没有找到 encryptedData");
+  let jsonText: string;
+  try {
+    jsonText = await decryptNanmEncryptedData(match[1]);
+  } catch (error) {
+    throw new Error(`漫画正文解密失败：${error instanceof Error ? error.message : "未知错误"}`);
+  }
+  let urls: unknown;
+  try { urls = JSON.parse(jsonText); } catch { throw new Error("漫画正文解密后不是有效图片列表"); }
+  if (!Array.isArray(urls)) throw new Error("漫画正文图片列表格式异常");
+  return urls.filter((url) => /^https?:\/\//i.test(asText(url))).map((url) => `[[MANGA_IMAGE]]${asText(url)}`).join("\n");
+}
+
 function isShushanSource(source: ReadingBookSource) {
   return source.adapter === "shushan" || /vossc\.com|书山聚合|书山/i.test(`${source.name} ${source.url}`);
 }
@@ -826,6 +955,7 @@ async function getShushanContentAdapter(source: ReadingBookSource, chapter: Gene
 }
 
 export async function searchGenericSource(source: ReadingBookSource, keyword: string, page = 1): Promise<GenericSourceBook[]> {
+  if (isNanmComicSource(source)) return getNanmSearch(source, keyword, page);
   if (isShushanSource(source)) return searchShushanAdapter(source, keyword, page);
   const raw = source.raw as any;
   const searchUrlRule = ruleString(raw, "searchUrl");
@@ -872,6 +1002,7 @@ export async function searchGenericSource(source: ReadingBookSource, keyword: st
 }
 
 export async function getGenericDetail(source: ReadingBookSource, book: GenericSourceBook): Promise<GenericSourceDetail> {
+  if (isNanmComicSource(source)) return getNanmDetail(source, book);
   if (isShushanSource(source)) return getShushanDetailAdapter(source, book);
   const raw = source.raw as any;
   if (!book.bookUrl) throw new Error("搜索结果没有 bookUrl");
@@ -893,6 +1024,7 @@ export async function getGenericDetail(source: ReadingBookSource, book: GenericS
 }
 
 export async function getGenericCatalog(source: ReadingBookSource, detail: GenericSourceDetail): Promise<GenericSourceChapter[]> {
+  if (isNanmComicSource(source)) return getNanmCatalog(source, detail);
   if (isShushanSource(source)) return getShushanCatalogAdapter(source, detail);
   const raw = source.raw as any;
   const rule = raw.ruleToc || {};
@@ -938,6 +1070,7 @@ function applyReplaceRules(text: string, rules: unknown) {
 }
 
 export async function getGenericChapterContent(source: ReadingBookSource, chapter: GenericSourceChapter, detail?: GenericSourceDetail): Promise<string> {
+  if (isNanmComicSource(source)) return getNanmContent(source, chapter);
   if (!chapter.url) throw new Error("章节没有正文地址");
   if (isShushanSource(source)) return getShushanContentAdapter(source, chapter, detail);
   const raw = source.raw as any;

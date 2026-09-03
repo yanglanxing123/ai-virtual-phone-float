@@ -104,7 +104,7 @@ export function getReadingSource(id: string) {
 export type ReadingRemoteBook = {
   sourceId: string;
   sourceName: string;
-  book: { title: string; author?: string; cover?: string; desc?: string; bookUrl: string };
+  book: { title: string; author?: string; cover?: string; desc?: string; bookUrl: string; readerType?: "manga" | "text" };
   chapters: Array<{ title: string; url: string; isPay?: boolean; isVip?: boolean }>;
   savedAt: string;
 };
