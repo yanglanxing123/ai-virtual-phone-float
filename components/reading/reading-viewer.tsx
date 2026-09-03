@@ -303,6 +303,9 @@ export function ReadingViewer({ book, onBack }: Props) {
     const [showNavigationDialog, setShowNavigationDialog] = useState(false);
     const [pdfJumpPage, setPdfJumpPage] = useState<number | undefined>(undefined);
     const [chaptersLoaded, setChaptersLoaded] = useState(false);
+    const [remoteLoading, setRemoteLoading] = useState(false);
+    const [remoteError, setRemoteError] = useState<string | null>(null);
+    const remoteLoadingChapterRef = useRef<string | null>(null);
     const touchStartRef = useRef({ x: 0, y: 0 });
     const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
     const [readingMessageMenu, setReadingMessageMenu] = useState<{ messageId: string; x: number; y: number } | null>(null);
@@ -576,23 +579,24 @@ export function ReadingViewer({ book, onBack }: Props) {
     }, [book.id]);
 
     useEffect(() => {
-        if (isPdf || !chaptersLoaded || chapters.length === 0) return;
+        if (isPdf || !chaptersLoaded) return;
+
         const shushan = getRemoteBook(book.id);
         const generic = getReadingRemoteBook(book.id);
-        const chapter = chapters[chapterIndex];
-        if (!chapter || chapter.paragraphs.length > 0) return;
+        const localChapter = chapters[chapterIndex];
+        if (!localChapter || localChapter.paragraphs.length > 0) return;
         if (!shushan?.apiKey || !shushan.url || !shushan.source) {
             if (!generic) return;
         }
 
+        const loadingKey = `${book.id}:${chapterIndex}`;
+        if (remoteLoadingChapterRef.current === loadingKey) return;
+        remoteLoadingChapterRef.current = loadingKey;
         let cancelled = false;
+        setRemoteLoading(true);
+        setRemoteError(null);
+
         const loadRemoteChapter = async () => {
-            const optimistic = chapters.map((item) =>
-                item.index === chapterIndex && item.paragraphs.length === 0
-                    ? { ...item, paragraphs: ["正在加载正文…"] }
-                    : item,
-            );
-            setChapters(optimistic);
             try {
                 let paragraphs: string[] = [];
 
@@ -620,26 +624,34 @@ export function ReadingViewer({ book, onBack }: Props) {
 
                 if (cancelled) return;
                 const safeParagraphs = paragraphs.length > 0 ? paragraphs : ["本章暂无正文或正文暂时无法获取。"];
-                const nextChapters = chapters.map((item) =>
-                    item.index === chapterIndex ? { ...item, paragraphs: safeParagraphs } : item,
-                );
-                await saveChapters(book.id, nextChapters);
-                if (!cancelled) setChapters(nextChapters);
+                await (async () => {
+                    const latest = await loadChapters(book.id);
+                    const next = latest.map((item) => item.index === chapterIndex ? { ...item, paragraphs: safeParagraphs } : item);
+                    await saveChapters(book.id, next);
+                    if (!cancelled) setChapters(next);
+                })();
             } catch (error) {
                 console.error("[Reading] Remote chapter load failed:", error);
                 if (!cancelled) {
-                    setChapters(chapters.map((item) =>
-                        item.index === chapterIndex
-                            ? { ...item, paragraphs: ["正文加载失败，请稍后重试。"] }
-                            : item,
-                    ));
+                    const message = error instanceof Error ? error.message : "正文加载失败，请稍后重试。";
+                    setRemoteError(message);
+                    const latest = await loadChapters(book.id);
+                    const next = latest.map((item) => item.index === chapterIndex ? { ...item, paragraphs: ["正文加载失败，请稍后重试。"] } : item);
+                    await saveChapters(book.id, next);
+                    setChapters(next);
+                }
+            } finally {
+                if (!cancelled) {
+                    setRemoteLoading(false);
+                    remoteLoadingChapterRef.current = null;
                 }
             }
         };
 
         void loadRemoteChapter();
         return () => { cancelled = true; };
-    }, [book.id, book.title, chapterIndex, chaptersLoaded, chapters, isPdf]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [book.id, chapterIndex, chaptersLoaded, isPdf]);
 
     useEffect(() => {
         if (chapters.length === 0) return;
@@ -1963,8 +1975,14 @@ export function ReadingViewer({ book, onBack }: Props) {
                     </>
                 )}
 
-                {showTxtLoading && (
-                    <ReadingLoadingView title="正在打开书页" subtitle="正在读取并排版当前章节" overlay />
+                {(showTxtLoading || remoteLoading) && (
+                    <ReadingLoadingView title={remoteLoading ? "正在加载正文" : "正在打开书页"} subtitle={remoteLoading ? "正在从书源获取当前章节" : "正在读取并排版当前章节"} overlay />
+                )}
+                {remoteError && !remoteLoading && (
+                    <div className="reading-debug-card" style={{ margin: "12px 16px" }}>
+                        <div className="reading-debug-title">书源正文提示</div>
+                        <div className="reading-debug-hint">{remoteError}</div>
+                    </div>
                 )}
 
                 {isPdf && <div className="h-[88px]" />}

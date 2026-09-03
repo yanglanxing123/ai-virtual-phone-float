@@ -627,3 +627,13 @@
 .reading-hub-login-card { width:min(100%,380px); max-height:82%; overflow:auto; padding:15px; border-radius:20px; background:rgba(255,253,248,.98); box-shadow:0 20px 60px rgba(45,30,10,.18); }
 .reading-spin { animation:reading-spin .8s linear infinite; }
 @keyframes reading-spin { to { transform:rotate(360deg); } }
+
+/* v15：书源兼容、封面与首页模块管理 */
+.reading-hub-module-actions { display:flex; gap:4px; align-items:center; }
+.reading-hub-module-actions button { width:28px; height:28px; border:1px solid rgba(130,112,96,.16); border-radius:9px; background:rgba(255,255,255,.72); color:#76685d; }
+.reading-hub-module-actions button:active { transform:scale(.94); }
+.reading-hub-module-form { display:grid; gap:12px; padding:14px; border-radius:16px; background:rgba(255,255,255,.72); border:1px solid rgba(130,112,96,.12); }
+.reading-hub-module-form select { width:100%; min-height:46px; border:1px solid rgba(130,112,96,.16); border-radius:14px; background:#fff; padding:0 12px; font:inherit; color:inherit; }
+.reading-hub-native-functions button.is-separator { justify-content:center; background:rgba(247,243,237,.7); color:#a0948a; font-size:12px; border-style:dashed; }
+.reading-hub-native-functions button:disabled { opacity:1; cursor:default; }
+.reading-hub-module-cover img, .reading-hub-result-cover img, .reading-hub-detail-cover img { display:block; width:100%; height:100%; object-fit:cover; }
