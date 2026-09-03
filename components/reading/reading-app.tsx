@@ -85,6 +85,10 @@ const DEFAULT_READING_CUSTOM_CSS = `/* 阅读 APP 全局主题：参考聊天 AP
 
 
 
+function sourceReaderType(source: ReadingBookSource | null | undefined): "manga" | "text" {
+  return source && (source.raw as any)?.bookSourceType === 2 ? "manga" : "text";
+}
+
 function getTitle(tab: Tab) {
   switch (tab) {
     case "home":
@@ -253,6 +257,24 @@ function discoverSourceModules(source: ReadingBookSource): Array<{ title: string
       }
     }
     return items;
+  }
+
+  // 楠楠漫画的 exploreUrl 是标准 Legado 发现页 JSON 数组，
+  // 这里原样读取模块标题与请求地址，不把分类硬编码进 App。
+  if ((source.raw as any)?.enabledExplore) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (item && typeof item === "object") {
+            push(String((item as any).title || ""), String((item as any).url || ""));
+          }
+        }
+        if (items.length) return items;
+      }
+    } catch {
+      // 兼容少数书源把 JSON 数组包在字符串里的情况，继续尝试 push()。
+    }
   }
 
   // 普通 Legado 书源：保留可直接识别的静态 push() 模块。
@@ -861,7 +883,7 @@ export default function ReadingApp({ onClose }: Props) {
                         const coverSaved = await downloadCoverForBook(id, cover);
                         const rawBookId = (sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? (selectedSourceBook as any).bookid ?? (selectedSourceBook as any).book_id ?? (selectedSourceBook as any).bookId;
                         const bookId = rawBookId == null ? "" : String(rawBookId);
-                        const book: Book = { id, title, author, format: "txt", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
+                        const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                         await addBook(book);
                         await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
                         saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, bookId, cover, desc, chapters });
@@ -1043,7 +1065,7 @@ export default function ReadingApp({ onClose }: Props) {
                               const id = `shushan_${Date.now()}`;
                               const chapters = sourceChapters.filter(x => !x.isVolume);
                               const coverSaved = await downloadCoverForBook(id, cover);
-                              const book: Book = { id, title, author, format: "txt", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
+                              const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                               await addBook(book);
                               await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
                               saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, bookId: String((sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? ""), cover, desc, chapters });
@@ -1058,7 +1080,7 @@ export default function ReadingApp({ onClose }: Props) {
                             const id = `shushan_${Date.now()}`;
                             const chapters = sourceChapters.filter(x => !x.isVolume);
                             const coverSaved = await downloadCoverForBook(id, cover);
-                            const book: Book = { id, title, author, format: "txt", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
+                            const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                             await addBook(book);
                             await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
                             saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, bookId: String((sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? ""), cover, desc, chapters });
@@ -1085,10 +1107,10 @@ export default function ReadingApp({ onClose }: Props) {
                     const id = `source_${Date.now()}`;
                     const chapters = genericChapters;
                     const coverSaved = await downloadCoverForBook(id, cover);
-                    const book: Book = { id, title, author, format: "txt", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
+                    const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                     await addBook(book);
                     await saveChapters(id, chapters.map((c,i) => ({ id:`${id}_ch${i}`, bookId:id, index:i, title:c.title || `第${i+1}章`, paragraphs:[] as string[] })));
-                    saveReadingRemoteBook(id,{sourceId:source.id,sourceName:source.name,book:{title,author,cover,desc,bookUrl:genericDetail.bookUrl},chapters,savedAt:new Date().toISOString()});
+                    saveReadingRemoteBook(id,{sourceId:source.id,sourceName:source.name,book:{title,author,cover,desc,bookUrl:genericDetail.bookUrl,readerType:sourceReaderType(source)},chapters,savedAt:new Date().toISOString()});
                     setActiveBook(book);
                   };
                   return <div className="reading-discovery-detail-card" style={cover ? { backgroundImage: `linear-gradient(180deg, rgba(255,250,247,.62), rgba(255,250,247,.96) 58%, rgba(255,250,247,.99)), url("${cover}")` } : undefined}>
