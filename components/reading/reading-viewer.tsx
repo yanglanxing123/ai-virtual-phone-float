@@ -31,6 +31,8 @@ import type { Book, BookChapter, ReadingAnnotation, ReadingProgress } from "@/li
 import { kvGet, kvSet } from "@/lib/kv-db";
 import type { Character } from "@/lib/character-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
+import { getReadingRemoteBook } from "@/lib/reading-source";
+import { getGenericChapterContent, htmlToParagraphs, type GenericSourceChapter } from "@/lib/reading-source-engine";
 
 /**
  * 过滤系统级内容：移除 XML 标签、系统指令等不应展示给用户的内容。
@@ -317,31 +319,8 @@ function MangaImage({ url }: { url: string }) {
     );
 }
 
-function MangaImage({ url }: { url: string }) {
-    const [src, setSrc] = useState(url);
-    const objectUrlRef = useRef<string | null>(null);
-    useEffect(() => {
-        let cancelled = false;
-        void fetch("/api/reading/source", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url, asset: true, timeoutMs: 20000, headers: { Referer: "https://guiwb.nnmh.info/" } }),
-        }).then(async (response) => {
-            if (!response.ok) return;
-            const blob = await response.blob();
-            if (!blob.size || cancelled) return;
-            const objectUrl = URL.createObjectURL(blob);
-            objectUrlRef.current = objectUrl;
-            setSrc(objectUrl);
-        }).catch(() => {});
-        return () => { cancelled = true; if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; } };
-    }, [url]);
-    return <div className="reading-manga-image-wrap" data-no-nav="true"><img className="reading-manga-image" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" /></div>;
-}
-
 export function ReadingViewer({ book, onBack }: Props) {
     const isPdf = book.format === "pdf";
-    const isManga = (book as Book & { readerType?: string }).readerType === "manga";
     const isManga = (book as Book & { readerType?: string }).readerType === "manga";
     const [readingConfig, setReadingConfig] = useState(() => loadReadingInteractionConfig());
     const [chapters, setChapters] = useState<BookChapter[]>([]);
@@ -517,7 +496,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                     )}
                                 </div>
                             )
-                            : item.text.startsWith("[[MANGA_IMAGE]]") ? <MangaImage key={i} url={item.text.slice("[[MANGA_IMAGE]]".length).trim()} /> : item.text.startsWith("[[MANGA_IMAGE]]") ? <MangaImage key={i} url={item.text.slice("[[MANGA_IMAGE]]".length).trim()} /> : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
+                            : item.text.startsWith("[[MANGA_IMAGE]]") ? <MangaImage key={i} url={item.text.slice("[[MANGA_IMAGE]]".length).trim()} /> : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
                 ))}
             </div>
         );
@@ -601,7 +580,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                             <span className="reading-annotation-name">{item.annotation.characterName}</span>
                             <span className="reading-annotation-text">{item.annotation.content}</span>
                         </div>
-                        : item.text.startsWith("[[MANGA_IMAGE]]") ? <MangaImage key={i} url={item.text.slice("[[MANGA_IMAGE]]".length).trim()} /> : item.text.startsWith("[[MANGA_IMAGE]]") ? <MangaImage key={i} url={item.text.slice("[[MANGA_IMAGE]]".length).trim()} /> : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
+                        : item.text.startsWith("[[MANGA_IMAGE]]") ? <MangaImage key={i} url={item.text.slice("[[MANGA_IMAGE]]".length).trim()} /> : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
             )}
         </div>
     );

@@ -387,7 +387,11 @@ export default function ReadingApp({ onClose }: Props) {
       if (Array.isArray(savedModules)) setHomeModules(savedModules);
     } catch {}
     setBookSources(installed);
-    const firstSourceId = installed.find((item) => item.adapter === "shushan" && item.enabled)?.id || installed[0]?.id || "";
+    const firstSourceId =
+      installed.find((item) => item.adapter === "shushan" && item.enabled)?.id ||
+      installed.find((item) => item.enabled)?.id ||
+      installed[0]?.id ||
+      "";
     setSelectedSourceId(firstSourceId);
     setHomeModuleSourceId(firstSourceId);
     let savedModules: unknown[] = [];
@@ -403,8 +407,25 @@ export default function ReadingApp({ onClose }: Props) {
     });
     {
       const selected = installed.find(item => item.id === firstSourceId);
-      if (selected && selected.adapter === "shushan") {
+      if (selected && (selected.adapter === "shushan" || (selected.raw as any)?.enabledExplore)) {
         const discovered = discoverSourceModules(selected);
+        if (selected.adapter !== "shushan") {
+          const existingForSource = savedModules.filter((item: any) => item && item.sourceId === firstSourceId);
+          const hasSourceModules = existingForSource.length > 0;
+          if (!hasSourceModules && discovered.length) {
+            const additions = discovered.slice(0, 5).map((item, i) => ({
+              id: `${firstSourceId}_discover_${i}`,
+              title: item.title,
+              url: item.url,
+              sourceId: firstSourceId,
+              enabled: true,
+            }));
+            const finalModules = [...additions, ...(savedModules as HomeModule[])];
+            setHomeModules(finalModules);
+            try { window.localStorage.setItem("reading-home-modules-v2", JSON.stringify(finalModules)); } catch {}
+          }
+          return;
+        }
         const byTitle = new Map(discovered.map(item => [item.title, item.url]));
         const isDiscoverTitle = (title: string) => /^(?:女频|男频)(?:阅读榜|新书榜)\s*·/.test(title);
         const repaired = savedModules.map((item: any) => {
@@ -657,6 +678,65 @@ export default function ReadingApp({ onClose }: Props) {
     const title = homeDetailBook.title || homeDetailBook.name || "未命名";
     const author = homeDetailBook.author || "未知作者";
     const cover = normalizeRemoteUrl(homeDetailBook.cover, homeDetailBook.book_url);
+
+    // 通用书源（包括楠楠漫画）不能走书山的 saveRemoteBook。
+    // 这里保存 sourceId + remote chapters，阅读器进入章节后再按书源规则懒加载正文。
+    const genericSource = bookSources.find(
+      (item) => item.adapter !== "shushan" && item.name === String(homeDetailBook.source || "").trim(),
+    );
+    if (genericSource) {
+      const id = `source_${genericSource.id}_${Date.now()}`;
+      const readerType = sourceReaderType(genericSource);
+      const coverSaved = await downloadCoverForBook(id, cover);
+      const localBook: Book = {
+        id,
+        title,
+        author,
+        format: "txt",
+        readerType,
+        totalChapters: chapters.length,
+        createdAt: new Date().toISOString(),
+        hasCover: coverSaved,
+        coverUrl: cover,
+      } as Book & { coverUrl?: string; readerType?: "manga" | "text" };
+
+      await addBook(localBook);
+      await saveChapters(id, chapters.map((chapter, index) => ({
+        id: `${id}_ch${index}`,
+        bookId: id,
+        index,
+        title: chapter.title || `第${index + 1}章`,
+        paragraphs: [],
+      })));
+      saveReadingRemoteBook(id, {
+        sourceId: genericSource.id,
+        sourceName: genericSource.name,
+        book: {
+          title,
+          author,
+          cover,
+          desc: homeDetailBook.desc,
+          bookUrl: homeDetailBook.book_url,
+          readerType,
+        },
+        chapters: chapters.map((chapter) => ({
+          title: chapter.title || "未命名章节",
+          url: chapter.url,
+          isPay: chapter.isPay,
+          isVip: chapter.isVip,
+        })),
+        savedAt: new Date().toISOString(),
+      });
+
+      if (mode === "read") {
+        setActiveBook(localBook);
+        closeHomeBookDetail();
+      } else {
+        setHomeDetailMessage("✅ 已加入书架");
+      }
+      return;
+    }
+
     const id = `shushan_${Date.now()}`;
     const coverSaved = await downloadCoverForBook(id, cover);
     const book: Book = {
