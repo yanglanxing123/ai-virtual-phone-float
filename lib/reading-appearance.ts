@@ -26,6 +26,7 @@ registerKvMigration(APPEARANCE_STORAGE_KEY);
 const BG_DB_NAME = "reading-appearance-assets";
 const BG_STORE_NAME = "assets";
 const BG_KEY = "shared-background";
+const READER_BG_KEY = "reader-background";
 const FONT_KEY = "custom-font";
 
 export const DEFAULT_READING_APPEARANCE: ReadingAppearance = {
@@ -86,32 +87,30 @@ export function saveReadingAppearance(appearance: ReadingAppearance): ReadingApp
 }
 
 async function openBackgroundDb(): Promise<IDBDatabase> {
-    // Open at >= 1: a backup restore may have bumped the stored version higher,
-    // and opening at a fixed lower version would throw a VersionError.
     return openIndexedDbAtLeast(BG_DB_NAME, 1, (db) => {
         if (!db.objectStoreNames.contains(BG_STORE_NAME)) db.createObjectStore(BG_STORE_NAME);
     });
 }
 
-export async function saveReadingBackground(blob: Blob | null): Promise<void> {
+async function saveAsset(key: string, blob: Blob | null): Promise<void> {
     const db = await openBackgroundDb();
     await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(BG_STORE_NAME, "readwrite");
         const store = tx.objectStore(BG_STORE_NAME);
-        if (blob) store.put(blob, BG_KEY);
-        else store.delete(BG_KEY);
+        if (blob) store.put(blob, key);
+        else store.delete(key);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
     });
     db.close();
 }
 
-export async function loadReadingBackground(): Promise<Blob | null> {
+async function loadAsset(key: string): Promise<Blob | null> {
     try {
         const db = await openBackgroundDb();
         const blob = await new Promise<Blob | null>((resolve, reject) => {
             const tx = db.transaction(BG_STORE_NAME, "readonly");
-            const req = tx.objectStore(BG_STORE_NAME).get(BG_KEY);
+            const req = tx.objectStore(BG_STORE_NAME).get(key);
             req.onsuccess = () => resolve((req.result as Blob) || null);
             req.onerror = () => reject(req.error);
         });
@@ -120,33 +119,30 @@ export async function loadReadingBackground(): Promise<Blob | null> {
     } catch {
         return null;
     }
+}
+
+/** 功能界面壁纸：首页 / 发现 / 书源 / 书架 / 外观等共用。 */
+export function saveReadingBackground(blob: Blob | null): Promise<void> {
+    return saveAsset(BG_KEY, blob);
+}
+
+export function loadReadingBackground(): Promise<Blob | null> {
+    return loadAsset(BG_KEY);
+}
+
+/** 阅读器专属壁纸：只给整个 ReadingViewer 使用。 */
+export function saveReadingReaderBackground(blob: Blob | null): Promise<void> {
+    return saveAsset(READER_BG_KEY, blob);
+}
+
+export function loadReadingReaderBackground(): Promise<Blob | null> {
+    return loadAsset(READER_BG_KEY);
 }
 
 export async function saveReadingCustomFont(blob: Blob | null): Promise<void> {
-    const db = await openBackgroundDb();
-    await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(BG_STORE_NAME, "readwrite");
-        const store = tx.objectStore(BG_STORE_NAME);
-        if (blob) store.put(blob, FONT_KEY);
-        else store.delete(FONT_KEY);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
-    db.close();
+    await saveAsset(FONT_KEY, blob);
 }
 
-export async function loadReadingCustomFont(): Promise<Blob | null> {
-    try {
-        const db = await openBackgroundDb();
-        const blob = await new Promise<Blob | null>((resolve, reject) => {
-            const tx = db.transaction(BG_STORE_NAME, "readonly");
-            const req = tx.objectStore(BG_STORE_NAME).get(FONT_KEY);
-            req.onsuccess = () => resolve((req.result as Blob) || null);
-            req.onerror = () => reject(req.error);
-        });
-        db.close();
-        return blob;
-    } catch {
-        return null;
-    }
+export function loadReadingCustomFont(): Promise<Blob | null> {
+    return loadAsset(FONT_KEY);
 }
