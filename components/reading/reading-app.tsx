@@ -821,6 +821,15 @@ export default function ReadingApp({ onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, homeModules, bookSources]);
 
+  // 进入独立发现页后自动加载首个尚未加载的模块。
+  // 必须放在 ReadingApp 内，不能放进 NavButton，否则会访问不到页面状态。
+  useEffect(() => {
+    if (tab !== "discovery" || homeModuleLoading) return;
+    const pending = homeModules.find((module) => module.enabled && !homeModuleData[module.id]);
+    if (pending) void refreshHomeModule(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, homeModules, homeModuleData, homeModuleLoading]);
+
   if (!ready) {
     return (
       <div
@@ -1544,14 +1553,6 @@ function NavButton({
   icon: ReactNode;
   onClick: () => void;
 }) {
-  // 进入独立发现页后自动加载首个尚未加载的模块。
-  useEffect(() => {
-    if (tab !== "discovery" || homeModuleLoading) return;
-    const pending = homeModules.find((module) => module.enabled && !homeModuleData[module.id]);
-    if (pending) void refreshHomeModule(pending);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, homeModules, homeModuleData, homeModuleLoading]);
-
   return (
     <button
       type="button"
