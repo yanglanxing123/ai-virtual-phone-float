@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { BookOpen, Library, Search, Palette, X, Upload, Trash2, MoreVertical, LogIn, Plus, ChevronRight, RefreshCw } from "lucide-react";
+import { BookOpen, Library, Search, Palette, Compass, X, Upload, Trash2, MoreVertical, LogIn, Plus, ChevronRight, RefreshCw } from "lucide-react";
 import { hydrateReadingStorage } from "@/lib/reading-storage";
 import { ReadingShelf } from "./reading-shelf";
 import { ReadingViewer } from "./reading-viewer";
@@ -9,10 +9,12 @@ import {
   DEFAULT_READING_APPEARANCE,
   loadReadingAppearance,
   loadReadingBackground,
+  loadReadingReaderBackground,
   loadReadingCustomFont,
   resolveReadingFontFamily,
   saveReadingAppearance,
   saveReadingBackground,
+  saveReadingReaderBackground,
   saveReadingCustomFont,
   type ReadingAppearance,
 } from "@/lib/reading-appearance";
@@ -35,7 +37,7 @@ import { importReadingSources, loadReadingSources, removeReadingSource, setReadi
 import { fetchReadingSourceModule, getGenericCatalog, getGenericDetail, searchGenericSource, type GenericSourceBook, type GenericSourceChapter, type GenericSourceDetail } from "@/lib/reading-source-engine";
 import "./reading-hub.css";
 
-type Tab = "home" | "shelf" | "sources" | "appearance";
+type Tab = "home" | "discovery" | "shelf" | "sources" | "appearance";
 
 type HomeModule = { id: string; title: string; url: string; sourceId: string; enabled: boolean; };
 
@@ -93,6 +95,8 @@ function getTitle(tab: Tab) {
   switch (tab) {
     case "home":
       return "首页";
+    case "discovery":
+      return "发现";
     case "shelf":
       return "书架";
     case "sources":
@@ -327,10 +331,12 @@ export default function ReadingApp({ onClose }: Props) {
     DEFAULT_READING_APPEARANCE,
   );
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
+  const [readerBackgroundUrl, setReaderBackgroundUrl] = useState<string | null>(null);
   const [customFontFamily, setCustomFontFamily] = useState<string | undefined>();
   const [customCss, setCustomCss] = useState(DEFAULT_READING_CUSTOM_CSS);
 
   const backgroundUrlRef = useRef<string | null>(null);
+  const readerBackgroundUrlRef = useRef<string | null>(null);
   const customFontUrlRef = useRef<string | null>(null);
 
   const updateBackgroundUrl = (nextUrl: string | null) => {
@@ -342,6 +348,14 @@ export default function ReadingApp({ onClose }: Props) {
     }
     backgroundUrlRef.current = nextUrl;
     setBackgroundUrl(nextUrl);
+  };
+
+  const updateReaderBackgroundUrl = (nextUrl: string | null) => {
+    if (readerBackgroundUrlRef.current && readerBackgroundUrlRef.current !== nextUrl) {
+      URL.revokeObjectURL(readerBackgroundUrlRef.current);
+    }
+    readerBackgroundUrlRef.current = nextUrl;
+    setReaderBackgroundUrl(nextUrl);
   };
 
   const loadCustomFontFace = async (blob: Blob | null) => {
@@ -387,11 +401,7 @@ export default function ReadingApp({ onClose }: Props) {
       if (Array.isArray(savedModules)) setHomeModules(savedModules);
     } catch {}
     setBookSources(installed);
-    const firstSourceId =
-      installed.find((item) => item.adapter === "shushan" && item.enabled)?.id ||
-      installed.find((item) => item.enabled)?.id ||
-      installed[0]?.id ||
-      "";
+    const firstSourceId = installed.find((item) => item.enabled)?.id || installed[0]?.id || "";
     setSelectedSourceId(firstSourceId);
     setHomeModuleSourceId(firstSourceId);
     let savedModules: unknown[] = [];
@@ -407,44 +417,35 @@ export default function ReadingApp({ onClose }: Props) {
     });
     {
       const selected = installed.find(item => item.id === firstSourceId);
-      if (selected && (selected.adapter === "shushan" || (selected.raw as any)?.enabledExplore)) {
+      if (selected) {
         const discovered = discoverSourceModules(selected);
-        if (selected.adapter !== "shushan") {
-          const existingForSource = savedModules.filter((item: any) => item && item.sourceId === firstSourceId);
-          const hasSourceModules = existingForSource.length > 0;
-          if (!hasSourceModules && discovered.length) {
-            const additions = discovered.slice(0, 5).map((item, i) => ({
-              id: `${firstSourceId}_discover_${i}`,
-              title: item.title,
-              url: item.url,
-              sourceId: firstSourceId,
-              enabled: true,
-            }));
-            const finalModules = [...additions, ...(savedModules as HomeModule[])];
-            setHomeModules(finalModules);
-            try { window.localStorage.setItem("reading-home-modules-v2", JSON.stringify(finalModules)); } catch {}
+        const sourceSaved = savedModules.filter((item: any) => item && item.sourceId === firstSourceId);
+        let finalModules = savedModules as HomeModule[];
+
+        if (selected.adapter === "shushan") {
+          const byTitle = new Map(discovered.map(item => [item.title, item.url]));
+          const isDiscoverTitle = (title: string) => /^(?:女频|男频)(?:阅读榜|新书榜)\s*·/.test(title);
+          const repaired = savedModules.map((item: any) => {
+            if (!item || typeof item !== "object") return item;
+            const title = String(item.title || "");
+            const freshUrl = byTitle.get(title);
+            if (!freshUrl || !isDiscoverTitle(title) || item.sourceId !== firstSourceId) return item;
+            return { ...item, url: freshUrl, enabled: item.enabled !== false };
+          });
+          const hasDiscover = repaired.some((item: any) => item && item.sourceId === firstSourceId && isDiscoverTitle(String(item.title || "")));
+          finalModules = repaired as HomeModule[];
+          if (!hasDiscover) {
+            const preferred = discovered.find(item => /女频新书榜\s*·\s*快穿/.test(item.title));
+            const defaults = discovered.filter(item => /女频(?:阅读榜|新书榜)\s*·/.test(item.title)).slice(0, 4);
+            const initial = [preferred, ...defaults].filter((item, i, arr) => item && arr.findIndex(x => x?.url === item.url) === i).slice(0, 5);
+            const additions = initial.map((item, i) => ({ id: `${firstSourceId}_discover_${i}`, title: item!.title, url: item!.url, sourceId: firstSourceId, enabled: true }));
+            finalModules = [...additions, ...finalModules];
           }
-          return;
-        }
-        const byTitle = new Map(discovered.map(item => [item.title, item.url]));
-        const isDiscoverTitle = (title: string) => /^(?:女频|男频)(?:阅读榜|新书榜)\s*·/.test(title);
-        const repaired = savedModules.map((item: any) => {
-          if (!item || typeof item !== "object") return item;
-          const title = String(item.title || "");
-          const freshUrl = byTitle.get(title);
-          if (!freshUrl || !isDiscoverTitle(title) || item.sourceId !== firstSourceId) return item;
-          return { ...item, url: freshUrl, enabled: item.enabled !== false };
-        });
-        const hasDiscover = repaired.some((item: any) => item && item.sourceId === firstSourceId && isDiscoverTitle(String(item.title || "")));
-        let finalModules = repaired as HomeModule[];
-        if (!hasDiscover) {
-          const preferred = discovered.find(item => /女频新书榜\s*·\s*快穿/.test(item.title));
-          const defaults = discovered.filter(item => /女频(?:阅读榜|新书榜)\s*·/.test(item.title)).slice(0, 4);
-          const initial = [preferred, ...defaults].filter((item, i, arr) => item && arr.findIndex(x => x?.url === item.url) === i).slice(0, 5);
-          const additions = initial.map((item, i) => ({ id: `${firstSourceId}_discover_${i}`, title: item!.title, url: item!.url, sourceId: firstSourceId, enabled: true }));
+        } else if (discovered.length && sourceSaved.length === 0) {
+          const additions = discovered.slice(0, 8).map((item, i) => ({ id: `${firstSourceId}_discover_${i}`, title: item.title, url: item.url, sourceId: firstSourceId, enabled: true }));
           finalModules = [...additions, ...finalModules];
         }
-        // 只有配置发生变化才写回，避免每次打开阅读 APP 都重置用户排序。
+
         if (JSON.stringify(finalModules) !== JSON.stringify(savedModules)) {
           setHomeModules(finalModules);
           try { window.localStorage.setItem("reading-home-modules-v2", JSON.stringify(finalModules)); } catch {}
@@ -457,6 +458,11 @@ export default function ReadingApp({ onClose }: Props) {
       updateBackgroundUrl(blob ? URL.createObjectURL(blob) : null);
     });
 
+    void loadReadingReaderBackground().then((blob) => {
+      if (cancelled) return;
+      updateReaderBackgroundUrl(blob ? URL.createObjectURL(blob) : null);
+    });
+
     void loadReadingCustomFont().then((blob) => {
       if (cancelled) return;
       void loadCustomFontFace(blob);
@@ -467,6 +473,9 @@ export default function ReadingApp({ onClose }: Props) {
 
       if (backgroundUrlRef.current) {
         URL.revokeObjectURL(backgroundUrlRef.current);
+      }
+      if (readerBackgroundUrlRef.current) {
+        URL.revokeObjectURL(readerBackgroundUrlRef.current);
       }
 
       if (customFontUrlRef.current) {
@@ -489,6 +498,8 @@ export default function ReadingApp({ onClose }: Props) {
     options: {
       backgroundFile: File | null;
       clearBackground: boolean;
+      readerBackgroundFile?: File | null;
+      clearReaderBackground?: boolean;
       customFontFile: File | null;
       clearCustomFont: boolean;
     },
@@ -502,6 +513,14 @@ export default function ReadingApp({ onClose }: Props) {
     } else if (options.backgroundFile) {
       await saveReadingBackground(options.backgroundFile);
       updateBackgroundUrl(URL.createObjectURL(options.backgroundFile));
+    }
+
+    if (options.clearReaderBackground) {
+      await saveReadingReaderBackground(null);
+      updateReaderBackgroundUrl(null);
+    } else if (options.readerBackgroundFile) {
+      await saveReadingReaderBackground(options.readerBackgroundFile);
+      updateReaderBackgroundUrl(URL.createObjectURL(options.readerBackgroundFile));
     }
 
     if (options.clearCustomFont) {
@@ -524,7 +543,8 @@ export default function ReadingApp({ onClose }: Props) {
     "--reading-bg-image": backgroundUrl
       ? `url("${backgroundUrl}")`
       : "none",
-    "--reading-function-bg-image": "none",
+    "--reading-function-bg-image": backgroundUrl ? `url("${backgroundUrl}")` : "none",
+    "--reading-viewer-bg-image": readerBackgroundUrl ? `url("${readerBackgroundUrl}")` : "none",
   } as CSSProperties;
 
   const saveCustomCss = (value: string) => {
@@ -678,65 +698,6 @@ export default function ReadingApp({ onClose }: Props) {
     const title = homeDetailBook.title || homeDetailBook.name || "未命名";
     const author = homeDetailBook.author || "未知作者";
     const cover = normalizeRemoteUrl(homeDetailBook.cover, homeDetailBook.book_url);
-
-    // 通用书源（包括楠楠漫画）不能走书山的 saveRemoteBook。
-    // 这里保存 sourceId + remote chapters，阅读器进入章节后再按书源规则懒加载正文。
-    const genericSource = bookSources.find(
-      (item) => item.adapter !== "shushan" && item.name === String(homeDetailBook.source || "").trim(),
-    );
-    if (genericSource) {
-      const id = `source_${genericSource.id}_${Date.now()}`;
-      const readerType = sourceReaderType(genericSource);
-      const coverSaved = await downloadCoverForBook(id, cover);
-      const localBook: Book = {
-        id,
-        title,
-        author,
-        format: "txt",
-        readerType,
-        totalChapters: chapters.length,
-        createdAt: new Date().toISOString(),
-        hasCover: coverSaved,
-        coverUrl: cover,
-      } as Book & { coverUrl?: string; readerType?: "manga" | "text" };
-
-      await addBook(localBook);
-      await saveChapters(id, chapters.map((chapter, index) => ({
-        id: `${id}_ch${index}`,
-        bookId: id,
-        index,
-        title: chapter.title || `第${index + 1}章`,
-        paragraphs: [],
-      })));
-      saveReadingRemoteBook(id, {
-        sourceId: genericSource.id,
-        sourceName: genericSource.name,
-        book: {
-          title,
-          author,
-          cover,
-          desc: homeDetailBook.desc,
-          bookUrl: homeDetailBook.book_url,
-          readerType,
-        },
-        chapters: chapters.map((chapter) => ({
-          title: chapter.title || "未命名章节",
-          url: chapter.url,
-          isPay: chapter.isPay,
-          isVip: chapter.isVip,
-        })),
-        savedAt: new Date().toISOString(),
-      });
-
-      if (mode === "read") {
-        setActiveBook(localBook);
-        closeHomeBookDetail();
-      } else {
-        setHomeDetailMessage("✅ 已加入书架");
-      }
-      return;
-    }
-
     const id = `shushan_${Date.now()}`;
     const coverSaved = await downloadCoverForBook(id, cover);
     const book: Book = {
@@ -1024,6 +985,56 @@ export default function ReadingApp({ onClose }: Props) {
               </section>
             )}
 
+            {tab === "discovery" && (
+              <section className="reading-hub-discovery-page">
+                <div className="reading-hub-search-hero">
+                  <div>
+                    <span>DISCOVER</span>
+                    <h2>发现好书</h2>
+                    <p>{homeModules.filter(x => x.enabled).length} 个发现模块 · 来自当前书源</p>
+                  </div>
+                  <button type="button" className="reading-hub-icon-btn" onClick={() => setSourceDrawerOpen(true)} aria-label="管理发现模块">
+                    <MoreVertical size={20} />
+                  </button>
+                </div>
+                {homeModules.filter(x => x.enabled).length === 0 ? (
+                  <div className="reading-hub-section reading-hub-discovery-empty">
+                    <Compass size={28} />
+                    <strong>还没有发现内容</strong>
+                    <span>打开右上角书源管理，从当前书源的发现页添加榜单或分类。</span>
+                  </div>
+                ) : (
+                  <div className="reading-hub-discovery-modules">
+                    {homeModules.filter(x => x.enabled).map(module => (
+                      <section key={module.id} className="reading-hub-module">
+                        <div className="reading-hub-module-head">
+                          <strong>{module.title}</strong>
+                          <button type="button" onClick={() => { void refreshHomeModule(module); }} disabled={homeModuleLoading === module.id}>
+                            {homeModuleLoading === module.id ? <RefreshCw size={14} className="reading-spin" /> : <RefreshCw size={14} />}
+                          </button>
+                        </div>
+                        {homeModuleData[module.id]?.length ? (
+                          <div className="reading-hub-module-grid">
+                            {homeModuleData[module.id].map((book, i) => (
+                              <button key={`${book.bookUrl}-${i}`} type="button" onClick={() => { void openHomeBookDetail(module, book); }}>
+                                <div className="reading-hub-module-cover">{book.cover ? <img src={normalizeRemoteUrl(book.cover, book.bookUrl)} alt="" /> : <BookOpen size={19} />}</div>
+                                <strong>{book.title}</strong>
+                                <small>{book.author || "未知作者"}</small>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <button type="button" className="reading-hub-module-empty" onClick={() => { void refreshHomeModule(module); }} disabled={homeModuleLoading === module.id}>
+                            {homeModuleLoading === module.id ? "正在加载…" : "点击加载发现内容"}
+                          </button>
+                        )}
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
             {tab === "shelf" && (
               <section className="reading-hub-shelf-wrap">
                 <ReadingShelf
@@ -1213,6 +1224,16 @@ export default function ReadingApp({ onClose }: Props) {
                 <div className="reading-hub-panel-head">
                   <div><h2>🎨 外观</h2><p>一套 CSS 控制整个阅读 APP，包括首页、书源、书架、详情、目录和阅读界面。</p></div>
                 </div>
+                <div className="reading-hub-wallpaper-card">
+                  <div className="reading-hub-css-card-head"><div><strong>阅读器壁纸</strong><span>仅进入真正的阅读器后使用，不影响首页、书源、书架、外观。</span></div></div>
+                  <div className="reading-hub-wallpaper-preview" style={readerBackgroundUrl ? { backgroundImage: `url("${readerBackgroundUrl}")` } : undefined}>
+                    {!readerBackgroundUrl && <span>暂未设置阅读器壁纸</span>}
+                  </div>
+                  <div className="reading-hub-wallpaper-actions">
+                    <label className="reading-hub-wallpaper-button">更换阅读器壁纸<input type="file" accept="image/*" onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file) return; await saveReadingReaderBackground(file); updateReaderBackgroundUrl(URL.createObjectURL(file)); }} /></label>
+                    <button type="button" className="reading-hub-wallpaper-clear" disabled={!readerBackgroundUrl} onClick={async () => { await saveReadingReaderBackground(null); updateReaderBackgroundUrl(null); }}>清除</button>
+                  </div>
+                </div>
                 <div className="reading-hub-css-card">
                   <div className="reading-hub-css-card-head"><div><strong>全局 CSS</strong><span>参考聊天 APP 的 --c-* / --ui-* 变量体系</span></div><button type="button" onClick={resetCustomCss}>恢复模板</button></div>
                   <textarea className="reading-hub-css-editor" value={customCss} onChange={e => saveCustomCss(e.target.value)} spellCheck={false} placeholder="在这里输入你的 CSS…" />
@@ -1221,7 +1242,7 @@ export default function ReadingApp({ onClose }: Props) {
                   <div className="reading-hub-css-card-head"><div><strong>可直接修改的核心变量</strong><span>后续换主题只需要改这一组变量</span></div></div>
                   <pre className="reading-hub-css-reference">{`--c-bg              页面背景\n--c-bg-soft         次级背景\n--c-card            卡片 / 面板\n--c-card-border     卡片边框\n--c-input           输入框 / 次级按钮\n--c-input-border    输入框边框\n--c-text            正文文字\n--c-text-title      标题文字\n--c-icon            次要图标 / 弱文字\n--c-icon-active     主色 / 激活色\n--c-line            分割线\n--ui-radius         小控件圆角\n--ui-radius-card    卡片圆角\n--ui-blur           毛玻璃模糊\n--ui-saturate       毛玻璃饱和度`}</pre>
                 </div>
-                <div className="reading-hub-appearance-scope-note">CSS 挂载在 .reading-app-surface 下，因此阅读器进入阅读模式后仍然继承同一套主题变量；你可以直接针对 .reading-page-content、.reading-line、.reading-footer 等阅读器类名继续细调。</div>
+                <div className="reading-hub-appearance-scope-note">全屏背景只作用于首页、发现、书源、书架、外观等功能界面；阅读器壁纸只作用于整个 ReadingViewer（顶部栏、正文、底部控制和浮动控件），两者独立保存。</div>
               </section>
             )}
           </main>
@@ -1488,6 +1509,12 @@ export default function ReadingApp({ onClose }: Props) {
               onClick={() => setTab("sources")}
             />
             <NavButton
+              active={tab === "discovery"}
+              label="发现"
+              icon={<Compass size={19} />}
+              onClick={() => setTab("discovery")}
+            />
+            <NavButton
               active={tab === "shelf"}
               label="书架"
               icon={<Library size={19} />}
@@ -1517,6 +1544,14 @@ function NavButton({
   icon: ReactNode;
   onClick: () => void;
 }) {
+  // 进入独立发现页后自动加载首个尚未加载的模块。
+  useEffect(() => {
+    if (tab !== "discovery" || homeModuleLoading) return;
+    const pending = homeModules.find((module) => module.enabled && !homeModuleData[module.id]);
+    if (pending) void refreshHomeModule(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, homeModules, homeModuleData, homeModuleLoading]);
+
   return (
     <button
       type="button"
