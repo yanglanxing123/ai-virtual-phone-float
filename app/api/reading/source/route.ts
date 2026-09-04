@@ -17,9 +17,9 @@ function cleanHeaders(value: unknown) {
 function makeBody(body: unknown, headers: Record<string, string>) {
   if (body == null) return undefined;
   const contentType = Object.entries(headers).find(([key]) => key.toLowerCase() === "content-type")?.[1] || "";
-  if (/application\\/json/i.test(contentType)) return typeof body === "string" ? body : JSON.stringify(body);
+  if (/application\/json/i.test(contentType)) return typeof body === "string" ? body : JSON.stringify(body);
   if (typeof body === "string") return body;
-  if (/application\\/x-www-form-urlencoded/i.test(contentType)) {
+  if (/application\/x-www-form-urlencoded/i.test(contentType)) {
     return new URLSearchParams(Object.entries(body as Record<string, unknown>).map(([k, v]) => [k, String(v ?? "")]));
   }
   return JSON.stringify(body);
@@ -66,7 +66,7 @@ async function proxyAsset(url: string, requestHeaders?: unknown, timeoutMsValue?
     const response = await fetch(target.toString(), { method: "GET", headers, redirect: "follow", cache: "no-store", signal: controller.signal });
     if (!response.ok) return NextResponse.json({ ok: false, error: `资源返回 HTTP ${response.status}` }, { status: 502 });
     const contentType = response.headers.get("content-type") || "application/octet-stream";
-    if (!/^(image\\/|font\\/|application\\/octet-stream)/i.test(contentType)) return NextResponse.json({ ok: false, error: "目标不是可保存的静态资源" }, { status: 415 });
+    if (!/^(image\/|font\/|application\/octet-stream)/i.test(contentType)) return NextResponse.json({ ok: false, error: "目标不是可保存的静态资源" }, { status: 415 });
     const buffer = await response.arrayBuffer();
     if (buffer.byteLength > 8 * 1024 * 1024) return NextResponse.json({ ok: false, error: "资源过大，未保存" }, { status: 413 });
     return new NextResponse(buffer, { status: 200, headers: { "Content-Type": contentType, "Cache-Control": "public, max-age=3600" } });
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       for (let hop = 0; hop < 6; hop++) {
         await assertSafeTarget(current);
         response = await fetch(current.toString(), { method, headers, body: ["GET", "HEAD"].includes(method) ? undefined : makeBody(body?.body, headers), redirect: "manual", cache: "no-store", signal: controller.signal });
-        if (![301,302,303,307,308].includes(response.status)) break;
+        if (![301, 302, 303, 307, 308].includes(response.status)) break;
         const location = response.headers.get("location");
         if (!location) break;
         current = new URL(location, current);
