@@ -2142,7 +2142,7 @@ export function ReadingViewer({ book, onBack }: Props) {
         : null;
 
     return (
-        <div className="reading-app-surface absolute inset-0 z-[100] flex flex-col bg-[var(--c-page-body-bg)]" data-immersive={immersive} style={{ paddingTop: 0 }}>
+        <div className="reading-app-surface absolute inset-0 z-[100] flex flex-col bg-[var(--c-page-body-bg)]" data-immersive={immersive} style={{ paddingTop: "var(--page-header-safe-top, 48px)" }}>
             {/* Page flip overlay */}
             {flipAnim && (
                 <>
@@ -2158,21 +2158,15 @@ export function ReadingViewer({ book, onBack }: Props) {
                 </>
             )}
 
-            {/* 阅读器唯一顶部层：返回 + 书名/章节信息 + 原有目录按钮。
-                不再单独渲染“书籍信息”层。 */}
+            {/* Header — chapter name + page info */}
             <header className={`reading-header ${immersive ? "reading-header--immersive" : "reading-header--revealed"}`} data-ui="header">
-                <div className="reading-header-top reading-header-top--single-row">
-                    <button onClick={onBack} className="page-back-btn reading-header-back" aria-label="返回">
+                <div className="reading-header-top">
+                    <button onClick={onBack} className="page-back-btn reading-header-back">
                         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="15 18 9 12 15 6" />
                         </svg>
                     </button>
-                    <div className="reading-header-title-group">
-                        <strong className="reading-header-book-title">{book.title}</strong>
-                        {!isPdf && currentChapter?.title && currentChapter.title !== book.title && (
-                            <span className="reading-header-chapter-title">{currentChapter.title}</span>
-                        )}
-                    </div>
+                    <span className="reading-header-title">{isPdf ? book.title : (currentChapter?.title || book.title)}</span>
                     <div className="reading-header-right-group">
                         <button
                             type="button"
@@ -2185,7 +2179,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                     </div>
                 </div>
                 {annotationError && (
-                    <div className="reading-header-status reading-header-status--floating" style={{ color: "var(--c-danger)" }}>{annotationError}</div>
+                    <div className="reading-header-status" style={{ color: "var(--c-danger)" }}>{annotationError}</div>
                 )}
             </header>
 
