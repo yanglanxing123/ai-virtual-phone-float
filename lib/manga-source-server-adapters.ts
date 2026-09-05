@@ -83,6 +83,40 @@ async function request(url: string, options: { method?: string; headers?: Record
 
 function sourceConfig(body: any): Rule {
   const raw = body?.sourceRaw || {};
+  const sourceUrl = String(body.sourceUrl || "");
+
+  // 如果是楠楠漫画，直接使用预设规则（忽略 raw.mangaAdapter）
+  if (sourceUrl.includes("nnmh.me") || sourceUrl.includes("nnmh.info")) {
+    const preset = {
+      search: {
+        url: "/index.php?m=&c=mh&a=load_searchpage,{\"method\":\"POST\",\"body\":\"page={{page}}&key={{key}}&paixu=&status=0&limitStatus=0\",\"headers\":{\"X-Requested-With\":\"XMLHttpRequest\"}}",
+        listSelector: "$.info[*]",
+        fields: {
+          title: "$.title",
+          bookUrl: "/home/book/index/id/{{id}}/",
+          cover: "$.cover_pic"
+        }
+      },
+      catalog: {
+        listSelector: "#html_box .item",
+        fields: {
+          chapterName: "a@text",
+          chapterUrl: "a@href"
+        }
+      },
+      content: {
+        encryptedDataSelector: "var encryptedData = \"([^\"]+)\"",
+        algorithm: "AES-CBC",
+        key: "tH1rU6qZ4vU1sK7pN1wO7mX4bY6dQ9gX",
+        ivMode: "prefix",
+        imagePath: "$",
+        referer: "https://nnmh.me/"
+      }
+    };
+    return { raw, cfg: preset };
+  }
+
+  // 其他书源仍从 raw.mangaAdapter 读取
   const cfg = raw?.mangaAdapter || raw?.manga || {};
   return { raw, cfg };
 }
