@@ -769,7 +769,8 @@ export default function ReadingApp({ onClose }: Props) {
     const author = homeDetailBook.author || "未知作者";
     const cover = normalizeRemoteUrl(homeDetailBook.cover, homeDetailBook.book_url);
     const id = `shushan_${Date.now()}`;
-    const coverSaved = await downloadCoverForBook(id, cover);
+    const coverSaved = false;
+    void downloadCoverForBook(id, cover);
     const book: Book = {
       id,
       title,
@@ -1039,7 +1040,8 @@ export default function ReadingApp({ onClose }: Props) {
                         }
                         const id = `shushan_${Date.now()}`;
                         const chapters = sourceChapters.filter(x => !x.isVolume);
-                        const coverSaved = await downloadCoverForBook(id, cover);
+                        const coverSaved = false;
+                        void downloadCoverForBook(id, cover);
                         const rawBookId = (sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? (selectedSourceBook as any).bookid ?? (selectedSourceBook as any).book_id ?? (selectedSourceBook as any).bookId;
                         const bookId = rawBookId == null ? "" : String(rawBookId);
                         const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
@@ -1095,7 +1097,7 @@ export default function ReadingApp({ onClose }: Props) {
                 <button type="button" className="reading-hub-desktop-back" onClick={onClose}>
                   ← 返回桌面
                 </button>
-                <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>排行榜</h2><p>直接使用书源发现页：阅读榜、新书榜、分类榜等都可以单独添加。</p></div></div>
+                <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>排行榜</h2><p>首页只管理书山小说源，和发现页漫画源完全分开。</p></div><button type="button" className="reading-hub-icon-btn" onClick={() => openSourceDrawer("home")} aria-label="管理首页书山书源"><MoreVertical size={20} /></button></div>
                   <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled && homeSourceIds.includes(x.sourceId) && isShushanSource(bookSources.find(source => source.id === x.sourceId))).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={() => { void openHomeBookDetail(module, book); }}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
                 </div>
                 </>
@@ -1297,7 +1299,8 @@ export default function ReadingApp({ onClose }: Props) {
                             <button type="button" onClick={async () => {
                               const id = `shushan_${Date.now()}`;
                               const chapters = sourceChapters.filter(x => !x.isVolume);
-                              const coverSaved = await downloadCoverForBook(id, cover);
+                              const coverSaved = false;
+                              void downloadCoverForBook(id, cover);
                               const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                               await addBook(book);
                               await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
@@ -1312,7 +1315,8 @@ export default function ReadingApp({ onClose }: Props) {
                           <button type="button" className="reading-hub-primary reading-discovery-read" disabled={!chapterCount || sourceLoading} onClick={async () => {
                             const id = `shushan_${Date.now()}`;
                             const chapters = sourceChapters.filter(x => !x.isVolume);
-                            const coverSaved = await downloadCoverForBook(id, cover);
+                            const coverSaved = false;
+                            void downloadCoverForBook(id, cover);
                             const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                             await addBook(book);
                             await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
@@ -1339,7 +1343,8 @@ export default function ReadingApp({ onClose }: Props) {
                     const source = bookSources.find(x => x.id === selectedSourceId); if (!source) return;
                     const id = `source_${Date.now()}`;
                     const chapters = genericChapters;
-                    const coverSaved = await downloadCoverForBook(id, cover);
+                    const coverSaved = false;
+                    void downloadCoverForBook(id, cover);
                     const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                     await addBook(book);
                     await saveChapters(id, chapters.map((c,i) => ({ id:`${id}_ch${i}`, bookId:id, index:i, title:c.title || `第${i+1}章`, paragraphs:[] as string[] })));
