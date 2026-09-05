@@ -329,7 +329,10 @@ async function content(sourceUrl: unknown, chapterUrl: string) {
     const result = await request(host, new URL(target).pathname + new URL(target).search);
     if (!result.response.ok) throw new Error(`正文 HTTP ${result.response.status}`);
 
-    const html = extractElementInnerHtml(result.text, [
+    // 读漫屋的章节页有一类非常关键的结构：外层章节 URL 本身不放漫画图片，
+    // 而是通过 iframe 再加载真正的阅读页；.main_img img 位于 iframe 文档里。
+    // 只抓外层 HTML 会得到“正文为空”，这正是之前适配失败的原因。
+    const directHtml = extractElementInnerHtml(result.text, [
       "main_img",
       "readerContainer",
       "comic_warp",
@@ -337,14 +340,45 @@ async function content(sourceUrl: unknown, chapterUrl: string) {
       "chapter-content",
       "read-content",
     ]);
-    if (html) return { content: html, baseUrl: result.url };
+    if (directHtml) return { content: directHtml, baseUrl: result.url };
 
-    // 个别轮换模板会把正文容器的 class 改掉，但仍会直接输出整章漫画图片。
-    // 只有检测到至少两张图片才启用兜底，避免把详情页的单张封面误当正文。
+    const iframeSrcs: string[] = [];
+    const iframeRe = /<iframe\b[^>]*(?:src|data-src)\s*=\s*["']([^"']+)["'][^>]*>/gi;
+    let iframeMatch: RegExpExecArray | null;
+    while ((iframeMatch = iframeRe.exec(result.text))) {
+      const src = decodeHtml(iframeMatch[1]).trim();
+      if (!src || /^(?:javascript:|#)/i.test(src)) continue;
+      const absolute = abs(result.url, src);
+      if (absolute && !iframeSrcs.includes(absolute)) iframeSrcs.push(absolute);
+    }
+
+    for (const iframeUrl of iframeSrcs) {
+      try {
+        const frame = await request(new URL(iframeUrl).origin, new URL(iframeUrl).pathname + new URL(iframeUrl).search);
+        if (!frame.response.ok) continue;
+        const frameHtml = extractElementInnerHtml(frame.text, [
+          "main_img",
+          "readerContainer",
+          "comic_warp",
+          "comic-content",
+          "chapter-content",
+          "read-content",
+        ]);
+        if (frameHtml) return { content: frameHtml, baseUrl: frame.url };
+
+        const frameImages = frame.text.match(/<img\b[^>]*(?:data-src|data-original|src)\s*=\s*["'][^"']+["'][^>]*>/gi) || [];
+        if (frameImages.length >= 1) return { content: frameImages.join("\n"), baseUrl: frame.url };
+      } catch {
+        // 某个 iframe 失败时继续尝试下一个。
+      }
+    }
+
+    // 个别轮换模板会把正文图片直接输出在外层页面，但没有固定容器。
+    // 只有检测到至少两张图片才启用外层兜底，避免把详情页的单张封面误当正文。
     const images = result.text.match(/<img\b[^>]*(?:data-src|data-original|src)\s*=\s*["'][^"']+["'][^>]*>/gi) || [];
     if (images.length >= 2) return { content: images.join("\n"), baseUrl: result.url };
 
-    throw new Error("正文页面没有找到漫画图片容器（.main_img）");
+    throw new Error("正文页面没有找到漫画图片（已检查 .main_img 和 iframe）");
   });
 }
 
