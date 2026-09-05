@@ -42,8 +42,7 @@
   font-weight: 900;
 }
 
-.reading-hub-close,
-.reading-hub-viewer-close {
+.reading-hub-close {
   border: 0;
   display: grid;
   place-items: center;
@@ -56,7 +55,6 @@
 }
 
 .reading-hub-close:active,
-.reading-hub-viewer-close:active,
 .reading-hub-nav-item:active,
 .reading-hub-card:active {
   transform: scale(.98);
@@ -415,16 +413,6 @@
   background-color: transparent !important;
 }
 
-.reading-hub-viewer-close {
-  position: absolute;
-  top: calc(8px + env(safe-area-inset-top));
-  right: 10px;
-  z-index: 20;
-  background: rgba(255,255,255,.82);
-  border: 1px solid rgba(80,55,20,.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
 
 @media (max-width: 460px) {
   .reading-hub-grid {
@@ -1234,6 +1222,35 @@
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
-.reading-app-surface.reading-hub-root.is-viewing .reading-header[data-book-info="true"] .reading-header-title {
-  display: inline !important;
+
+/* v47.4：阅读器顶部只保留一层。书名与章节直接放入原目录所在行。 */
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-top--single-row {
+  min-height: 52px;
+  height: 52px;
+}
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-title-group {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  overflow: hidden;
+}
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-book-title,
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-chapter-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-book-title { font-size: 13px; font-weight: 900; }
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-chapter-title { font-size: 11px; opacity: .66; }
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-status--floating {
+  position: absolute;
+  left: 52px;
+  right: 52px;
+  top: 54px;
+  z-index: 3;
+  pointer-events: none;
 }
