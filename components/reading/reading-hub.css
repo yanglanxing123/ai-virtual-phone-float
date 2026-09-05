@@ -1224,16 +1224,16 @@
 @media (max-width:480px) { .reading-hub-wallpaper-actions { gap: 8px; } .reading-hub-wallpaper-button,.reading-hub-wallpaper-clear { font-size: 11px; } }
 
 
-/* v47.2：仅处理“书籍信息”这一阅读页顶部。
-   不新增标题、不改变正文背景、不影响首页顶栏；保留原有返回箭头与目录按钮。 */
-.reading-header[data-book-info="true"] {
+/* v47.3：阅读器顶部不再有独立毛玻璃背景。只处理 header，不改正文/正文卡片。
+   章节标题与目录按钮仍放在原来的同一层；外层阅读器右上角 X 已移除。 */
+.reading-app-surface.reading-hub-root.is-viewing .reading-header {
   background: transparent !important;
   background-color: transparent !important;
-  border-bottom-color: transparent !important;
+  border-color: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
-.reading-header[data-book-info="true"] .reading-header-title {
-  display: none !important;
+.reading-app-surface.reading-hub-root.is-viewing .reading-header[data-book-info="true"] .reading-header-title {
+  display: inline !important;
 }

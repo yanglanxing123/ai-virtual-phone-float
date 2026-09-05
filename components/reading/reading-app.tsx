@@ -309,6 +309,10 @@ export default function ReadingApp({ onClose }: Props) {
   const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceMessage, setSourceMessage] = useState("");
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false);
+  const [sourceDrawerMode, setSourceDrawerMode] = useState<"home" | "discovery" | "search">("search");
+  const [sourceImportTarget, setSourceImportTarget] = useState<"home" | "discovery" | "search">("search");
+  const [homeSourceIds, setHomeSourceIds] = useState<string[]>([]);
+  const [discoverySourceIds, setDiscoverySourceIds] = useState<string[]>([]);
   const [sourceLoginOpen, setSourceLoginOpen] = useState(false);
   const [loginFields, setLoginFields] = useState<Record<string, string>>({});
   const [homeModules, setHomeModules] = useState<HomeModule[]>([]);
@@ -318,6 +322,7 @@ export default function ReadingApp({ onClose }: Props) {
   const [homeModuleTitle, setHomeModuleTitle] = useState("");
   const [homeModuleUrl, setHomeModuleUrl] = useState("");
   const [homeModuleSourceId, setHomeModuleSourceId] = useState("");
+  const [discoveryModuleSourceId, setDiscoveryModuleSourceId] = useState("");
   const [selectedSourceBook, setSelectedSourceBook] = useState<ShushanSearchBook | null>(null);
   const [sourceDetail, setSourceDetail] = useState<ShushanSearchBook | null>(null);
   const [sourceChapters, setSourceChapters] = useState<ShushanChapter[]>([]);
@@ -412,10 +417,33 @@ export default function ReadingApp({ onClose }: Props) {
       if (Array.isArray(savedModules)) setHomeModules(savedModules);
     } catch {}
     setBookSources(installed);
+    const installedIds = new Set(installed.map((item) => item.id));
+    let savedHomeSourceIds: string[] | null = null;
+    let savedDiscoverySourceIds: string[] | null = null;
+    try {
+      const homeRaw = JSON.parse(window.localStorage.getItem("reading-home-source-ids-v1") || "null");
+      if (Array.isArray(homeRaw)) savedHomeSourceIds = homeRaw.filter((id): id is string => typeof id === "string" && installedIds.has(id));
+    } catch {}
+    try {
+      const discoveryRaw = JSON.parse(window.localStorage.getItem("reading-discovery-source-ids-v1") || "null");
+      if (Array.isArray(discoveryRaw)) savedDiscoverySourceIds = discoveryRaw.filter((id): id is string => typeof id === "string" && installedIds.has(id));
+    } catch {}
+    const defaultHomeSourceIds = installed.filter((item) => isShushanSource(item)).map((item) => item.id);
+    const defaultDiscoverySourceIds = installed.filter((item) => isMangaSource(item)).map((item) => item.id);
+    const nextHomeSourceIds = savedHomeSourceIds ?? defaultHomeSourceIds;
+    const nextDiscoverySourceIds = savedDiscoverySourceIds ?? defaultDiscoverySourceIds;
+    setHomeSourceIds(nextHomeSourceIds);
+    setDiscoverySourceIds(nextDiscoverySourceIds);
+    try {
+      window.localStorage.setItem("reading-home-source-ids-v1", JSON.stringify(nextHomeSourceIds));
+      window.localStorage.setItem("reading-discovery-source-ids-v1", JSON.stringify(nextDiscoverySourceIds));
+    } catch {}
     const firstNovelSource = installed.find((item) => item.enabled && isShushanSource(item)) || installed.find(isShushanSource);
     const firstSourceId = firstNovelSource?.id || installed.find((item) => item.enabled)?.id || installed[0]?.id || "";
     setSelectedSourceId(firstSourceId);
     setHomeModuleSourceId(firstNovelSource?.id || firstSourceId);
+    const firstMangaSource = installed.find((item) => item.enabled && isMangaSource(item)) || installed.find(isMangaSource);
+    setDiscoveryModuleSourceId(firstMangaSource?.id || "");
     let savedModules: unknown[] = [];
     try {
       const rawModules = JSON.parse(window.localStorage.getItem("reading-home-modules-v2") || "[]");
@@ -542,6 +570,36 @@ export default function ReadingApp({ onClose }: Props) {
       await saveReadingCustomFont(options.customFontFile);
       await loadCustomFontFace(options.customFontFile);
     }
+  };
+
+  const persistSourceSet = (kind: "home" | "discovery", ids: string[]) => {
+    const unique = [...new Set(ids)];
+    if (kind === "home") setHomeSourceIds(unique);
+    else setDiscoverySourceIds(unique);
+    try {
+      window.localStorage.setItem(kind === "home" ? "reading-home-source-ids-v1" : "reading-discovery-source-ids-v1", JSON.stringify(unique));
+    } catch {}
+  };
+
+  const sourceIdsForDrawer = sourceDrawerMode === "home" ? homeSourceIds : sourceDrawerMode === "discovery" ? discoverySourceIds : bookSources.map((source) => source.id);
+  const drawerSources = bookSources.filter((source) => {
+    if (!sourceIdsForDrawer.includes(source.id)) return false;
+    if (sourceDrawerMode === "home") return isShushanSource(source);
+    if (sourceDrawerMode === "discovery") return isMangaSource(source);
+    return true;
+  });
+  const openSourceDrawer = (mode: "home" | "discovery" | "search") => {
+    setSourceDrawerMode(mode);
+    setSourceImportTarget(mode);
+    if (mode === "home" && !homeModuleSourceId) {
+      const first = bookSources.find((source) => homeSourceIds.includes(source.id)) || bookSources.find(isShushanSource);
+      if (first) setHomeModuleSourceId(first.id);
+    }
+    if (mode === "discovery" && !discoveryModuleSourceId) {
+      const first = bookSources.find((source) => discoverySourceIds.includes(source.id)) || bookSources.find(isMangaSource);
+      if (first) setDiscoveryModuleSourceId(first.id);
+    }
+    setSourceDrawerOpen(true);
   };
 
   const appearanceStyle = {
@@ -774,12 +832,28 @@ export default function ReadingApp({ onClose }: Props) {
       }
       const books = extractHomeBooks(parsed);
       setHomeModuleData((prev) => ({ ...prev, [module.id]: books }));
-      if (!books.length) {
-        throw new Error("榜单接口已返回，但没有识别到书籍数据");
-      }
+      if (!books.length) throw new Error("榜单接口已返回，但没有识别到书籍数据");
     } catch (error) {
       setHomeModuleData((prev) => ({ ...prev, [module.id]: [] }));
       setSourceMessage(error instanceof Error ? error.message : "首页模块加载失败");
+    } finally {
+      setHomeModuleLoading(null);
+    }
+  };
+
+  const refreshDiscoveryModule = async (module: HomeModule) => {
+    setHomeModuleLoading(module.id);
+    try {
+      const source = bookSources.find((item) => item.id === module.sourceId);
+      if (!source) throw new Error("发现页书源不存在");
+      if (!isMangaSource(source)) throw new Error("发现页仅允许使用楠楠漫画源");
+      const parsed = await fetchReadingSourceModule(source, module.url, 1);
+      const books = extractHomeBooks(parsed);
+      setHomeModuleData((prev) => ({ ...prev, [module.id]: books }));
+      if (!books.length) throw new Error("漫画发现接口已返回，但没有识别到漫画数据");
+    } catch (error) {
+      setHomeModuleData((prev) => ({ ...prev, [module.id]: [] }));
+      setSourceMessage(error instanceof Error ? error.message : "发现模块加载失败");
     } finally {
       setHomeModuleLoading(null);
     }
@@ -869,7 +943,7 @@ export default function ReadingApp({ onClose }: Props) {
       const source = bookSources.find((item) => item.id === module.sourceId);
       return module.enabled && isMangaSource(source) && !homeModuleData[module.id];
     });
-    if (pending) void refreshHomeModule(pending);
+    if (pending) void refreshDiscoveryModule(pending);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, homeModules, homeModuleData, homeModuleLoading]);
 
@@ -894,14 +968,6 @@ export default function ReadingApp({ onClose }: Props) {
       <style data-reading-custom-css>{customCss.replace(/<\/style/gi, "<\\/style")}</style>
       {activeBook ? (
         <div className="reading-hub-viewer">
-          <button
-            type="button"
-            className="reading-hub-viewer-close"
-            aria-label="返回阅读首页"
-            onClick={() => setActiveBook(null)}
-          >
-            <X size={18} />
-          </button>
           <ReadingViewer
             book={activeBook}
             onBack={() => setActiveBook(null)}
@@ -1030,7 +1096,7 @@ export default function ReadingApp({ onClose }: Props) {
                   ← 返回桌面
                 </button>
                 <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>排行榜</h2><p>直接使用书源发现页：阅读榜、新书榜、分类榜等都可以单独添加。</p></div></div>
-                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled && isShushanSource(bookSources.find(source => source.id === x.sourceId))).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={() => { void openHomeBookDetail(module, book); }}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
+                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled && homeSourceIds.includes(x.sourceId) && isShushanSource(bookSources.find(source => source.id === x.sourceId))).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={() => { void openHomeBookDetail(module, book); }}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
                 </div>
                 </>
                 )}
@@ -1043,13 +1109,13 @@ export default function ReadingApp({ onClose }: Props) {
                   <div>
                     <span>DISCOVER</span>
                     <h2>发现漫画</h2>
-                    <p>{homeModules.filter(x => x.enabled && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length} 个漫画发现模块 · 来自楠楠漫画</p>
+                    <p>{homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length} 个漫画发现模块 · 来自楠楠漫画</p>
                   </div>
-                  <button type="button" className="reading-hub-icon-btn" onClick={() => setSourceDrawerOpen(true)} aria-label="管理发现模块">
+                  <button type="button" className="reading-hub-icon-btn" onClick={() => openSourceDrawer("discovery")} aria-label="管理发现模块">
                     <MoreVertical size={20} />
                   </button>
                 </div>
-                {homeModules.filter(x => x.enabled && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length === 0 ? (
+                {homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length === 0 ? (
                   <div className="reading-hub-section reading-hub-discovery-empty">
                     <Compass size={28} />
                     <strong>还没有发现内容</strong>
@@ -1057,11 +1123,11 @@ export default function ReadingApp({ onClose }: Props) {
                   </div>
                 ) : (
                   <div className="reading-hub-discovery-modules">
-                    {homeModules.filter(x => x.enabled && isMangaSource(bookSources.find(source => source.id === x.sourceId))).map(module => (
+                    {homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).map(module => (
                       <section key={module.id} className="reading-hub-module">
                         <div className="reading-hub-module-head">
                           <strong>{module.title}</strong>
-                          <button type="button" onClick={() => { void refreshHomeModule(module); }} disabled={homeModuleLoading === module.id}>
+                          <button type="button" onClick={() => { void refreshDiscoveryModule(module); }} disabled={homeModuleLoading === module.id}>
                             {homeModuleLoading === module.id ? <RefreshCw size={14} className="reading-spin" /> : <RefreshCw size={14} />}
                           </button>
                         </div>
@@ -1076,7 +1142,7 @@ export default function ReadingApp({ onClose }: Props) {
                             ))}
                           </div>
                         ) : (
-                          <button type="button" className="reading-hub-module-empty" onClick={() => { void refreshHomeModule(module); }} disabled={homeModuleLoading === module.id}>
+                          <button type="button" className="reading-hub-module-empty" onClick={() => { void refreshDiscoveryModule(module); }} disabled={homeModuleLoading === module.id}>
                             {homeModuleLoading === module.id ? "正在加载…" : "点击加载发现内容"}
                           </button>
                         )}
@@ -1107,40 +1173,60 @@ export default function ReadingApp({ onClose }: Props) {
                     <h2>搜索你想看的书</h2>
                     <p>{bookSources.filter((item) => item.enabled).length} 个已启用书源 · 结果优先展示</p>
                   </div>
-                  <button type="button" className="reading-hub-icon-btn" onClick={() => setSourceDrawerOpen(true)} aria-label="书源管理">
+                  <button type="button" className="reading-hub-icon-btn" onClick={() => openSourceDrawer("search")} aria-label="书源管理">
                     <MoreVertical size={20} />
                   </button>
                 </div>
 
                 <div className="reading-hub-source-pills">
+                  <button type="button" className={!sourceFilter ? "is-active" : ""} onClick={() => setSourceFilter("")}>全部书源</button>
                   {bookSources.filter((item) => item.enabled).map((source) => (
-                    <button key={source.id} type="button" className={selectedSourceId === source.id ? "is-active" : ""} onClick={() => {
-                      setSelectedSourceId(source.id); setGenericResults([]); setSourceResults([]); setGenericBook(null); setGenericDetail(null); setGenericChapters([]); setSelectedSourceBook(null); setSourceDetail(null); setSourceChapters([]); setSourceMessage("");
-                    }}>{source.name}</button>
+                    <button key={source.id} type="button" className={sourceFilter === source.id ? "is-active" : ""} onClick={() => setSourceFilter(source.id)}>{source.name}</button>
                   ))}
                 </div>
 
                 <div className="reading-hub-big-searchbox">
                   <Search size={21} />
                   <input value={sourceKeyword} onChange={(e) => setSourceKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget.parentElement?.querySelector("button") as HTMLButtonElement | null)?.click(); }} placeholder="输入书名、作者，或 书名@来源" />
-                  <button type="button" disabled={sourceLoading || !sourceKeyword.trim() || !selectedSourceId} onClick={async () => {
-                    const currentSource = bookSources.find((item) => item.id === selectedSourceId);
-                    if (!currentSource) return;
+                  <button type="button" disabled={sourceLoading || !sourceKeyword.trim()} onClick={async () => {
                     setSourceLoading(true); setSourceMessage(""); setGenericResults([]); setSourceResults([]);
+                    setSelectedSourceBook(null); setGenericBook(null); setSourceDetail(null); setGenericDetail(null); setSourceChapters([]); setGenericChapters([]);
                     try {
                       const raw = sourceKeyword.trim();
-                      if (currentSource.adapter === "shushan") {
-                        const [keyword, inlineSource] = raw.split("@");
-                        const account = loadShushanAccount();
-                        if (!account.apiKey) throw new Error("请先在「书源管理 → 书源登录」完成书山登录");
-                        const result = await searchShushan(account.apiKey, keyword.trim(), inlineSource?.trim() || "", 1);
-                        const results = Array.isArray(result.data) ? result.data : [];
-                        setSourceResults(results);
-                        setSourceMessage(results.length ? `找到 ${results.length} 本相关书籍` : "书源返回 0 条结果，可尝试只填书名，或清空指定来源");
-                      } else {
-                        const result = await searchGenericSource(currentSource, raw.replace(/@.+$/, ""), 1);
-                        setGenericResults(result); setSourceMessage(result.length ? `找到 ${result.length} 本相关书籍` : "没有找到结果");
+                      const [keywordPart, inlineSource] = raw.split("@");
+                      const keyword = keywordPart.trim();
+                      let targets = bookSources.filter((item) => item.enabled);
+                      if (sourceFilter) targets = targets.filter((item) => item.id === sourceFilter);
+                      if (inlineSource?.trim()) {
+                        const needle = inlineSource.trim().toLowerCase();
+                        targets = targets.filter((item) => item.name.toLowerCase().includes(needle) || item.url.toLowerCase().includes(needle));
                       }
+                      const account = loadShushanAccount();
+                      const shushanTargets = targets.filter((item) => isShushanSource(item));
+                      const genericTargets = targets.filter((item) => !isShushanSource(item));
+                      const [shushanSettled, genericSettled] = await Promise.all([
+                        account.apiKey && shushanTargets.length
+                          ? Promise.allSettled(shushanTargets.map(async (source) => ({ sourceId: source.id, items: (await searchShushan(account.apiKey, keyword, inlineSource?.trim() || "", 1)).data || [] })))
+                          : Promise.resolve([] as PromiseSettledResult<{ sourceId: string; items: ShushanSearchBook[] }>[]) ,
+                        genericTargets.length
+                          ? Promise.allSettled(genericTargets.map(async (source) => ({ sourceId: source.id, items: await searchGenericSource(source, keyword, 1) })))
+                          : Promise.resolve([] as PromiseSettledResult<{ sourceId: string; items: GenericSourceBook[] }>[])
+                      ]);
+                      const shushanResults: ShushanSearchBook[] = [];
+                      const genericResultsMerged: GenericSourceBook[] = [];
+                      let failures = 0;
+                      for (const result of shushanSettled) {
+                        if (result.status === "fulfilled") for (const item of result.value.items) shushanResults.push({ ...item, _readingSourceId: result.value.sourceId } as ShushanSearchBook);
+                        else failures++;
+                      }
+                      for (const result of genericSettled) {
+                        if (result.status === "fulfilled") for (const item of result.value.items) genericResultsMerged.push({ ...item, _readingSourceId: result.value.sourceId } as GenericSourceBook);
+                        else failures++;
+                      }
+                      setSourceResults(shushanResults);
+                      setGenericResults(genericResultsMerged);
+                      const total = shushanResults.length + genericResultsMerged.length;
+                      setSourceMessage(total ? `共找到 ${total} 条结果${failures ? `，${failures} 个书源请求失败` : ""}` : (account.apiKey || !shushanTargets.length ? "没有找到结果" : "楠楠漫画有结果；书山请先登录后再搜索"));
                     } catch (error) { setSourceMessage(error instanceof Error ? error.message : "搜索失败"); }
                     finally { setSourceLoading(false); }
                   }}>{sourceLoading ? "搜索中…" : "搜索"}</button>
@@ -1150,7 +1236,9 @@ export default function ReadingApp({ onClose }: Props) {
 
                 {sourceResults.length > 0 && !selectedSourceBook && <div className="reading-hub-result-list">{sourceResults.map((item, index) => (
                   <button key={`${item.source}-${item.book_url}-${index}`} type="button" className="reading-hub-result-card" onClick={async () => {
-                    const source = bookSources.find((x) => x.id === selectedSourceId); if (!source) return;
+                    const resultSourceId = String((item as any)._readingSourceId || selectedSourceId || "");
+                    const source = bookSources.find((x) => x.id === resultSourceId); if (!source) return;
+                    setSelectedSourceId(source.id);
                     setSelectedSourceBook(item); setSourceDetail(null); setSourceChapters([]); setSourceLoading(true); setSourceMessage("正在打开详情…");
                     try { const result = await getShushanDetail(loadShushanAccount().apiKey, item); const mergedDetail = { ...item, ...result.data } as ShushanSearchBook; setSourceDetail(mergedDetail); const cat = await getShushanCatalog(loadShushanAccount().apiKey, mergedDetail); setSourceChapters(cat.data || []); setSourceMessage(`目录 ${cat.data?.filter((x) => !x.isVolume).length || 0} 章`); }
                     catch (error) { setSourceMessage(error instanceof Error ? error.message : "获取详情失败"); }
@@ -1158,14 +1246,16 @@ export default function ReadingApp({ onClose }: Props) {
                   }}><div className="reading-hub-result-cover">{item.cover ? <img src={item.cover} alt="" /> : <BookOpen size={24} />}</div><div className="reading-hub-result-main"><strong>{item.title || "未命名"}</strong><span>{item.author || "未知作者"} · {item.source || "书山"}</span><small>{item.latestChapterTitle || item.desc || ""}</small></div><ChevronRight size={18} /></button>
                 ))}</div>}
 
-                {sourceResults.length === 0 && genericResults.length > 0 && !genericBook && <div className="reading-hub-result-list">{genericResults.map((item, index) => (
+                {genericResults.length > 0 && !genericBook && <div className="reading-hub-result-list">{genericResults.map((item, index) => (
                   <button key={`${item.bookUrl}-${index}`} type="button" className="reading-hub-result-card" onClick={async () => {
-                    const source = bookSources.find((x) => x.id === selectedSourceId); if (!source) return;
+                    const resultSourceId = String((item as any)._readingSourceId || selectedSourceId || "");
+                    const source = bookSources.find((x) => x.id === resultSourceId); if (!source) return;
+                    setSelectedSourceId(source.id);
                     setGenericBook(item); setGenericDetail(null); setGenericChapters([]); setSourceLoading(true); setSourceMessage("正在打开详情…");
                     try { const detail = await getGenericDetail(source, item); setGenericDetail(detail); const chapters = await getGenericCatalog(source, detail); setGenericChapters(chapters); setSourceMessage(`目录 ${chapters.length} 章`); }
                     catch (error) { setSourceMessage(error instanceof Error ? error.message : "获取详情失败"); }
                     finally { setSourceLoading(false); }
-                  }}><div className="reading-hub-result-cover">{item.cover ? <img src={item.cover} alt="" /> : <BookOpen size={24} />}</div><div className="reading-hub-result-main"><strong>{item.title}</strong><span>{item.author || "未知作者"}</span><small>{item.latestChapterTitle || item.desc || ""}</small></div><ChevronRight size={18} /></button>
+                  }}><div className="reading-hub-result-cover">{item.cover ? <img src={item.cover} alt="" /> : <BookOpen size={24} />}</div><div className="reading-hub-result-main"><strong>{item.title}</strong><span>{item.author || "未知作者"} · {bookSources.find(x => x.id === String((item as any)._readingSourceId || ""))?.name || "书源"}</span><small>{item.latestChapterTitle || item.desc || ""}</small></div><ChevronRight size={18} /></button>
                 ))}</div>}
 
                 {selectedSourceBook && <div className="reading-hub-detail-page">
@@ -1261,7 +1351,7 @@ export default function ReadingApp({ onClose }: Props) {
                       <div className="reading-discovery-book-head"><div className="reading-discovery-cover">{cover ? <img src={cover} alt="" /> : <BookOpen size={32} />}</div><div className="reading-discovery-book-main"><h2>{title}</h2><p>{author}</p><span>📚 {bookSources.find(x=>x.id===selectedSourceId)?.name || "书源"}</span></div></div>
                       <div className="reading-discovery-meta-grid"><div><small>标签</small><strong>{tags}</strong></div><div><small>评分</small><strong>{rating}</strong></div><div><small>状态</small><strong>{status}</strong></div><div><small>最近更新</small><strong>{updatedAt}</strong></div><div><small>全书字数</small><strong>{wordCount}</strong></div><div><small>章节</small><strong>{chapterCount} 章</strong></div></div>
                       <section className="reading-discovery-intro"><h3>简介</h3><p>{desc}</p></section>
-                      <div className="reading-discovery-actions reading-discovery-actions--compact"><button type="button" onClick={saveGenericBook}><span>🔖</span>放入书架</button><button type="button" onClick={()=>setSourceMessage(`目录共 ${chapterCount} 章`)}><span>☷</span>目录</button><button type="button" onClick={()=>setSourceDrawerOpen(true)}><span>&lt;&gt;</span>书源</button><button type="button" onClick={()=>setSourceMessage("阅读记录已保存在本地")}><span>⌁</span>记录</button></div>
+                      <div className="reading-discovery-actions reading-discovery-actions--compact"><button type="button" onClick={saveGenericBook}><span>🔖</span>放入书架</button><button type="button" onClick={()=>setSourceMessage(`目录共 ${chapterCount} 章`)}><span>☷</span>目录</button><button type="button" onClick={()=>openSourceDrawer("search")}><span>&lt;&gt;</span>书源</button><button type="button" onClick={()=>setSourceMessage("阅读记录已保存在本地")}><span>⌁</span>记录</button></div>
                       <div className="reading-discovery-current"><strong>在读 · {genericChapters[0]?.title || "暂无章节"}</strong><span>共 {chapterCount} 章</span></div>
                       <section className="reading-discovery-intro reading-discovery-intro--source"><h3>来源信息</h3><p>源站：{bookSources.find(x=>x.id===selectedSourceId)?.name || "书源"}</p><p>作者：{author}</p></section>
                       <button type="button" className="reading-hub-primary reading-discovery-read" disabled={!chapterCount || sourceLoading} onClick={saveGenericBook}>▣ 开始阅读</button>
@@ -1314,12 +1404,21 @@ export default function ReadingApp({ onClose }: Props) {
                 const result = importReadingSources(parsed);
                 const next = result.sources;
                 setBookSources(next);
-                const first = next.find((item) => item.enabled)?.id || "";
-                if (!selectedSourceId && first) {
-                  setSelectedSourceId(first);
-                  setHomeModuleSourceId(first);
+                const importedItems = Array.isArray(parsed) ? parsed : [parsed];
+                const importedKeys = new Set(importedItems.filter((item: any) => item && typeof item === "object").map((item: any) => `${String(item.bookSourceName || item.name || "").trim()}|${String(item.bookSourceUrl || item.url || "").trim()}`));
+                const importedIds = next.filter((item) => importedKeys.has(`${item.name}|${item.url}`)).map((item) => item.id);
+                const allowedImportedIds = importedIds.filter((id) => {
+                  const source = next.find((item) => item.id === id);
+                  return sourceImportTarget === "home" ? isShushanSource(source) : sourceImportTarget === "discovery" ? isMangaSource(source) : true;
+                });
+                if (sourceImportTarget === "home" || sourceImportTarget === "discovery") {
+                  const base = sourceImportTarget === "home" ? homeSourceIds : discoverySourceIds;
+                  persistSourceSet(sourceImportTarget, [...base, ...allowedImportedIds]);
                 }
-                setSourceMessage(`已导入 ${result.added} 个书源${result.skipped ? `，跳过 ${result.skipped} 个` : ""}`);
+                const first = next.find((item) => item.enabled)?.id || "";
+                if (!selectedSourceId && first) setSelectedSourceId(first);
+                if (!homeModuleSourceId && first) setHomeModuleSourceId(first);
+                setSourceMessage(`已导入 ${result.added} 个书源${result.skipped ? `，跳过 ${result.skipped} 个` : ""}；仅加入当前${sourceImportTarget === "home" ? "首页" : sourceImportTarget === "discovery" ? "发现页" : "搜索库"}`);
               } catch (error) {
                 setSourceMessage(error instanceof Error ? `书源导入失败：${error.message}` : "书源导入失败");
               }
@@ -1330,11 +1429,11 @@ export default function ReadingApp({ onClose }: Props) {
             <div className="reading-hub-drawer-backdrop" onClick={() => setSourceDrawerOpen(false)}>
               <aside className="reading-hub-drawer" onClick={(e) => e.stopPropagation()}>
                 <div className="reading-hub-drawer-head">
-                  <strong>书源</strong>
+                  <strong>{sourceDrawerMode === "home" ? "首页书源" : sourceDrawerMode === "discovery" ? "发现页书源" : "全部书源"}</strong>
                   <button type="button" onClick={() => setSourceDrawerOpen(false)}><X size={18} /></button>
                 </div>
                 <div className="reading-hub-drawer-actions">
-                  <button type="button" onClick={() => sourceFileInputRef.current?.click()}><Upload size={16} /> 导入书源</button>
+                  <button type="button" onClick={() => { setSourceImportTarget(sourceDrawerMode); sourceFileInputRef.current?.click(); }}><Upload size={16} /> 导入书源</button>
                   <button type="button" onClick={() => {
                     const source = bookSources.find((x) => x.id === selectedSourceId);
                     if (!source) return;
@@ -1358,47 +1457,51 @@ export default function ReadingApp({ onClose }: Props) {
                   }}><LogIn size={16} /> 书源登录</button>
                   <button type="button" onClick={() => setTab("appearance")}><Palette size={16} /> 阅读外观</button>
                 </div>
-                <div className="reading-hub-drawer-section">
-                  <div className="reading-hub-drawer-title">首页发现</div>
-                  <label className="reading-hub-field reading-hub-drawer-source-select"><span>选择书源</span><select value={homeModuleSourceId} onChange={e=>setHomeModuleSourceId(e.target.value)}>{bookSources.map(source=><option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
+                {sourceDrawerMode !== "search" && <div className="reading-hub-drawer-section">
+                  <div className="reading-hub-drawer-title">{sourceDrawerMode === "discovery" ? "发现页模块" : "首页排行榜"}</div>
+                  <label className="reading-hub-field reading-hub-drawer-source-select"><span>选择书源</span><select value={sourceDrawerMode === "home" ? homeModuleSourceId : discoveryModuleSourceId} onChange={e => sourceDrawerMode === "home" ? setHomeModuleSourceId(e.target.value) : setDiscoveryModuleSourceId(e.target.value)}>{bookSources.filter(source => (sourceDrawerMode === "home" ? homeSourceIds : discoverySourceIds).includes(source.id)).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
                   <div className="reading-hub-drawer-discovered">
-                    <div className="reading-hub-drawer-subtitle">发现页榜单</div>
+                    <div className="reading-hub-drawer-subtitle">{sourceDrawerMode === "discovery" ? "漫画发现模块" : "小说排行榜"}</div>
                     <div className="reading-hub-drawer-discovered-list">
                       {(() => {
-                        const source = bookSources.find(x => x.id === homeModuleSourceId);
+                        const sourceId = sourceDrawerMode === "home" ? homeModuleSourceId : discoveryModuleSourceId;
+                        const source = bookSources.find(x => x.id === sourceId);
                         const items = source ? discoverSourceModules(source) : [];
                         return items.map(item => {
                           const id = `${source!.id}_${item.title}`;
                           const exists = homeModules.some(x => x.id === id);
-                          return <button key={`${item.title}-${item.url}`} type="button" className={exists ? "is-added" : ""} disabled={exists} onClick={() => { persistHomeModules([...homeModules, { id, title:item.title, url:item.url, sourceId:source!.id, enabled:true }]); setHomeModuleData(prev=>{const copy={...prev}; delete copy[id]; return copy;}); }}><Plus size={12}/><span>{item.title}</span>{exists && <em>已添加</em>}</button>;
+                          return <button key={`${item.title}-${item.url}`} type="button" className={exists ? "is-added" : ""} disabled={exists} onClick={() => {
+                            const next = [...homeModules, { id, title:item.title, url:item.url, sourceId:source!.id, enabled:true }];
+                            persistHomeModules(next);
+                          }}><Plus size={12}/><span>{item.title}</span>{exists && <em>已添加</em>}</button>;
                         });
                       })()}
                     </div>
                   </div>
-                  <button type="button" className="reading-hub-drawer-wide-action" onClick={() => { setTab("home"); setHomeModuleEditorOpen(v => !v); }}>＋ 自定义首页模块</button>
+                  {sourceDrawerMode === "home" && <button type="button" className="reading-hub-drawer-wide-action" onClick={() => { setTab("home"); setHomeModuleEditorOpen(v => !v); }}>＋ 自定义首页模块</button>}
                   <div className="reading-hub-drawer-module-list">
-                    {homeModules.map((module, index) => (
+                    {homeModules.filter(module => (sourceDrawerMode === "home" ? homeSourceIds : discoverySourceIds).includes(module.sourceId)).map((module, index) => (
                       <div key={module.id} className="reading-hub-drawer-module">
                         <span>{module.title}</span>
                         <div>
-                          <button type="button" onClick={() => { if (index <= 0) return; const next=[...homeModules]; [next[index-1],next[index]]=[next[index],next[index-1]]; persistHomeModules(next); }}>↑</button>
-                          <button type="button" onClick={() => { if (index >= homeModules.length-1) return; const next=[...homeModules]; [next[index],next[index+1]]=[next[index+1],next[index]]; persistHomeModules(next); }}>↓</button>
+                          <button type="button" onClick={() => { if (index <= 0) return; const allowedIds = sourceDrawerMode === "home" ? homeSourceIds : discoverySourceIds; const visible = homeModules.filter(x => allowedIds.includes(x.sourceId)); const pos = visible.findIndex(x => x.id === module.id); if (pos <= 0) return; const swap = visible[pos - 1]; const next=[...homeModules]; const a=next.findIndex(x=>x.id===module.id); const b=next.findIndex(x=>x.id===swap.id); [next[a],next[b]]=[next[b],next[a]]; persistHomeModules(next); }}>↑</button>
+                          <button type="button" onClick={() => { const allowedIds = sourceDrawerMode === "home" ? homeSourceIds : discoverySourceIds; const visible = homeModules.filter(x => allowedIds.includes(x.sourceId)); const pos = visible.findIndex(x => x.id === module.id); if (pos < 0 || pos >= visible.length - 1) return; const swap = visible[pos + 1]; const next=[...homeModules]; const a=next.findIndex(x=>x.id===module.id); const b=next.findIndex(x=>x.id===swap.id); [next[a],next[b]]=[next[b],next[a]]; persistHomeModules(next); }}>↓</button>
                           <button type="button" onClick={() => { persistHomeModules(homeModules.filter(x => x.id !== module.id)); setHomeModuleData(prev => { const copy={...prev}; delete copy[module.id]; return copy; }); }}>×</button>
                         </div>
                       </div>
                     ))}
                   </div>
-                  {homeModuleEditorOpen && <div className="reading-hub-module-form">
+                  {sourceDrawerMode === "home" && homeModuleEditorOpen && <div className="reading-hub-module-form">
                     <label className="reading-hub-field"><span>模块名称</span><input value={homeModuleTitle} onChange={e=>setHomeModuleTitle(e.target.value)} placeholder="例如：女频新书榜 · 快穿" /></label>
                     <label className="reading-hub-field"><span>模块地址</span><input value={homeModuleUrl} onChange={e=>setHomeModuleUrl(e.target.value)} placeholder="https://..." /></label>
-                    <label className="reading-hub-field"><span>使用书源</span><select value={homeModuleSourceId} onChange={e=>setHomeModuleSourceId(e.target.value)}>{bookSources.map(source=><option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
+                    <label className="reading-hub-field"><span>使用书源</span><select value={homeModuleSourceId} onChange={e=>setHomeModuleSourceId(e.target.value)}>{bookSources.filter(source => homeSourceIds.includes(source.id)).map(source=><option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
                     <button type="button" className="reading-hub-primary" disabled={!homeModuleTitle.trim()||!/^https?:\/\//i.test(homeModuleUrl.trim())||!homeModuleSourceId} onClick={()=>{const id=`custom_${Date.now()}`;persistHomeModules([...homeModules,{id,title:homeModuleTitle.trim(),url:homeModuleUrl.trim(),sourceId:homeModuleSourceId,enabled:true}]);setHomeModuleTitle("");setHomeModuleUrl("");setHomeModuleEditorOpen(false);}}>保存模块</button>
                   </div>}
-                </div>
+                </div>}
 
                 <div className="reading-hub-drawer-section">
                   <div className="reading-hub-drawer-title">我的书源</div>
-                  {bookSources.map((source) => (
+                  {drawerSources.map((source) => (
                     <div key={source.id} className="reading-hub-drawer-source">
                       <button type="button" onClick={() => {
                         setSelectedSourceId(source.id);
@@ -1416,6 +1519,10 @@ export default function ReadingApp({ onClose }: Props) {
                         setReadingSourceEnabled(source.id, e.target.checked);
                         setBookSources(loadReadingSources());
                       }} />
+                      {sourceDrawerMode !== "search" && <button type="button" className="reading-hub-drawer-source-remove" title="从当前页面移除" onClick={() => {
+                        const kind = sourceDrawerMode as "home" | "discovery";
+                        persistSourceSet(kind, (kind === "home" ? homeSourceIds : discoverySourceIds).filter((id) => id !== source.id));
+                      }}>−</button>}
                     </div>
                   ))}
                 </div>

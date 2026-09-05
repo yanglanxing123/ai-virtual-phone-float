@@ -31,7 +31,8 @@ import type { Book, BookChapter, ReadingAnnotation, ReadingProgress } from "@/li
 import { kvGet, kvSet } from "@/lib/kv-db";
 import type { Character } from "@/lib/character-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
-import { getReadingRemoteBook } from "@/lib/reading-source";
+import { getReadingRemoteBook, getReadingSource } from "@/lib/reading-source";
+import { createDeviceId, getRemoteBook, getShushanChapterContent, loadShushanAccount } from "@/lib/shushan-client";
 import { getGenericChapterContent, htmlToParagraphs, type GenericSourceChapter } from "@/lib/reading-source-engine";
 
 /**
@@ -358,6 +359,8 @@ export function ReadingViewer({ book, onBack }: Props) {
     const [showNavigationDialog, setShowNavigationDialog] = useState(false);
     const [pdfJumpPage, setPdfJumpPage] = useState<number | undefined>(undefined);
     const [chaptersLoaded, setChaptersLoaded] = useState(false);
+    const [remoteContentLoading, setRemoteContentLoading] = useState(false);
+    const [remoteContentError, setRemoteContentError] = useState("");
     const touchStartRef = useRef({ x: 0, y: 0 });
     const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
     const [readingMessageMenu, setReadingMessageMenu] = useState<{ messageId: string; x: number; y: number } | null>(null);
@@ -430,11 +433,11 @@ export function ReadingViewer({ book, onBack }: Props) {
     const bilingualTranslationEnabled = readingConfig.bilingualTranslationEnabled === true;
     const defaultTranslationExpanded = readingConfig.collapseBilingualTranslation !== true;
     const currentChapter = chapters[chapterIndex];
-    const isBookInfoChapter = !isPdf && /^(?:书籍信息|书籍资料)$/i.test(String(currentChapter?.title || "").trim());
     const txtPagesChapterIndex = txtPages[0]?.find((item) => item.kind !== "gap")?.chapterIndex ?? txtPages[0]?.[0]?.chapterIndex;
     const txtPagesReadyForCurrentChapter = !isPdf && txtPages.length > 0 && txtPagesChapterIndex === chapterIndex;
     const showTxtLoading = !isPdf && (
         !chaptersLoaded ||
+        remoteContentLoading ||
         (chaptersLoaded && chapters.length > 0 && Boolean(currentChapter) && !txtPagesReadyForCurrentChapter)
     );
 
@@ -727,6 +730,57 @@ export function ReadingViewer({ book, onBack }: Props) {
         })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [book.id]);
+
+    // 在线书籍的目录只保存章节地址，正文按当前章节懒加载；本地 TXT/EPUB 不会进入这里。
+    useEffect(() => {
+        const targetChapter = chapters[chapterIndex];
+        if (isPdf || !chaptersLoaded || !targetChapter || targetChapter.paragraphs.length > 0) return;
+        const shushanRemote = getRemoteBook(book.id);
+        const genericRemote = getReadingRemoteBook(book.id);
+        if (!shushanRemote && !genericRemote) return;
+        let cancelled = false;
+        setRemoteContentLoading(true);
+        setRemoteContentError("");
+        (async () => {
+            try {
+                let content = "";
+                if (shushanRemote) {
+                    const chapter = shushanRemote.chapters?.[chapterIndex];
+                    if (!chapter) throw new Error("在线章节信息不存在");
+                    const apiKey = shushanRemote.apiKey || loadShushanAccount().apiKey;
+                    if (!apiKey) throw new Error("书山登录状态已失效，请重新登录");
+                    const result = await getShushanChapterContent(
+                        apiKey,
+                        chapter,
+                        { source: shushanRemote.source, url: shushanRemote.url, name: shushanRemote.name },
+                        createDeviceId(),
+                    );
+                    content = result.content || "";
+                } else if (genericRemote) {
+                    const source = getReadingSource(genericRemote.sourceId);
+                    const chapter = genericRemote.chapters?.[chapterIndex];
+                    if (!source || !chapter) throw new Error("在线书源或章节信息不存在");
+                    content = await getGenericChapterContent(source, chapter);
+                }
+                const paragraphs = htmlToParagraphs(content);
+                if (!paragraphs.length) throw new Error("正文接口返回为空");
+                if (cancelled) return;
+                const nextChapters = chapters.map((chapter, index) =>
+                    index === chapterIndex ? { ...chapter, paragraphs } : chapter,
+                );
+                await saveChapters(book.id, nextChapters);
+                if (cancelled) return;
+                setChapters(nextChapters);
+                setTxtPage(0);
+                setRemoteContentError("");
+            } catch (error) {
+                if (!cancelled) setRemoteContentError(error instanceof Error ? error.message : "在线正文加载失败");
+            } finally {
+                if (!cancelled) setRemoteContentLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [book.id, chapterIndex, chapters, chaptersLoaded, isPdf]);
 
     useEffect(() => {
         if (chapters.length === 0) return;
@@ -2105,7 +2159,7 @@ export function ReadingViewer({ book, onBack }: Props) {
             )}
 
             {/* Header — chapter name + page info */}
-            <header className={`reading-header ${immersive ? "reading-header--immersive" : "reading-header--revealed"}`} data-ui="header" data-book-info={isBookInfoChapter ? "true" : undefined}>
+            <header className={`reading-header ${immersive ? "reading-header--immersive" : "reading-header--revealed"}`} data-ui="header">
                 <div className="reading-header-top">
                     <button onClick={onBack} className="page-back-btn reading-header-back">
                         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -2239,7 +2293,18 @@ export function ReadingViewer({ book, onBack }: Props) {
                 )}
 
                 {showTxtLoading && (
-                    <ReadingLoadingView title="正在打开书页" subtitle="正在读取并排版当前章节" overlay />
+                    <ReadingLoadingView
+                        title={remoteContentLoading ? "正在读取在线正文" : "正在打开书页"}
+                        subtitle={remoteContentLoading ? "正在获取当前章节内容" : "正在读取并排版当前章节"}
+                        overlay
+                    />
+                )}
+                {remoteContentError && !remoteContentLoading && (
+                    <div className="reading-debug-card" style={{ margin: "16px" }}>
+                        <div className="reading-debug-title">在线正文加载失败</div>
+                        <div className="reading-debug-line">{remoteContentError}</div>
+                        <div className="reading-debug-hint">请先确认书源登录状态和网络连接，然后重新打开章节。</div>
+                    </div>
                 )}
 
                 {isPdf && <div className="h-[88px]" />}
