@@ -283,7 +283,7 @@ export async function fetchReadingSourceModule(source: ReadingBookSource, module
 
   const state = loadReadingSourceState(source.id);
   const vars = { ...(state.variables || {}), key: "", page: String(page), pageIndex: String(page), keyword: "" };
-  const templated = replaceVars(moduleUrl, vars);
+  const templated = resolveSourceFunctions(replaceVars(moduleUrl, vars), source);
   const request = parseRequestUrl(templated, source.url);
   if (!/^https?:/i.test(request.url)) throw new Error("首页模块地址不是有效的 HTTP/HTTPS 地址");
 
@@ -724,8 +724,78 @@ export function sourceCapabilities(source: ReadingBookSource) {
 
 
 function isNanmComicSource(source: ReadingBookSource) {
+  // 仅对原有楠楠漫画专用加密接口启用专用适配。
+  // 不要再用 bookSourceType===2 判断，否则所有漫画源都会被误判成楠楠漫画源。
+  return /楠楠漫画|nnmh\.info/i.test(`${source.name} ${source.url}`);
+}
+
+function resolveSourceFunctions(input: string, source: ReadingBookSource): string {
   const raw = source.raw as any;
-  return raw?.bookSourceType === 2 || /楠楠漫画|nnmh\.info/i.test(`${source.name} ${source.url}`);
+  const jsLib = asText(raw?.jsLib);
+  if (!jsLib || !input) return input;
+  let output = input;
+  const state = loadReadingSourceState(source.id);
+  const info = (state as any)?.loginInfo || (state as any)?.variables || {};
+
+  // 兼容常见的书源自定义函数：function surl(){ ... return ... }。
+  // 只解析纯字符串/登录配置读取，不执行任意 JS。
+  const values = new Map<string, string>();
+  const functionStart = /function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g;
+  let match: RegExpExecArray | null;
+  while ((match = functionStart.exec(jsLib))) {
+    const name = match[1];
+    let depth = 1;
+    let quote = '';
+    let escape = false;
+    let i = match.index + match[0].length;
+    for (; i < jsLib.length && depth > 0; i += 1) {
+      const ch = jsLib[i];
+      if (quote) {
+        if (escape) { escape = false; continue; }
+        if (ch === '\\') { escape = true; continue; }
+        if (ch === quote) quote = '';
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+      if (ch === '{') depth += 1;
+      else if (ch === '}') depth -= 1;
+    }
+    const body = jsLib.slice(match.index + match[0].length, Math.max(match.index + match[0].length, i - 1));
+    const ret = body.match(/return\s+([\s\S]*?)(?:;|\n|$)/i)?.[1]?.trim();
+    if (!ret) continue;
+
+    const loginKey = ret.match(/(?:this\.source\.)?getLoginInfoMap\(\)\s*\[\s*['"]([^'"]+)['"]\s*\]/i);
+    if (loginKey) {
+      const configured = asText(info?.[loginKey[1]]).trim();
+      const fallback = body.match(/else\s+['"]([^'"]+)['"]/i)?.[1]
+        || ret.match(/:\s*['"]([^'"]+)['"]/i)?.[1]
+        || '';
+      values.set(name, configured || fallback);
+      continue;
+    }
+    const quoted = ret.match(/^['"]([^'"]*)['"]$/);
+    if (quoted) values.set(name, quoted[1]);
+  }
+
+  for (const [name, value] of values) {
+    output = output.replace(new RegExp(`\\b${name}\\s*\\(\\s*\\)`, 'g'), value);
+  }
+  return output;
+}
+
+function normalizeMangaImageHtml(content: string, baseUrl: string) {
+  if (!content || typeof DOMParser === 'undefined') return content;
+  try {
+    const doc = new DOMParser().parseFromString(`<div>${content}</div>`, 'text/html');
+    const root = doc.body.firstElementChild;
+    if (!root) return content;
+    root.querySelectorAll('img').forEach((img) => {
+      const src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-original') || '';
+      if (src) img.setAttribute('src', joinUrl(baseUrl, src));
+      img.removeAttribute('loading');
+    });
+    return root.innerHTML;
+  } catch { return content; }
 }
 
 function normalizeNanmCover(value: unknown, base: string) {
@@ -942,7 +1012,7 @@ async function getShushanCatalogAdapter(source: ReadingBookSource, detail: Gener
 
 async function getShushanContentAdapter(source: ReadingBookSource, chapter: GenericSourceChapter, detail?: GenericSourceDetail): Promise<string> {
   const account = requireShushanAccount();
-  const raw = chapter.raw && typeof chapter.raw === "object" ? chapter.raw as ShushanChapter : {};
+  const raw = chapter.raw && typeof chapter.raw === "object" ? chapter.raw as ShushanChapter : {} as ShushanChapter;
   const catalogRaw = detail?.raw && typeof detail.raw === "object" ? detail.raw as Record<string, unknown> : {};
   const catalog = {
     source: String(catalogRaw.source || ""),
@@ -964,7 +1034,7 @@ export async function searchGenericSource(source: ReadingBookSource, keyword: st
 
   const state = loadReadingSourceState(source.id);
   const vars = { ...(state.variables || {}), key: keyword, page: String(page), pageIndex: String(page), keyword };
-  const templated = replaceVars(searchUrlRule, vars);
+  const templated = resolveSourceFunctions(replaceVars(searchUrlRule, vars), source);
   const request = parseRequestUrl(templated, source.url);
   if (!/^https?:/i.test(request.url)) throw new Error("搜索地址不是有效的 HTTP/HTTPS 地址");
   const options = request.options || {};
@@ -1010,7 +1080,7 @@ export async function getGenericDetail(source: ReadingBookSource, book: GenericS
 
   const state = loadReadingSourceState(source.id);
   const vars = state.variables || {};
-  const payload = await fetchSource({ source, url: joinUrl(source.url, replaceVars(book.bookUrl, vars)), headers: parseHeaderRule(source, vars) });
+  const payload = await fetchSource({ source, url: joinUrl(source.url, resolveSourceFunctions(replaceVars(book.bookUrl, vars), source)), headers: parseHeaderRule(source, vars) });
   const root = parsePayload(payload.text, payload.contentType);
   const title = scalar(root, ruleString(rule, "name", "title")) || book.title;
   const author = scalar(root, ruleString(rule, "author")) || book.author;
@@ -1033,12 +1103,26 @@ export async function getGenericCatalog(source: ReadingBookSource, detail: Gener
 
   const state = loadReadingSourceState(source.id);
   const vars = state.variables || {};
-  const payload = await fetchSource({ source, url: joinUrl(source.url, replaceVars(url, vars)), headers: parseHeaderRule(source, vars) });
+  const payload = await fetchSource({ source, url: joinUrl(source.url, resolveSourceFunctions(replaceVars(url, vars), source)), headers: parseHeaderRule(source, vars) });
   const root = parsePayload(payload.text, payload.contentType);
   const listRule = ruleString(rule, "chapterList");
   requireSimpleRule(listRule, "目录列表");
   if (!listRule) throw new Error("书源没有配置 ruleToc.chapterList");
-  const items = manyValues(root, listRule);
+  let items = manyValues(root, listRule);
+  // 一些漫画书源把目录列表写成 java.webView/@js，浏览器端无法直接执行。
+  // 对这类源，优先从当前目录页的常见章节链接结构做无侵入兜底；小说源仍严格按原规则解析。
+  if (!items.length && source.raw && (source.raw as any).bookSourceType === 2 && containsJs(listRule)) {
+    const selectors = [
+      '#html_box .item', '.chapter-list a', '.chapterlist a', '.chapter-list li',
+      '.chapter a', '.chapters a', '.list-chapter a', '.catalog a', '.comic-chapter a',
+    ];
+    for (const selector of selectors) {
+      try {
+        const found = Array.from((root as ParentNode).querySelectorAll(selector));
+        if (found.length) { items = found; break; }
+      } catch {}
+    }
+  }
 
   return items.map((item) => {
     const title = scalar(item, ruleString(rule, "chapterName", "name", "title")) || "未命名章节";
@@ -1078,7 +1162,7 @@ export async function getGenericChapterContent(source: ReadingBookSource, chapte
 
   const state = loadReadingSourceState(source.id);
   const vars = state.variables || {};
-  const chapterUrl = joinUrl(source.url, replaceVars(chapter.url, vars));
+  const chapterUrl = joinUrl(source.url, resolveSourceFunctions(replaceVars(chapter.url, vars), source));
   const payload = await fetchSource({ source, url: chapterUrl, headers: parseHeaderRule(source, vars) });
   const root = parsePayload(payload.text, payload.contentType);
   const contentRule = ruleString(rule, "content", "body", "text");
@@ -1092,6 +1176,7 @@ export async function getGenericChapterContent(source: ReadingBookSource, chapte
   const subContentRule = ruleString(rule, "subContent");
   const transformedSub = subContentRule ? safeJsTransform(content, subContentRule, source) : undefined;
   if (transformedSub !== undefined) content = transformedSub;
+  if ((raw as any).bookSourceType === 2) content = normalizeMangaImageHtml(content, payload.url || chapterUrl || source.url);
   return applyReplaceRules(content, raw.replaceRegex);
 }
 
