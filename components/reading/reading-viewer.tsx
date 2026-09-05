@@ -2142,7 +2142,7 @@ export function ReadingViewer({ book, onBack }: Props) {
         : null;
 
     return (
-        <div className="reading-app-surface absolute inset-0 z-[100] flex flex-col bg-[var(--c-page-body-bg)]" data-immersive={immersive} style={{ paddingTop: "var(--page-header-safe-top, 48px)" }}>
+        <div className="reading-app-surface absolute inset-0 z-[100] flex flex-col bg-[var(--c-page-body-bg)]" data-immersive={immersive} style={{ paddingTop: 0 }}>
             {/* Page flip overlay */}
             {flipAnim && (
                 <>
