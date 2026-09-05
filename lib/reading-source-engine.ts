@@ -275,6 +275,12 @@ async function fetchSource(request: {
 }
 
 export async function fetchReadingSourceModule(source: ReadingBookSource, moduleUrl: string, page = 1): Promise<unknown> {
+  // 读漫屋的分类页（/sort/1 等）依赖 ruleExplore，直接交给专用 route，
+  // 这样分类页和搜索/详情/正文使用同一套站点切换与请求头兼容逻辑。
+  if (isDumanwuSource(source)) {
+    return dumanwuRequest<GenericSourceBook[]>(source, "module", { moduleUrl, page });
+  }
+
   // 楠楠漫画的 exploreUrl 本身就是标准 Legado「发现页模块」数组，
   // 每个模块只是一个带 POST 参数的请求地址；直接复用漫画源自己的 ruleExplore。
   if (isNanmComicSource(source)) {
