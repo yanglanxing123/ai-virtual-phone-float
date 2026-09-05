@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     let target: URL;
     try { target = new URL(url); } catch { return NextResponse.json({ ok: false, error: "URL 无效" }, { status: 400 }); }
     if (!["http:", "https:"].includes(target.protocol)) return NextResponse.json({ ok: false, error: "仅支持 HTTP/HTTPS" }, { status: 400 });
-    const method = String(body?.method || "GET").toUpperCase();
+    let method = String(body?.method || "GET").toUpperCase();
     const headers = cleanHeaders(body?.headers);
     if (!headers.Accept) headers.Accept = "text/html,application/json;q=0.9,*/*;q=0.8";
     if (!headers["User-Agent"] && !headers["user-agent"]) headers["User-Agent"] = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Safari/605.1.15";
@@ -106,11 +106,19 @@ export async function POST(request: NextRequest) {
       let response: Response | null = null;
       for (let hop = 0; hop < 6; hop++) {
         await assertSafeTarget(current);
-        response = await fetch(current.toString(), { method, headers, body: ["GET", "HEAD"].includes(method) ? undefined : makeBody(body?.body, headers), redirect: "manual", cache: "no-store", signal: controller.signal });
+        const requestMethod = method;
+        const requestBody = ["GET", "HEAD"].includes(requestMethod) ? undefined : makeBody(body?.body, headers);
+        // 一些 PHP/漫画源会先把 POST 请求 301/302 到规范化地址。
+        // 浏览器 fetch 对 301/302/303 的 POST 会转成 GET；这里也按同样语义处理，
+        // 否则把原 POST 直接重放到跳转地址很容易得到 404。307/308 则严格保留原请求。
+        response = await fetch(current.toString(), { method: requestMethod, headers, body: requestBody, redirect: "manual", cache: "no-store", signal: controller.signal });
         if (![301, 302, 303, 307, 308].includes(response.status)) break;
         const location = response.headers.get("location");
         if (!location) break;
         current = new URL(location, current);
+        if ([301, 302, 303].includes(response.status) && !["GET", "HEAD"].includes(method)) {
+          method = "GET";
+        }
       }
       if (!response) throw new Error("请求没有返回响应");
       const text = await response.text();
