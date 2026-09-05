@@ -430,6 +430,7 @@ export function ReadingViewer({ book, onBack }: Props) {
     const bilingualTranslationEnabled = readingConfig.bilingualTranslationEnabled === true;
     const defaultTranslationExpanded = readingConfig.collapseBilingualTranslation !== true;
     const currentChapter = chapters[chapterIndex];
+    const isBookInfoChapter = !isPdf && /^(?:书籍信息|书籍资料)$/i.test(String(currentChapter?.title || "").trim());
     const txtPagesChapterIndex = txtPages[0]?.find((item) => item.kind !== "gap")?.chapterIndex ?? txtPages[0]?.[0]?.chapterIndex;
     const txtPagesReadyForCurrentChapter = !isPdf && txtPages.length > 0 && txtPagesChapterIndex === chapterIndex;
     const showTxtLoading = !isPdf && (
@@ -2104,7 +2105,7 @@ export function ReadingViewer({ book, onBack }: Props) {
             )}
 
             {/* Header — chapter name + page info */}
-            <header className={`reading-header ${immersive ? "reading-header--immersive" : "reading-header--revealed"}`} data-ui="header">
+            <header className={`reading-header ${immersive ? "reading-header--immersive" : "reading-header--revealed"}`} data-ui="header" data-book-info={isBookInfoChapter ? "true" : undefined}>
                 <div className="reading-header-top">
                     <button onClick={onBack} className="page-back-btn reading-header-back">
                         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
