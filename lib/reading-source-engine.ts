@@ -1080,16 +1080,35 @@ export async function getGenericCatalog(source: ReadingBookSource, detail: Gener
 }
 
 function normalizeMangaImageHtml(content: string, baseUrl: string) {
-  return String(content || "").replace(/<(img\b[^>]*?)>/gi, (full, attrs: string) => {
-    const source = attrs.match(/(?:data-src|data-original|src)\s*=\s*["']([^"']+)["']/i)?.[1] || "";
-    if (!source) return full;
+  const html = String(content || "").trim();
+  if (!html) return "";
+
+  // 漫画阅读器已经支持 [[MANGA_IMAGE]] 标记。
+  // 不要把图片 HTML 再交给 htmlToParagraphs，否则 <img> 没有文本内容会被解析成空正文。
+  const images: string[] = [];
+  const imageRe = /<img\b[^>]*(?:data-src|data-original|src)\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = imageRe.exec(html))) {
+    const source = String(match[1] || "").trim();
+    if (!source) continue;
     const absolute = joinUrl(baseUrl, source);
-    const cleaned = attrs
-      .replace(/\s(?:data-src|data-original)\s*=\s*["'][^"']*["']/gi, "")
-      .replace(/\sloading\s*=\s*["'][^"']*["']/gi, "");
-    const withoutSrc = cleaned.replace(/\ssrc\s*=\s*["'][^"']*["']/i, "");
-    return `<img${withoutSrc} src="${absolute}">`;
-  });
+    if (absolute && !images.includes(absolute)) images.push(absolute);
+  }
+
+  if (images.length > 0) {
+    return images.map((url) => `[[MANGA_IMAGE]]${url}`).join("\n");
+  }
+
+  // 有些正文接口已经直接返回图片 URL，一行一个；保留这种格式。
+  const directUrls = html
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter((line) => /^https?:\/\//i.test(line));
+  if (directUrls.length > 0) {
+    return directUrls.map((url) => `[[MANGA_IMAGE]]${url}`).join("\n");
+  }
+
+  return html;
 }
 
 function applyReplaceRules(text: string, rules: unknown) {
