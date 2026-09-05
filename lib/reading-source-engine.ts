@@ -723,6 +723,115 @@ export function sourceCapabilities(source: ReadingBookSource) {
 
 
 
+function isDumanwuSource(source: ReadingBookSource) {
+  return /读漫屋|dumanwu(?:\d+)?\.com|dumanwu.*ip-ddns\.com/i.test(`${source.name} ${source.url}`);
+}
+
+function getDumanwuBases(source: ReadingBookSource) {
+  const state = loadReadingSourceState(source.id);
+  const configured = String(state.variables?.地址 || state.variables?.address || '').trim().replace(/\/*$/, '');
+  const sourceUrl = String(source.url || '').trim().replace(/\/*$/, '');
+  // 读漫屋域名会轮换。专用适配器不再把书源里的旧 DDNS 当成唯一入口。
+  const candidates = [configured, 'https://www.dumanwu1.com', 'https://www.dumanwu.com', sourceUrl]
+    .filter(Boolean)
+    .filter((url, index, arr) => arr.indexOf(url) === index);
+  return candidates;
+}
+
+async function fetchDumanwuPage(source: ReadingBookSource, pathOrUrl: string, options: { method?: string; body?: string } = {}) {
+  const bases = getDumanwuBases(source);
+  let lastError: unknown = null;
+  for (const base of bases) {
+    const url = /^https?:\/\//i.test(pathOrUrl) ? pathOrUrl : joinUrl(base, pathOrUrl);
+    try {
+      const payload = await fetchSource({
+        source,
+        url,
+        method: options.method || 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+          ...(parseHeaderRule(source)),
+        },
+        body: options.body,
+      });
+      return payload;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('读漫屋请求失败');
+}
+
+async function getDumanwuSearch(source: ReadingBookSource, keyword: string): Promise<GenericSourceBook[]> {
+  const payload = await fetchDumanwuPage(source, '/s', { method: 'POST', body: `k=${encodeURIComponent(keyword)}` });
+  const root = parsePayload(payload.text, payload.contentType);
+  if (!(typeof Document !== 'undefined' && root instanceof Document)) return [];
+  const items = Array.from(root.querySelectorAll('.item-data .itemnar'));
+  return items.map((item) => {
+    const img = item.querySelector('img');
+    const a = item.querySelector('a[href]');
+    const latest = item.querySelector('img + span');
+    const title = img?.getAttribute('alt')?.trim() || textOf(item.querySelector('a') as Element) || '未命名';
+    const href = a?.getAttribute('href') || '';
+    const cover = img?.getAttribute('data-src') || img?.getAttribute('src') || '';
+    return {
+      title,
+      cover: cover ? joinUrl(payload.url, cover) : undefined,
+      latestChapterTitle: latest ? textOf(latest) : undefined,
+      bookUrl: joinUrl(payload.url, href),
+      raw: item,
+    };
+  }).filter((book) => !!book.bookUrl);
+}
+
+async function getDumanwuDetail(source: ReadingBookSource, book: GenericSourceBook): Promise<GenericSourceDetail> {
+  const payload = await fetchDumanwuPage(source, book.bookUrl);
+  const root = parsePayload(payload.text, payload.contentType);
+  const title = scalar(root, '.himg img@title') || book.title;
+  const author = scalar(root, 'span:matchesWholeOwnText(^作\\s*者)@text##^作\\s*者[\\s：\\:]*') || book.author;
+  const cover = scalar(root, '.himg img@data-src') || scalar(root, '.himg img@src') || book.cover;
+  const desc = scalar(root, '.detinfo .content@html') || book.desc;
+  const lastChapterTitle = scalar(root, '.himg img+a@text') || book.latestChapterTitle;
+  return {
+    ...book,
+    title,
+    author,
+    cover: cover ? joinUrl(payload.url, cover) : undefined,
+    desc,
+    intro: desc,
+    latestChapterTitle: lastChapterTitle,
+    bookUrl: payload.url || book.bookUrl,
+    tocUrl: payload.url || book.bookUrl,
+    raw: root,
+  };
+}
+
+async function getDumanwuCatalog(source: ReadingBookSource, detail: GenericSourceDetail): Promise<GenericSourceChapter[]> {
+  const payload = await fetchDumanwuPage(source, detail.tocUrl || detail.bookUrl);
+  const root = parsePayload(payload.text, payload.contentType);
+  if (!(typeof Document !== 'undefined' && root instanceof Document)) return [];
+  const links = Array.from(root.querySelectorAll('ul a[href], .chaplist-more a[href]'));
+  const seen = new Set<string>();
+  return links.map((a, index) => {
+    const href = a.getAttribute('href') || '';
+    const url = joinUrl(payload.url, href);
+    const title = textOf(a.querySelector('li') || a) || `第${index + 1}章`;
+    return { title, url, raw: a };
+  }).filter((chapter) => {
+    if (!chapter.url || seen.has(chapter.url)) return false;
+    seen.add(chapter.url);
+    return true;
+  });
+}
+
+async function getDumanwuContent(source: ReadingBookSource, chapter: GenericSourceChapter): Promise<string> {
+  const payload = await fetchDumanwuPage(source, chapter.url);
+  const root = parsePayload(payload.text, payload.contentType);
+  const content = scalar(root, '.main_img@html') || '';
+  return normalizeMangaImageHtml(content, payload.url || chapter.url);
+}
+
 function isNanmComicSource(source: ReadingBookSource) {
   // 仅对原有楠楠漫画专用加密接口启用专用适配。
   // 不要再用 bookSourceType===2 判断，否则所有漫画源都会被误判成楠楠漫画源。
@@ -1025,6 +1134,7 @@ async function getShushanContentAdapter(source: ReadingBookSource, chapter: Gene
 }
 
 export async function searchGenericSource(source: ReadingBookSource, keyword: string, page = 1): Promise<GenericSourceBook[]> {
+  if (isDumanwuSource(source)) return getDumanwuSearch(source, keyword);
   if (isNanmComicSource(source)) return getNanmSearch(source, keyword, page);
   if (isShushanSource(source)) return searchShushanAdapter(source, keyword, page);
   const raw = source.raw as any;
@@ -1072,6 +1182,7 @@ export async function searchGenericSource(source: ReadingBookSource, keyword: st
 }
 
 export async function getGenericDetail(source: ReadingBookSource, book: GenericSourceBook): Promise<GenericSourceDetail> {
+  if (isDumanwuSource(source)) return getDumanwuDetail(source, book);
   if (isNanmComicSource(source)) return getNanmDetail(source, book);
   if (isShushanSource(source)) return getShushanDetailAdapter(source, book);
   const raw = source.raw as any;
@@ -1094,6 +1205,7 @@ export async function getGenericDetail(source: ReadingBookSource, book: GenericS
 }
 
 export async function getGenericCatalog(source: ReadingBookSource, detail: GenericSourceDetail): Promise<GenericSourceChapter[]> {
+  if (isDumanwuSource(source)) return getDumanwuCatalog(source, detail);
   if (isNanmComicSource(source)) return getNanmCatalog(source, detail);
   if (isShushanSource(source)) return getShushanCatalogAdapter(source, detail);
   const raw = source.raw as any;
@@ -1154,6 +1266,7 @@ function applyReplaceRules(text: string, rules: unknown) {
 }
 
 export async function getGenericChapterContent(source: ReadingBookSource, chapter: GenericSourceChapter, detail?: GenericSourceDetail): Promise<string> {
+  if (isDumanwuSource(source)) return getDumanwuContent(source, chapter);
   if (isNanmComicSource(source)) return getNanmContent(source, chapter);
   if (!chapter.url) throw new Error("章节没有正文地址");
   if (isShushanSource(source)) return getShushanContentAdapter(source, chapter, detail);
