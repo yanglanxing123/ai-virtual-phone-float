@@ -1181,11 +1181,13 @@
 .reading-app-surface.reading-hub-root.is-viewing .reading-hub-viewer {
   background-image: var(--reading-viewer-bg-image, none) !important;
 }
+.reading-app-surface.reading-hub-root.is-viewing .reading-header,
 .reading-app-surface.reading-hub-root.is-viewing .reading-footer,
 .reading-app-surface.reading-hub-root.is-viewing .reading-page-stage,
 .reading-app-surface.reading-hub-root.is-viewing .reading-continuous-stage {
   background: transparent !important;
 }
+.reading-app-surface.reading-hub-root.is-viewing .reading-header,
 .reading-app-surface.reading-hub-root.is-viewing .reading-footer {
   backdrop-filter: blur(16px) saturate(135%);
   -webkit-backdrop-filter: blur(16px) saturate(135%);
@@ -1210,14 +1212,72 @@
 @media (max-width:480px) { .reading-hub-wallpaper-actions { gap: 8px; } .reading-hub-wallpaper-button,.reading-hub-wallpaper-clear { font-size: 11px; } }
 
 
-/* 阅读器顶部已从 JSX 中完全移除；正文不再预留顶部控制栏空间。 */
-
-/* v47.2：阅读器顶部纯 CSS 清理
-   仅作用于进入正文阅读状态，不改正文内容、壁纸与章节逻辑。 */
-.reading-app-surface.reading-hub-root.is-viewing > .reading-hub-topbar {
-  display: none !important;
+/* v47.3：阅读器顶部不再有独立毛玻璃背景。只处理 header，不改正文/正文卡片。
+   章节标题与目录按钮仍放在原来的同一层；外层阅读器右上角 X 已移除。 */
+.reading-app-surface.reading-hub-root.is-viewing .reading-header {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
-.reading-app-surface.reading-hub-root.is-viewing > .reading-hub-content {
+/* v47.4：阅读器顶部只保留一层。书名与章节直接放入原目录所在行。 */
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-top--single-row {
+  min-height: 52px;
+  height: 52px;
+}
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-title-group {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  overflow: hidden;
+}
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-book-title,
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-chapter-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-book-title { font-size: 13px; font-weight: 900; }
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-chapter-title { font-size: 11px; opacity: .66; }
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-status--floating {
+  position: absolute;
+  left: 52px;
+  right: 52px;
+  top: 54px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+
+/* Reader: keep the existing directory row as the only top control layer. */
+.reading-app-surface.reading-hub-root.is-viewing .reading-header {
+  position: absolute !important;
   top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 20 !important;
+  height: 52px !important;
+  pointer-events: none;
+}
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-top--single-row {
+  pointer-events: auto;
+  height: 52px !important;
+  min-height: 52px !important;
+  padding-top: env(safe-area-inset-top, 0px);
+  box-sizing: border-box;
+}
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-back,
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-right-group {
+  flex: 0 0 44px;
+}
+.reading-app-surface.reading-hub-root.is-viewing .reading-header-title-group {
+  min-width: 0;
+  flex: 1 1 auto;
 }
