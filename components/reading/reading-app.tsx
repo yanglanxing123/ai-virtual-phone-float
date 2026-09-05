@@ -102,6 +102,25 @@ function isShushanSource(source: ReadingBookSource | null | undefined) {
   return source.adapter === "shushan" || /vossc\.com|书山聚合|书山/i.test(`${source.name} ${source.url}`);
 }
 
+function sourceNeedsLogin(source: ReadingBookSource | null | undefined) {
+  if (!source) return false;
+  if (source.adapter === "shushan") return true;
+  const raw = source.raw as any;
+  const loginUrl = String(raw?.loginUrl || "").trim();
+  const loginUi = String(raw?.loginUi || "").trim();
+  if (!loginUrl && !loginUi) return false;
+  if (/^function\s+login\s*\(\s*\)\s*\{\s*\}$/i.test(loginUrl)) return false;
+  try {
+    const parsed = JSON.parse(loginUi);
+    if (Array.isArray(parsed)) {
+      const fields = parsed.filter((item: any) => item && item.type !== "button");
+      if (fields.some((item: any) => /账号|用户名|邮箱|密码|token|令牌|验证码|cookie|密钥|key/i.test(String(item.name || "")) || /password|email|tel|number/i.test(String(item.type || "")))) return true;
+      if (parsed.some((item: any) => item && item.type === "button" && /^(login|signin|sign_in)\s*\(/i.test(String(item.action || "")))) return true;
+    }
+  } catch {}
+  return /(^|[\s;])(?:login|signin|sign_in)\s*\(/i.test(loginUrl) || /登录|signin|sign in/i.test(loginUrl);
+}
+
 function getTitle(tab: Tab) {
   switch (tab) {
     case "home":
@@ -846,7 +865,7 @@ export default function ReadingApp({ onClose }: Props) {
     try {
       const source = bookSources.find((item) => item.id === module.sourceId);
       if (!source) throw new Error("发现页书源不存在");
-      if (!isMangaSource(source)) throw new Error("发现页仅允许使用楠楠漫画源");
+      if (sourceReaderType(source) !== "manga") throw new Error("发现页仅支持漫画书源");
       const parsed = await fetchReadingSourceModule(source, module.url, 1);
       const books = extractHomeBooks(parsed);
       setHomeModuleData((prev) => ({ ...prev, [module.id]: books }));
@@ -1110,7 +1129,7 @@ export default function ReadingApp({ onClose }: Props) {
                   <div>
                     <span>DISCOVER</span>
                     <h2>发现漫画</h2>
-                    <p>{homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length} 个漫画发现模块 · 来自楠楠漫画</p>
+                    <p>{homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length} 个漫画发现模块 · 来自漫画书源</p>
                   </div>
                   <button type="button" className="reading-hub-icon-btn" onClick={() => openSourceDrawer("discovery")} aria-label="管理发现模块">
                     <MoreVertical size={20} />
@@ -1438,7 +1457,7 @@ export default function ReadingApp({ onClose }: Props) {
                 </div>
                 <div className="reading-hub-drawer-actions">
                   <button type="button" onClick={() => { setSourceImportTarget(sourceDrawerMode); sourceFileInputRef.current?.click(); }}><Upload size={16} /> 导入书源</button>
-                  <button type="button" onClick={() => {
+                  {sourceNeedsLogin(bookSources.find((x) => x.id === selectedSourceId)) && <button type="button" onClick={() => {
                     const source = bookSources.find((x) => x.id === selectedSourceId);
                     if (!source) return;
                     try {
@@ -1458,7 +1477,7 @@ export default function ReadingApp({ onClose }: Props) {
                     } catch {
                       setSourceMessage("该书源登录配置无法读取");
                     }
-                  }}><LogIn size={16} /> 书源登录</button>
+                  }}><LogIn size={16} /> 书源登录</button>}
                   <button type="button" onClick={() => setTab("appearance")}><Palette size={16} /> 阅读外观</button>
                 </div>
                 {sourceDrawerMode !== "search" && <div className="reading-hub-drawer-section">
