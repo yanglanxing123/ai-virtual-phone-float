@@ -775,32 +775,37 @@ async function fetchNanmExploreModule(source: ReadingBookSource, moduleUrl: stri
 }
 
 async function getNanmSearch(source: ReadingBookSource, keyword: string, page: number): Promise<GenericSourceBook[]> {
-  const raw = source.raw as any;
-  const searchUrlRule = ruleString(raw, "searchUrl");
-  if (!searchUrlRule) throw new Error("漫画书源没有配置 searchUrl");
-  const state = loadReadingSourceState(source.id);
-  const vars = { ...(state.variables || {}), key: keyword, page: String(page), pageIndex: String(page), keyword };
-  const templated = replaceVars(searchUrlRule, vars);
-  const request = parseRequestUrl(templated, source.url);
-  const options = request.options || {};
-  const payload = await fetchSource({
-    source,
-    url: request.url,
-    method: options.method || "GET",
-    headers: { ...parseHeaderRule(source, vars), ...(options.headers || {}) },
-    body: typeof options.body === "string" ? replaceVars(options.body, vars) : options.body,
+  // 构造 POST 请求体
+  const body = `page=${page}&key=${encodeURIComponent(keyword)}&paixu=&status=0&limitStatus=0`;
+  
+  // 发起请求（注意使用 source.url 作为基础）
+  const response = await fetch(`${source.url}/index.php?m=&c=mh&a=load_searchpage`, {
+    method: 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36'
+    },
+    body
   });
-  const root = parsePayload(payload.text, payload.contentType);
-  const list = manyValues(root, "$.info[*]");
-  return list.map((item: any) => {
-    const title = asText(item?.title).trim() || "未命名";
-    const author = asText(item?.author).trim() || undefined;
-    const cover = normalizeNanmCover(item?.cover_pic, payload.url || source.url);
-    const desc = asText(item?.summary).trim() || undefined;
-    const id = asText(item?.id).trim();
-    const bookUrl = id ? joinUrl(payload.url || source.url, `/home/book/index/id/${id}/`) : "";
-    return { title, author, cover, desc, latestChapterTitle: asText(item?.maxepisodes).trim() || undefined, bookUrl, raw: item };
-  }).filter((book) => !!book.bookUrl);
+
+  if (!response.ok) throw new Error(`搜索 HTTP ${response.status}`);
+  
+  const data = await response.json();
+  if (!data?.info || !Array.isArray(data.info)) {
+    throw new Error('返回数据格式异常，缺少 info 数组');
+  }
+
+  // 映射为 GenericSourceBook[]
+  return data.info.map((item: any) => ({
+    title: item.title || '未命名',
+    author: item.author || undefined,
+    cover: item.cover_pic ? `${source.url}${item.cover_pic}` : undefined,
+    desc: item.summary || undefined,
+    latestChapterTitle: item.maxepisodes || undefined,
+    bookUrl: `${source.url}/home/book/index/id/${item.id}/`,
+    raw: item
+  }));
 }
 
 async function getNanmDetail(source: ReadingBookSource, book: GenericSourceBook): Promise<GenericSourceDetail> {
