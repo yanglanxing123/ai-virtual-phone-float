@@ -128,6 +128,34 @@ function parseSearch(html: string, base: string) {
   return output;
 }
 
+// /sort/* 使用 ruleExplore：.likedata + img@data-src + img@alt + p(最新)。
+function parseExplore(html: string, base: string) {
+  const output: any[] = [];
+  const seen = new Set<string>();
+  for (const block of blocks(html, "likedata")) {
+    const img = block.match(/<img\b[^>]*>/i)?.[0] || "";
+    const link = block.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/i)?.[1] || "";
+    const title = attr(img, "alt") || attr(img, "title") || stripTags(block).slice(0, 80);
+    if (!title || !link) continue;
+    const bookUrl = abs(base, link);
+    if (!bookUrl || seen.has(bookUrl)) continue;
+    seen.add(bookUrl);
+    const authorMatch = block.match(/<p\b[^>]*>\s*作者\s*[：:]?\s*([\s\S]*?)<\/p>/i);
+    const latestMatch = block.match(/<p\b[^>]*>\s*最新\s*[：:]?\s*([\s\S]*?)<\/p>/i);
+    const introMatch = block.match(/<[^>]*class=["'][^"']*\\ble-j\\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i);
+    output.push({
+      title,
+      author: stripTags(authorMatch?.[1] || "") || undefined,
+      cover: abs(base, attr(img, "data-src") || attr(img, "src")) || undefined,
+      latestChapterTitle: stripTags(latestMatch?.[1] || "") || undefined,
+      desc: stripTags(introMatch?.[1] || "") || undefined,
+      bookUrl,
+      raw: { title, url: link },
+    });
+  }
+  return output;
+}
+
 function parseDetail(html: string, url: string) {
   const himg = blocks(html, "himg")[0] || html;
   const img = himg.match(/<img\b[^>]*>/i)?.[0] || "";
@@ -200,6 +228,17 @@ async function search(sourceUrl: unknown, keyword: string) {
   });
 }
 
+async function module(sourceUrl: unknown, moduleUrl: string) {
+  return tryHosts(sourceUrl, async (host) => {
+    const target = new URL(moduleUrl, host).toString();
+    const result = await request(host, new URL(target).pathname + new URL(target).search);
+    if (!result.response.ok) throw new Error(`分类页面 HTTP ${result.response.status}`);
+    const items = parseExplore(result.text, result.url);
+    if (!items.length) throw new Error("分类页面请求成功但没有解析到漫画");
+    return items;
+  });
+}
+
 async function detail(sourceUrl: unknown, bookUrl: string) {
   return tryHosts(sourceUrl, async (host) => {
     const target = new URL(bookUrl, host).toString();
@@ -232,9 +271,30 @@ async function content(sourceUrl: unknown, chapterUrl: string) {
     const target = new URL(chapterUrl, host).toString();
     const result = await request(host, new URL(target).pathname + new URL(target).search);
     if (!result.response.ok) throw new Error(`正文 HTTP ${result.response.status}`);
-    const match = result.text.match(/<[^>]*class=["'][^"']*\bmain_img\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i);
-    const html = match?.[1] || "";
-    if (!html) throw new Error("正文页面没有找到 .main_img");
+
+    // 使用平衡标签扫描而不是简单的正则，避免 .main_img 内部嵌套 div 时被提前截断。
+    const open = result.text.match(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\bmain_img\b[^"']*["'][^>]*>/i);
+    if (!open) throw new Error("正文页面没有找到 .main_img");
+    const tag = open[1];
+    const start = (open.index ?? 0) + open[0].length;
+    const token = new RegExp(`<\\/?${tag}\\b[^>]*>`, "gi");
+    token.lastIndex = start;
+    let depth = 1;
+    let cursor = start;
+    let match: RegExpExecArray | null;
+    while ((match = token.exec(result.text))) {
+      if (/^<\//.test(match[0])) {
+        depth -= 1;
+        if (depth === 0) {
+          cursor = match.index;
+          break;
+        }
+      } else if (!/\/\s*>$/.test(match[0])) {
+        depth += 1;
+      }
+    }
+    const html = result.text.slice(start, cursor || result.text.length).trim();
+    if (!html) throw new Error(".main_img 中没有正文图片");
     return { content: html, baseUrl: result.url };
   });
 }
@@ -247,6 +307,7 @@ export async function POST(request: NextRequest) {
     if (!action) return NextResponse.json({ ok: false, error: "缺少 action" }, { status: 400 });
 
     if (action === "search") return NextResponse.json({ ok: true, data: await search(sourceUrl, String(body?.keyword || "").trim()) });
+    if (action === "module") return NextResponse.json({ ok: true, data: await module(sourceUrl, String(body?.moduleUrl || "")) });
     if (action === "detail") return NextResponse.json({ ok: true, data: await detail(sourceUrl, String(body?.bookUrl || "")) });
     if (action === "catalog") return NextResponse.json({ ok: true, data: await catalog(sourceUrl, String(body?.bookUrl || "")) });
     if (action === "content") return NextResponse.json({ ok: true, data: await content(sourceUrl, String(body?.chapterUrl || "")) });
