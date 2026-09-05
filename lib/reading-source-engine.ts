@@ -733,9 +733,8 @@ export function sourceCapabilities(source: ReadingBookSource) {
 
 function isNanmComicSource(source: ReadingBookSource) {
   const raw = source.raw as any;
-  return /楠楠漫画|nnmh\.info/i.test(`${source.name} ${source.url}`);
+  return /楠楠漫画|nnmh\.(info|me)/i.test(`${source.name} ${source.url}`);
 }
-
 function normalizeNanmCover(value: unknown, base: string) {
   const url = joinUrl(base, asText(value));
   return url || undefined;
