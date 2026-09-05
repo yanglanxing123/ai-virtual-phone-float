@@ -97,6 +97,40 @@ function isMangaSource(source: ReadingBookSource | null | undefined) {
   return raw?.bookSourceType === 2 || /楠楠漫画|nnmh\.info/i.test(`${source.name} ${source.url}`);
 }
 
+function getSourceTypeLabel(source: ReadingBookSource | null | undefined) {
+  return sourceReaderType(source) === "manga" ? "漫画" : "小说";
+}
+
+/**
+ * loginUi 在 Legado 书源里并不等于“需要登录”。
+ * 很多书源会用 loginUi 保存地址、测速、发布页等普通设置，甚至 loginUrl 只是空函数。
+ * 因此只有真正存在登录动作/凭据字段时才显示“登录”，避免无登录漫画源被误判。
+ */
+function sourceNeedsLogin(source: ReadingBookSource | null | undefined) {
+  if (!source) return false;
+  if (source.adapter === "shushan") return true;
+  const raw = source.raw as any;
+  const loginUrl = String(raw?.loginUrl || "").trim();
+  const loginUi = String(raw?.loginUi || "").trim();
+  if (!loginUrl && !loginUi) return false;
+  if (/^function\s+login\s*\(\s*\)\s*\{\s*\}$/i.test(loginUrl)) return false;
+  try {
+    const parsed = JSON.parse(loginUi);
+    if (Array.isArray(parsed)) {
+      const fields = parsed.filter((item: any) => item && item.type !== "button");
+      const hasCredential = fields.some((item: any) => {
+        const name = String(item.name || "").toLowerCase();
+        const type = String(item.type || "").toLowerCase();
+        return /账号|用户名|邮箱|密码|token|令牌|验证码|cookie|密钥|key/.test(name) || /password|email|tel|number/.test(type);
+      });
+      if (hasCredential) return true;
+      const hasLoginAction = parsed.some((item: any) => item && item.type === "button" && /^(login|signin|sign_in)\s*\(/i.test(String(item.action || "")));
+      if (hasLoginAction) return true;
+    }
+  } catch {}
+  return /(^|[\s;])(?:login|signin|sign_in)\s*\(/i.test(loginUrl) || /登录|signin|sign in/i.test(loginUrl);
+}
+
 function isShushanSource(source: ReadingBookSource | null | undefined) {
   if (!source) return false;
   return source.adapter === "shushan" || /vossc\.com|书山聚合|书山/i.test(`${source.name} ${source.url}`);
@@ -846,7 +880,7 @@ export default function ReadingApp({ onClose }: Props) {
     try {
       const source = bookSources.find((item) => item.id === module.sourceId);
       if (!source) throw new Error("发现页书源不存在");
-      if (!isMangaSource(source)) throw new Error("发现页仅允许使用楠楠漫画源");
+      if (sourceReaderType(source) !== "manga") throw new Error("发现页仅支持漫画书源");
       const parsed = await fetchReadingSourceModule(source, module.url, 1);
       const books = extractHomeBooks(parsed);
       setHomeModuleData((prev) => ({ ...prev, [module.id]: books }));
@@ -1438,7 +1472,7 @@ export default function ReadingApp({ onClose }: Props) {
                 </div>
                 <div className="reading-hub-drawer-actions">
                   <button type="button" onClick={() => { setSourceImportTarget(sourceDrawerMode); sourceFileInputRef.current?.click(); }}><Upload size={16} /> 导入书源</button>
-                  <button type="button" onClick={() => {
+                  {sourceNeedsLogin(bookSources.find((x) => x.id === selectedSourceId)) && <button type="button" onClick={() => {
                     const source = bookSources.find((x) => x.id === selectedSourceId);
                     if (!source) return;
                     try {
@@ -1458,7 +1492,7 @@ export default function ReadingApp({ onClose }: Props) {
                     } catch {
                       setSourceMessage("该书源登录配置无法读取");
                     }
-                  }}><LogIn size={16} /> 书源登录</button>
+                  }}><LogIn size={16} /> 书源登录</button>}
                   <button type="button" onClick={() => setTab("appearance")}><Palette size={16} /> 阅读外观</button>
                 </div>
                 {sourceDrawerMode !== "search" && <div className="reading-hub-drawer-section">
@@ -1610,7 +1644,7 @@ export default function ReadingApp({ onClose }: Props) {
             </div>
           )}
 
-          {sourceLoginOpen && (
+          {sourceLoginOpen && sourceNeedsLogin(bookSources.find((x) => x.id === selectedSourceId)) && (
             <div className="reading-hub-login-modal" onClick={() => setSourceLoginOpen(false)}>
               <div className="reading-hub-login-card" onClick={(e) => e.stopPropagation()}>
                 <div className="reading-hub-drawer-head">
