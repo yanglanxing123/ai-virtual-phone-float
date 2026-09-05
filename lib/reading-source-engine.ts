@@ -1,6 +1,5 @@
 import { loadReadingSourceState, saveReadingSourceState, type ReadingBookSource } from "./reading-source";
 import { createDeviceId, getShushanChapterContent, getShushanCatalog, getShushanDetail, loadShushanAccount, type ShushanChapter, type ShushanDetail, type ShushanSearchBook } from "./shushan-client";
-import { getMangaSourceAdapter } from "./manga-source-adapters";
 
 export type GenericSourceBook = {
   title: string;
@@ -278,15 +277,26 @@ async function fetchSource(request: {
 export async function fetchReadingSourceModule(source: ReadingBookSource, moduleUrl: string, page = 1): Promise<unknown> {
   // 读漫屋的分类页（/sort/1 等）依赖 ruleExplore，直接交给专用 route，
   // 这样分类页和搜索/详情/正文使用同一套站点切换与请求头兼容逻辑。
-  const mangaAdapter = getMangaSourceAdapter(source);
-  if (mangaAdapter) {
-    return mangaAdapter.request("module", { moduleUrl, page }) as Promise<GenericSourceBook[]>;
+  if (isDumanwuSource(source)) {
+    return dumanwuRequest<GenericSourceBook[]>(source, "module", { moduleUrl, page });
   }
 
   // 楠楠漫画的 exploreUrl 本身就是标准 Legado「发现页模块」数组，
   // 每个模块只是一个带 POST 参数的请求地址；直接复用漫画源自己的 ruleExplore。
   if (isNanmComicSource(source)) {
     return fetchNanmExploreModule(source, moduleUrl, page);
+  }
+
+  const mangaCfg = mangaAdapterConfig(source);
+  if (mangaCfg?.module) {
+    const state = loadReadingSourceState(source.id);
+    const vars = { ...(state.variables || {}), key: "", page: String(page), pageIndex: String(page), keyword: "" };
+    const templated = replaceVars(moduleUrl, vars);
+    const request = parseRequestUrl(templated, source.url);
+    const options = request.options || {};
+    const payload = await fetchSource({ source, url: request.url, method: options.method || "GET", headers: { ...parseHeaderRule(source, vars), ...(options.headers || {}) }, body: typeof options.body === "string" ? replaceVars(options.body, vars) : options.body });
+    const root = parsePayload(payload.text, payload.contentType);
+    return parseMangaAdapterList(root, source, mangaCfg, "module");
   }
 
   const state = loadReadingSourceState(source.id);
@@ -731,10 +741,26 @@ export function sourceCapabilities(source: ReadingBookSource) {
 
 
 
+function isDumanwuSource(source: ReadingBookSource) {
+  return /读漫屋|dumanwu/i.test(`${source.name} ${source.url}`);
+}
+
+async function dumanwuRequest<T>(source: ReadingBookSource, action: string, payload: Record<string, unknown> = {}): Promise<T> {
+  const response = await fetch("/api/reading/dumanwu", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, sourceUrl: source.url, ...payload }),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data?.ok) throw new Error(data?.error || `读漫屋接口请求失败（HTTP ${response.status}）`);
+  return data.data as T;
+}
+
 function isNanmComicSource(source: ReadingBookSource) {
   const raw = source.raw as any;
-  return /楠楠漫画|nnmh\.(info|me)/i.test(`${source.name} ${source.url}`);
+  return /楠楠漫画|nnmh\.info/i.test(`${source.name} ${source.url}`);
 }
+
 function normalizeNanmCover(value: unknown, base: string) {
   const url = joinUrl(base, asText(value));
   return url || undefined;
@@ -775,37 +801,32 @@ async function fetchNanmExploreModule(source: ReadingBookSource, moduleUrl: stri
 }
 
 async function getNanmSearch(source: ReadingBookSource, keyword: string, page: number): Promise<GenericSourceBook[]> {
-  // 构造 POST 请求体
-  const body = `page=${page}&key=${encodeURIComponent(keyword)}&paixu=&status=0&limitStatus=0`;
-  
-  // 发起请求（注意使用 source.url 作为基础）
-  const response = await fetch(`${source.url}/index.php?m=&c=mh&a=load_searchpage`, {
-    method: 'POST',
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36'
-    },
-    body
+  const raw = source.raw as any;
+  const searchUrlRule = ruleString(raw, "searchUrl");
+  if (!searchUrlRule) throw new Error("漫画书源没有配置 searchUrl");
+  const state = loadReadingSourceState(source.id);
+  const vars = { ...(state.variables || {}), key: keyword, page: String(page), pageIndex: String(page), keyword };
+  const templated = replaceVars(searchUrlRule, vars);
+  const request = parseRequestUrl(templated, source.url);
+  const options = request.options || {};
+  const payload = await fetchSource({
+    source,
+    url: request.url,
+    method: options.method || "GET",
+    headers: { ...parseHeaderRule(source, vars), ...(options.headers || {}) },
+    body: typeof options.body === "string" ? replaceVars(options.body, vars) : options.body,
   });
-
-  if (!response.ok) throw new Error(`搜索 HTTP ${response.status}`);
-  
-  const data = await response.json();
-  if (!data?.info || !Array.isArray(data.info)) {
-    throw new Error('返回数据格式异常，缺少 info 数组');
-  }
-
-  // 映射为 GenericSourceBook[]
-  return data.info.map((item: any) => ({
-    title: item.title || '未命名',
-    author: item.author || undefined,
-    cover: item.cover_pic ? `${source.url}${item.cover_pic}` : undefined,
-    desc: item.summary || undefined,
-    latestChapterTitle: item.maxepisodes || undefined,
-    bookUrl: `${source.url}/home/book/index/id/${item.id}/`,
-    raw: item
-  }));
+  const root = parsePayload(payload.text, payload.contentType);
+  const list = manyValues(root, "$.info[*]");
+  return list.map((item: any) => {
+    const title = asText(item?.title).trim() || "未命名";
+    const author = asText(item?.author).trim() || undefined;
+    const cover = normalizeNanmCover(item?.cover_pic, payload.url || source.url);
+    const desc = asText(item?.summary).trim() || undefined;
+    const id = asText(item?.id).trim();
+    const bookUrl = id ? joinUrl(payload.url || source.url, `/home/book/index/id/${id}/`) : "";
+    return { title, author, cover, desc, latestChapterTitle: asText(item?.maxepisodes).trim() || undefined, bookUrl, raw: item };
+  }).filter((book) => !!book.bookUrl);
 }
 
 async function getNanmDetail(source: ReadingBookSource, book: GenericSourceBook): Promise<GenericSourceDetail> {
@@ -966,11 +987,98 @@ async function getShushanContentAdapter(source: ReadingBookSource, chapter: Gene
   return result.content || "";
 }
 
+
+function mangaAdapterConfig(source: ReadingBookSource): any | undefined {
+  const raw = source.raw as any;
+  if (Number(raw?.bookSourceType) !== 2) return undefined;
+  return raw?.mangaAdapter || raw?.manga || undefined;
+}
+
+function mangaJsField(result: any, rule: unknown): string | undefined {
+  const text = asText(rule).trim().replace(/^@js:/i, "").trim();
+  if (!text) return undefined;
+  // 支持通用漫画源最常见的安全表达式："前缀" + result.id + "后缀"，以及 result.foo。
+  const parts = text.split(/\s*\+\s*/).map((part) => part.trim());
+  if (!parts.length) return undefined;
+  const values = parts.map((part) => {
+    const quoted = parseQuoted(part);
+    if (quoted !== undefined) return quoted;
+    const prop = part.match(/^result(?:\.([A-Za-z_$][\w$]*))$/);
+    if (prop) return result && typeof result === "object" ? asText(result[prop[1]]) : "";
+    const index = part.match(/^result\[(\d+)\]$/);
+    if (index) return Array.isArray(result) ? asText(result[Number(index[1])]) : "";
+    return undefined;
+  });
+  return values.every((v) => v !== undefined) ? values.join("") : undefined;
+}
+
+function mangaField(root: unknown, item: unknown, rule: unknown, source: ReadingBookSource): string {
+  const rawRule = asText(rule).trim();
+  if (!rawRule) return "";
+  const js = mangaJsField(item, rawRule);
+  if (js !== undefined) return js;
+  const value = scalar(item, rawRule) || scalar(root, rawRule);
+  // 某些封面规则会把请求头串在 URL 后面；通用适配器只保留 URL，Referer 应由 content.referer 配置。
+  return asText(value).split(",{")[0].trim();
+}
+
+function parseMangaAdapterList(root: unknown, source: ReadingBookSource, cfg: any, section: "search" | "module"): GenericSourceBook[] {
+  const rule = cfg?.[section] || {};
+  const listRule = String(rule.listSelector || (section === "search" ? "$.info[*]" : "")).trim();
+  const items = listRule ? manyValues(root, listRule) : (Array.isArray(root) ? root : []);
+  const fields = rule.fields || {};
+  const base = source.url;
+  return items.map((item: any) => {
+    const title = mangaField(root, item, fields.title || fields.name, source) || "未命名";
+    const author = mangaField(root, item, fields.author, source) || undefined;
+    const cover = mangaField(root, item, fields.cover || fields.coverUrl, source) || undefined;
+    const desc = mangaField(root, item, fields.desc || fields.intro, source) || undefined;
+    const latest = mangaField(root, item, fields.latestChapterTitle || fields.lastChapter, source) || undefined;
+    let bookUrl = mangaField(root, item, fields.url || fields.bookUrl || fields.detailUrl, source);
+    if (!bookUrl && item && typeof item === "object") {
+      const id = asText((item as any).id || (item as any).book_id || (item as any).bookId).trim();
+      const template = asText(rule.detailUrlTemplate || cfg.detail?.urlTemplate).trim();
+      if (id && template) bookUrl = template.replace(/\{\{id\}\}/g, encodeURIComponent(id));
+    }
+    return {
+      title,
+      author,
+      cover: cover ? joinUrl(base, cover) : undefined,
+      desc,
+      latestChapterTitle: latest,
+      bookUrl: joinUrl(base, bookUrl),
+      raw: item,
+    };
+  }).filter((book) => !!book.bookUrl || book.title !== "未命名");
+}
+
+async function searchMangaAdapter(source: ReadingBookSource, keyword: string, page: number, cfg: any): Promise<GenericSourceBook[]> {
+  const rule = cfg.search || {};
+  const rawUrl = String(rule.url || "").trim();
+  if (!rawUrl) throw new Error("漫画源 mangaAdapter.search.url 未配置");
+  const state = loadReadingSourceState(source.id);
+  const vars = { ...(state.variables || {}), key: keyword, keyword, page: String(page), pageIndex: String(page) };
+  const templated = replaceVars(rawUrl, vars);
+  const request = parseRequestUrl(templated, source.url);
+  const options = request.options || {};
+  const method = String(rule.method || options.method || "GET").toUpperCase();
+  const headers = { ...parseHeaderRule(source, vars), ...(options.headers || {}), ...(rule.headers || {}) };
+  const bodyRule = rule.body !== undefined ? rule.body : options.body;
+  const payload = await fetchSource({
+    source,
+    url: request.url,
+    method,
+    headers,
+    body: typeof bodyRule === "string" ? replaceVars(bodyRule, vars) : bodyRule,
+  });
+  const root = parsePayload(payload.text, payload.contentType);
+  return parseMangaAdapterList(root, source, cfg, "search");
+}
+
 export async function searchGenericSource(source: ReadingBookSource, keyword: string, page = 1): Promise<GenericSourceBook[]> {
-  {
-    const mangaAdapter = getMangaSourceAdapter(source);
-    if (mangaAdapter) return mangaAdapter.request("search", { keyword, page }) as Promise<GenericSourceBook[]>;
-  }
+  const mangaCfg = mangaAdapterConfig(source);
+  if (mangaCfg?.search) return searchMangaAdapter(source, keyword, page, mangaCfg);
+  if (isDumanwuSource(source)) return dumanwuRequest<GenericSourceBook[]>(source, "search", { keyword, page });
   if (isNanmComicSource(source)) return getNanmSearch(source, keyword, page);
   if (isShushanSource(source)) return searchShushanAdapter(source, keyword, page);
   const raw = source.raw as any;
@@ -1018,10 +1126,7 @@ export async function searchGenericSource(source: ReadingBookSource, keyword: st
 }
 
 export async function getGenericDetail(source: ReadingBookSource, book: GenericSourceBook): Promise<GenericSourceDetail> {
-  {
-    const mangaAdapter = getMangaSourceAdapter(source);
-    if (mangaAdapter) return mangaAdapter.request("detail", { bookUrl: book.bookUrl }) as Promise<GenericSourceDetail>;
-  }
+  if (isDumanwuSource(source)) return dumanwuRequest<GenericSourceDetail>(source, "detail", { bookUrl: book.bookUrl });
   if (isNanmComicSource(source)) return getNanmDetail(source, book);
   if (isShushanSource(source)) return getShushanDetailAdapter(source, book);
   const raw = source.raw as any;
@@ -1044,10 +1149,7 @@ export async function getGenericDetail(source: ReadingBookSource, book: GenericS
 }
 
 export async function getGenericCatalog(source: ReadingBookSource, detail: GenericSourceDetail): Promise<GenericSourceChapter[]> {
-  {
-    const mangaAdapter = getMangaSourceAdapter(source);
-    if (mangaAdapter) return mangaAdapter.request("catalog", { bookUrl: detail.bookUrl }) as Promise<GenericSourceChapter[]>;
-  }
+  if (isDumanwuSource(source)) return dumanwuRequest<GenericSourceChapter[]>(source, "catalog", { bookUrl: detail.bookUrl });
   if (isNanmComicSource(source)) return getNanmCatalog(source, detail);
   if (isShushanSource(source)) return getShushanCatalogAdapter(source, detail);
   const raw = source.raw as any;
@@ -1079,7 +1181,7 @@ export async function getGenericCatalog(source: ReadingBookSource, detail: Gener
   }).filter((chapter) => !!chapter.url || !!chapter.title);
 }
 
-export function normalizeMangaImageHtml(content: string, baseUrl: string) {
+function normalizeMangaImageHtml(content: string, baseUrl: string) {
   const html = String(content || "").trim();
   if (!html) return "";
 
@@ -1126,12 +1228,9 @@ function applyReplaceRules(text: string, rules: unknown) {
 }
 
 export async function getGenericChapterContent(source: ReadingBookSource, chapter: GenericSourceChapter, detail?: GenericSourceDetail): Promise<string> {
-  {
-    const mangaAdapter = getMangaSourceAdapter(source);
-    if (mangaAdapter) {
-      const result = await mangaAdapter.request("content", { chapterUrl: chapter.url }) as { content: string; baseUrl?: string };
-      return normalizeMangaImageHtml(result.content, result.baseUrl || chapter.url);
-    }
+  if (isDumanwuSource(source)) {
+    const result = await dumanwuRequest<{ content: string; baseUrl?: string }>(source, "content", { chapterUrl: chapter.url });
+    return normalizeMangaImageHtml(result.content, result.baseUrl || chapter.url);
   }
   if (isNanmComicSource(source)) return getNanmContent(source, chapter);
   if (!chapter.url) throw new Error("章节没有正文地址");
