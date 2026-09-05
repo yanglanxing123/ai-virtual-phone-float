@@ -392,6 +392,7 @@ export default function ReadingApp({ onClose }: Props) {
   const [genericChapters, setGenericChapters] = useState<GenericSourceChapter[]>([]);
   // 首页排行榜使用独立的详情状态，不复用“书源搜索页”状态，避免点击榜单书籍后被切回书源页。
   const [homeDetailOpen, setHomeDetailOpen] = useState(false);
+  const [homeDetailSourceId, setHomeDetailSourceId] = useState("");
   const [homeDetailBook, setHomeDetailBook] = useState<ShushanSearchBook | null>(null);
   const [homeDetailChapters, setHomeDetailChapters] = useState<ShushanChapter[]>([]);
   const [homeDetailLoading, setHomeDetailLoading] = useState(false);
@@ -719,6 +720,7 @@ export default function ReadingApp({ onClose }: Props) {
     }
 
     setHomeDetailOpen(true);
+    setHomeDetailSourceId(source.id);
     setHomeDetailBook(null);
     setHomeDetailChapters([]);
     setHomeDetailMessage("");
@@ -812,6 +814,7 @@ export default function ReadingApp({ onClose }: Props) {
 
   const closeHomeBookDetail = () => {
     setHomeDetailOpen(false);
+    setHomeDetailSourceId("");
     setHomeDetailBook(null);
     setHomeDetailChapters([]);
     setHomeDetailMessage("");
@@ -819,6 +822,11 @@ export default function ReadingApp({ onClose }: Props) {
 
   const saveHomeDetailBook = async (mode: "shelf" | "read") => {
     if (!homeDetailBook) return;
+    const source = bookSources.find((item) => item.id === homeDetailSourceId);
+    if (!source) {
+      setHomeDetailMessage("书源不存在，请重新打开这本漫画");
+      return;
+    }
     const chapters = homeDetailChapters.filter((chapter) => !chapter.isVolume);
     if (!chapters.length) {
       setHomeDetailMessage("目录暂时没有加载成功，无法加入书架");
@@ -828,7 +836,7 @@ export default function ReadingApp({ onClose }: Props) {
     const title = homeDetailBook.title || homeDetailBook.name || "未命名";
     const author = homeDetailBook.author || "未知作者";
     const cover = normalizeRemoteUrl(homeDetailBook.cover, homeDetailBook.book_url);
-    const id = `shushan_${Date.now()}`;
+    const id = `remote_${Date.now()}`;
     const coverSaved = false;
     void downloadCoverForBook(id, cover);
     const book: Book = {
@@ -836,6 +844,7 @@ export default function ReadingApp({ onClose }: Props) {
       title,
       author,
       format: "txt",
+      readerType: sourceReaderType(source),
       totalChapters: chapters.length,
       createdAt: new Date().toISOString(),
       hasCover: coverSaved,
@@ -850,17 +859,37 @@ export default function ReadingApp({ onClose }: Props) {
       title: chapter.title || `第${index + 1}章`,
       paragraphs: [],
     })));
-    const rawBookId = homeDetailBook.bookid ?? homeDetailBook.book_id ?? homeDetailBook.bookId;
-    saveRemoteBook(id, {
-      source: homeDetailBook.source || "书山聚合",
-      url: homeDetailBook.book_url,
-      name: title,
-      apiKey: loadShushanAccount().apiKey,
-      bookId: rawBookId == null ? "" : String(rawBookId),
-      cover,
-      desc: homeDetailBook.desc,
-      chapters,
-    });
+
+    if (source.adapter === "shushan") {
+      const rawBookId = homeDetailBook.bookid ?? homeDetailBook.book_id ?? homeDetailBook.bookId;
+      saveRemoteBook(id, {
+        source: homeDetailBook.source || source.name,
+        url: homeDetailBook.book_url,
+        name: title,
+        apiKey: loadShushanAccount().apiKey,
+        bookId: rawBookId == null ? "" : String(rawBookId),
+        cover,
+        desc: homeDetailBook.desc,
+        chapters,
+      });
+    } else {
+      // 漫画/普通通用书源不能写入书山专用存储，否则 ReadingViewer 找不到 sourceId，
+      // 结果就是“详情能打开，但加入书架/开始阅读没有实际作用”。
+      saveReadingRemoteBook(id, {
+        sourceId: source.id,
+        sourceName: source.name,
+        book: {
+          title,
+          author,
+          cover,
+          desc: homeDetailBook.desc,
+          bookUrl: homeDetailBook.book_url,
+          readerType: sourceReaderType(source),
+        },
+        chapters,
+        savedAt: new Date().toISOString(),
+      });
+    }
 
     if (mode === "read") {
       setActiveBook(book);
@@ -908,7 +937,16 @@ export default function ReadingApp({ onClose }: Props) {
       if (!source) throw new Error("发现页书源不存在");
       if (sourceReaderType(source) !== "manga") throw new Error("发现页仅支持漫画书源");
       const parsed = await fetchReadingSourceModule(source, module.url, 1);
-      const books = extractHomeBooks(parsed);
+      const rawBooks = extractHomeBooks(parsed);
+      // 发现页是漫画列表：站点返回对象经常同时出现在外层和嵌套字段里，
+      // 这里按“书名”再去重一次，避免同一本漫画出现“有封面 + 无封面”两张卡。
+      const seenTitles = new Set<string>();
+      const books = rawBooks.filter((book) => {
+        const key = String(book.title || "").replace(/\s+/g, "").trim().toLowerCase();
+        if (!key || seenTitles.has(key)) return false;
+        seenTitles.add(key);
+        return true;
+      });
       setHomeModuleData((prev) => ({ ...prev, [module.id]: books }));
       if (!books.length) throw new Error("漫画发现接口已返回，但没有识别到漫画数据");
     } catch (error) {
@@ -1103,7 +1141,7 @@ export default function ReadingApp({ onClose }: Props) {
                         void downloadCoverForBook(id, cover);
                         const rawBookId = (sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? (selectedSourceBook as any).bookid ?? (selectedSourceBook as any).book_id ?? (selectedSourceBook as any).bookId;
                         const bookId = rawBookId == null ? "" : String(rawBookId);
-                        const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
+                        const book: Book = { id, title, author, format: "txt", readerType: "text", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                         await addBook(book);
                         await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
                         saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, bookId, cover, desc, chapters });
@@ -1170,7 +1208,7 @@ export default function ReadingApp({ onClose }: Props) {
                   <div>
                     <span>DISCOVER</span>
                     <h2>发现漫画</h2>
-                    <p>{homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length} 个漫画发现模块 · 来自楠楠漫画</p>
+                    <p>{homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length} 个漫画发现模块 · 来自 {bookSources.find(source => discoverySourceIds.includes(source.id) && isMangaSource(source))?.name || "漫画书源"}</p>
                   </div>
                   <button type="button" className="reading-hub-icon-btn" onClick={() => openSourceDrawer("discovery")} aria-label="管理发现模块">
                     <MoreVertical size={20} />
@@ -1360,7 +1398,7 @@ export default function ReadingApp({ onClose }: Props) {
                               const chapters = sourceChapters.filter(x => !x.isVolume);
                               const coverSaved = false;
                               void downloadCoverForBook(id, cover);
-                              const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
+                              const book: Book = { id, title, author, format: "txt", readerType: "text", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                               await addBook(book);
                               await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
                               saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, bookId: String((sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? ""), cover, desc, chapters });
@@ -1376,7 +1414,7 @@ export default function ReadingApp({ onClose }: Props) {
                             const chapters = sourceChapters.filter(x => !x.isVolume);
                             const coverSaved = false;
                             void downloadCoverForBook(id, cover);
-                            const book: Book = { id, title, author, format: "txt", readerType: sourceReaderType(source), totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
+                            const book: Book = { id, title, author, format: "txt", readerType: "text", totalChapters: chapters.length, createdAt: new Date().toISOString(), hasCover: coverSaved, coverUrl: cover } as Book & { coverUrl?: string };
                             await addBook(book);
                             await saveChapters(id, chapters.map((c, i) => ({ id: `${id}_ch${i}`, bookId: id, index: i, title: c.title || `第${i + 1}章`, paragraphs: [] as string[] })));
                             saveRemoteBook(id, { source: sourceDetail.source, url: sourceDetail.book_url, name: title, apiKey: loadShushanAccount().apiKey, bookId: String((sourceDetail as any).bookid ?? (sourceDetail as any).book_id ?? (sourceDetail as any).bookId ?? ""), cover, desc, chapters });
