@@ -97,11 +97,15 @@ function isMangaSource(source: ReadingBookSource | null | undefined) {
   return raw?.bookSourceType === 2 || /楠楠漫画|nnmh\.info/i.test(`${source.name} ${source.url}`);
 }
 
-function isShushanSource(source: ReadingBookSource | null | undefined) {
-  if (!source) return false;
-  return source.adapter === "shushan" || /vossc\.com|书山聚合|书山/i.test(`${source.name} ${source.url}`);
+function getSourceTypeLabel(source: ReadingBookSource | null | undefined) {
+  return sourceReaderType(source) === "manga" ? "漫画" : "小说";
 }
 
+/**
+ * loginUi 在 Legado 书源里并不等于“需要登录”。
+ * 很多书源会用 loginUi 保存地址、测速、发布页等普通设置，甚至 loginUrl 只是空函数。
+ * 因此只有真正存在登录动作/凭据字段时才显示“登录”，避免无登录漫画源被误判。
+ */
 function sourceNeedsLogin(source: ReadingBookSource | null | undefined) {
   if (!source) return false;
   if (source.adapter === "shushan") return true;
@@ -114,11 +118,22 @@ function sourceNeedsLogin(source: ReadingBookSource | null | undefined) {
     const parsed = JSON.parse(loginUi);
     if (Array.isArray(parsed)) {
       const fields = parsed.filter((item: any) => item && item.type !== "button");
-      if (fields.some((item: any) => /账号|用户名|邮箱|密码|token|令牌|验证码|cookie|密钥|key/i.test(String(item.name || "")) || /password|email|tel|number/i.test(String(item.type || "")))) return true;
-      if (parsed.some((item: any) => item && item.type === "button" && /^(login|signin|sign_in)\s*\(/i.test(String(item.action || "")))) return true;
+      const hasCredential = fields.some((item: any) => {
+        const name = String(item.name || "").toLowerCase();
+        const type = String(item.type || "").toLowerCase();
+        return /账号|用户名|邮箱|密码|token|令牌|验证码|cookie|密钥|key/.test(name) || /password|email|tel|number/.test(type);
+      });
+      if (hasCredential) return true;
+      const hasLoginAction = parsed.some((item: any) => item && item.type === "button" && /^(login|signin|sign_in)\s*\(/i.test(String(item.action || "")));
+      if (hasLoginAction) return true;
     }
   } catch {}
   return /(^|[\s;])(?:login|signin|sign_in)\s*\(/i.test(loginUrl) || /登录|signin|sign in/i.test(loginUrl);
+}
+
+function isShushanSource(source: ReadingBookSource | null | undefined) {
+  if (!source) return false;
+  return source.adapter === "shushan" || /vossc\.com|书山聚合|书山/i.test(`${source.name} ${source.url}`);
 }
 
 function getTitle(tab: Tab) {
@@ -290,6 +305,32 @@ function discoverSourceModules(source: ReadingBookSource): Array<{ title: string
         }
       }
     }
+    return items;
+  }
+
+  // 读漫屋的 exploreUrl 是 @js 动态脚本：先请求 /sort/1，再读取 .type-list li a。
+  // 浏览器端不会执行 Legado 的 java.ajax / Jsoup，因此这里提供与站点分类一致的兼容映射。
+  // 分类页地址本身仍交给读漫屋专用 route 处理，站点切换时不会绕过适配器。
+  if (/读漫屋|dumanwu/i.test(`${source.name} ${source.url}`)) {
+    const categories = [
+      ["冒险", "/sort/1"],
+      ["热血", "/sort/2"],
+      ["都市", "/sort/3"],
+      ["玄幻", "/sort/4"],
+      ["悬疑", "/sort/5"],
+      ["耽美", "/sort/6"],
+      ["恋爱", "/sort/7"],
+      ["生活", "/sort/8"],
+      ["搞笑", "/sort/9"],
+      ["穿越", "/sort/10"],
+      ["修真", "/sort/11"],
+      ["后宫", "/sort/12"],
+      ["女主", "/sort/13"],
+      ["古风", "/sort/14"],
+      ["连载", "/sort/15"],
+      ["完结", "/sort/16"],
+    ] as const;
+    for (const [title, url] of categories) push(title, url);
     return items;
   }
 
@@ -927,7 +968,7 @@ export default function ReadingApp({ onClose }: Props) {
     if (!discovered.length) return;
     setHomeModules((current) => {
       const existing = new Set(current.filter((item) => item.sourceId === mangaSource.id).map((item) => `${item.title}|${item.url}`));
-      const additions = discovered.slice(0, 12).filter((item) => !existing.has(`${item.title}|${item.url}`)).map((item, index) => ({
+      const additions = discovered.filter((item) => !existing.has(`${item.title}|${item.url}`)).map((item, index) => ({
         id: `${mangaSource.id}_discovery_${index}_${Date.now()}`,
         title: item.title,
         url: item.url,
@@ -1129,7 +1170,7 @@ export default function ReadingApp({ onClose }: Props) {
                   <div>
                     <span>DISCOVER</span>
                     <h2>发现漫画</h2>
-                    <p>{homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length} 个漫画发现模块 · 来自漫画书源</p>
+                    <p>{homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length} 个漫画发现模块 · 来自楠楠漫画</p>
                   </div>
                   <button type="button" className="reading-hub-icon-btn" onClick={() => openSourceDrawer("discovery")} aria-label="管理发现模块">
                     <MoreVertical size={20} />
@@ -1629,7 +1670,7 @@ export default function ReadingApp({ onClose }: Props) {
             </div>
           )}
 
-          {sourceLoginOpen && (
+          {sourceLoginOpen && sourceNeedsLogin(bookSources.find((x) => x.id === selectedSourceId)) && (
             <div className="reading-hub-login-modal" onClick={() => setSourceLoginOpen(false)}>
               <div className="reading-hub-login-card" onClick={(e) => e.stopPropagation()}>
                 <div className="reading-hub-drawer-head">

@@ -393,7 +393,7 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
         });
     };
 
-    const formatBadge = (f: string) => f.toUpperCase();
+    const formatBadge = (f: string, readerType?: string) => readerType === "manga" ? "漫画" : f.toUpperCase();
 
     const coverGradients = ["linen", "mist", "graphite", "sage", "cream", "parchment"] as const;
     const coverLayouts = ["layout-1", "layout-2", "layout-3", "layout-4"] as const;
@@ -496,7 +496,7 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                                         <span className="reading-list-title">{book.title}</span>
                                         {book.author && <span className="reading-list-author">{book.author}</span>}
                                         <div className="reading-list-meta">
-                                            <span className="reading-list-badge">{formatBadge(book.format)}</span>
+                                            <span className="reading-list-badge">{formatBadge(book.format, book.readerType)}</span>
                                             <span>{book.totalChapters}章</span>
                                         </div>
                                         <div className="reading-list-progress-row">
