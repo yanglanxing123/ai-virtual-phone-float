@@ -1,5 +1,6 @@
 import { loadReadingSourceState, saveReadingSourceState, type ReadingBookSource } from "./reading-source";
 import { createDeviceId, getShushanChapterContent, getShushanCatalog, getShushanDetail, loadShushanAccount, type ShushanChapter, type ShushanDetail, type ShushanSearchBook } from "./shushan-client";
+import { getMangaSourceAdapter } from "./manga-source-adapters";
 
 export type GenericSourceBook = {
   title: string;
@@ -277,8 +278,9 @@ async function fetchSource(request: {
 export async function fetchReadingSourceModule(source: ReadingBookSource, moduleUrl: string, page = 1): Promise<unknown> {
   // 读漫屋的分类页（/sort/1 等）依赖 ruleExplore，直接交给专用 route，
   // 这样分类页和搜索/详情/正文使用同一套站点切换与请求头兼容逻辑。
-  if (isDumanwuSource(source)) {
-    return dumanwuRequest<GenericSourceBook[]>(source, "module", { moduleUrl, page });
+  const mangaAdapter = getMangaSourceAdapter(source);
+  if (mangaAdapter) {
+    return mangaAdapter.request("module", { moduleUrl, page }) as Promise<GenericSourceBook[]>;
   }
 
   // 楠楠漫画的 exploreUrl 本身就是标准 Legado「发现页模块」数组，
@@ -729,21 +731,6 @@ export function sourceCapabilities(source: ReadingBookSource) {
 
 
 
-function isDumanwuSource(source: ReadingBookSource) {
-  return /读漫屋|dumanwu/i.test(`${source.name} ${source.url}`);
-}
-
-async function dumanwuRequest<T>(source: ReadingBookSource, action: string, payload: Record<string, unknown> = {}): Promise<T> {
-  const response = await fetch("/api/reading/dumanwu", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, sourceUrl: source.url, ...payload }),
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok || !data?.ok) throw new Error(data?.error || `读漫屋接口请求失败（HTTP ${response.status}）`);
-  return data.data as T;
-}
-
 function isNanmComicSource(source: ReadingBookSource) {
   const raw = source.raw as any;
   return /楠楠漫画|nnmh\.info/i.test(`${source.name} ${source.url}`);
@@ -976,7 +963,10 @@ async function getShushanContentAdapter(source: ReadingBookSource, chapter: Gene
 }
 
 export async function searchGenericSource(source: ReadingBookSource, keyword: string, page = 1): Promise<GenericSourceBook[]> {
-  if (isDumanwuSource(source)) return dumanwuRequest<GenericSourceBook[]>(source, "search", { keyword, page });
+  {
+    const mangaAdapter = getMangaSourceAdapter(source);
+    if (mangaAdapter) return mangaAdapter.request("search", { keyword, page }) as Promise<GenericSourceBook[]>;
+  }
   if (isNanmComicSource(source)) return getNanmSearch(source, keyword, page);
   if (isShushanSource(source)) return searchShushanAdapter(source, keyword, page);
   const raw = source.raw as any;
@@ -1024,7 +1014,10 @@ export async function searchGenericSource(source: ReadingBookSource, keyword: st
 }
 
 export async function getGenericDetail(source: ReadingBookSource, book: GenericSourceBook): Promise<GenericSourceDetail> {
-  if (isDumanwuSource(source)) return dumanwuRequest<GenericSourceDetail>(source, "detail", { bookUrl: book.bookUrl });
+  {
+    const mangaAdapter = getMangaSourceAdapter(source);
+    if (mangaAdapter) return mangaAdapter.request("detail", { bookUrl: book.bookUrl }) as Promise<GenericSourceDetail>;
+  }
   if (isNanmComicSource(source)) return getNanmDetail(source, book);
   if (isShushanSource(source)) return getShushanDetailAdapter(source, book);
   const raw = source.raw as any;
@@ -1047,7 +1040,10 @@ export async function getGenericDetail(source: ReadingBookSource, book: GenericS
 }
 
 export async function getGenericCatalog(source: ReadingBookSource, detail: GenericSourceDetail): Promise<GenericSourceChapter[]> {
-  if (isDumanwuSource(source)) return dumanwuRequest<GenericSourceChapter[]>(source, "catalog", { bookUrl: detail.bookUrl });
+  {
+    const mangaAdapter = getMangaSourceAdapter(source);
+    if (mangaAdapter) return mangaAdapter.request("catalog", { bookUrl: detail.bookUrl }) as Promise<GenericSourceChapter[]>;
+  }
   if (isNanmComicSource(source)) return getNanmCatalog(source, detail);
   if (isShushanSource(source)) return getShushanCatalogAdapter(source, detail);
   const raw = source.raw as any;
@@ -1079,7 +1075,7 @@ export async function getGenericCatalog(source: ReadingBookSource, detail: Gener
   }).filter((chapter) => !!chapter.url || !!chapter.title);
 }
 
-function normalizeMangaImageHtml(content: string, baseUrl: string) {
+export function normalizeMangaImageHtml(content: string, baseUrl: string) {
   const html = String(content || "").trim();
   if (!html) return "";
 
@@ -1126,9 +1122,12 @@ function applyReplaceRules(text: string, rules: unknown) {
 }
 
 export async function getGenericChapterContent(source: ReadingBookSource, chapter: GenericSourceChapter, detail?: GenericSourceDetail): Promise<string> {
-  if (isDumanwuSource(source)) {
-    const result = await dumanwuRequest<{ content: string; baseUrl?: string }>(source, "content", { chapterUrl: chapter.url });
-    return normalizeMangaImageHtml(result.content, result.baseUrl || chapter.url);
+  {
+    const mangaAdapter = getMangaSourceAdapter(source);
+    if (mangaAdapter) {
+      const result = await mangaAdapter.request("content", { chapterUrl: chapter.url }) as { content: string; baseUrl?: string };
+      return normalizeMangaImageHtml(result.content, result.baseUrl || chapter.url);
+    }
   }
   if (isNanmComicSource(source)) return getNanmContent(source, chapter);
   if (!chapter.url) throw new Error("章节没有正文地址");
