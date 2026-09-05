@@ -142,7 +142,7 @@ function parseExplore(html: string, base: string) {
     seen.add(bookUrl);
     const authorMatch = block.match(/<p\b[^>]*>\s*作者\s*[：:]?\s*([\s\S]*?)<\/p>/i);
     const latestMatch = block.match(/<p\b[^>]*>\s*最新\s*[：:]?\s*([\s\S]*?)<\/p>/i);
-    const introMatch = block.match(/<[^>]*class=["'][^"']*\\ble-j\\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i);
+    const introMatch = block.match(/<[^>]*class=["'][^"']*\ble-j\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i);
     output.push({
       title,
       author: stripTags(authorMatch?.[1] || "") || undefined,
@@ -176,18 +176,70 @@ function parseDetail(html: string, url: string) {
   };
 }
 
+function extractElementInnerHtml(html: string, classNames: string[]) {
+  for (const className of classNames) {
+    const open = html.match(new RegExp(`<([a-z0-9]+)\\b[^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>`, "i"));
+    if (!open) continue;
+    const tag = open[1];
+    const start = (open.index ?? 0) + open[0].length;
+    const token = new RegExp(`<\\/?${tag}\\b[^>]*>`, "gi");
+    token.lastIndex = start;
+    let depth = 1;
+    let end = html.length;
+    let match: RegExpExecArray | null;
+    while ((match = token.exec(html))) {
+      if (/^<\//.test(match[0])) {
+        depth -= 1;
+        if (depth === 0) {
+          end = match.index;
+          break;
+        }
+      } else if (!/\/\s*>$/.test(match[0])) {
+        depth += 1;
+      }
+    }
+    const inner = html.slice(start, end).trim();
+    if (inner) return inner;
+  }
+  return "";
+}
+
 function parseChapters(html: string, base: string) {
-  const list = html.match(/<[^>]*class=["'][^"']*\bchapterlistload\b[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/i)?.[0] || html;
+  // 读漫屋当前模板是 <ul><a><li>章节名</li></a></ul>，但部分页面/版本会变成
+  // <ul><li><a>章节名</a></li></ul>。不要把 li 固定在 a 内部。
+  const list = extractElementInnerHtml(html, ["chapterlistload", "chapter-list", "chapterlist"]);
+  const source = list || html;
   const output: any[] = [];
   const seen = new Set<string>();
-  const re = /<a\b[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?<li\b[^>]*>([\s\S]*?)<\/li>[\s\S]*?<\/a>/gi;
+  const re = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(list))) {
-    const url = abs(base, m[1]);
+  while ((m = re.exec(source))) {
+    const href = decodeHtml(m[1]).trim();
+    const url = abs(base, href);
     const title = stripTags(m[2]);
     if (!title || !url || seen.has(url)) continue;
+    if (/^(?:返回|收藏|开始阅读|下载APP|APP观看|大人，更多话点这里)$/i.test(title)) continue;
+    if (/^(?:javascript:|#)/i.test(href)) continue;
     seen.add(url);
     output.push({ title, url, raw: { url, title } });
+  }
+
+  // 某些新版详情页不会把章节列表包在 chapterlistload 中，
+  // 直接从同一漫画 ID 下的 .html 链接兜底。
+  if (!output.length) {
+    const id = (() => {
+      try { return new URL(base).pathname.replace(/^\//, "").split("/")[0]; } catch { return ""; }
+    })();
+    const fallback = /<a\b[^>]*href=["']([^"']+\.html(?:[?#][^"']*)?)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    while ((m = fallback.exec(html))) {
+      const href = decodeHtml(m[1]).trim();
+      if (id && !new RegExp(`(?:^|/)${id}(?:/|$)`, "i").test(href)) continue;
+      const url = abs(base, href);
+      const title = stripTags(m[2]);
+      if (!title || !url || seen.has(url)) continue;
+      seen.add(url);
+      output.push({ title, url, raw: { url, title } });
+    }
   }
   return output;
 }
@@ -241,7 +293,8 @@ async function module(sourceUrl: unknown, moduleUrl: string) {
 
 async function detail(sourceUrl: unknown, bookUrl: string) {
   return tryHosts(sourceUrl, async (host) => {
-    const target = new URL(bookUrl, host).toString();
+    const parsed = new URL(bookUrl, host);
+    const target = new URL(parsed.pathname + parsed.search, host).toString();
     const result = await request(host, new URL(target).pathname + new URL(target).search);
     if (!result.response.ok) throw new Error(`详情 HTTP ${result.response.status}`);
     return parseDetail(result.text, result.url);
@@ -250,13 +303,14 @@ async function detail(sourceUrl: unknown, bookUrl: string) {
 
 async function catalog(sourceUrl: unknown, bookUrl: string) {
   return tryHosts(sourceUrl, async (host) => {
-    const target = new URL(bookUrl, host).toString();
+    const parsed = new URL(bookUrl, host);
+    const target = new URL(parsed.pathname + parsed.search, host).toString();
     const result = await request(host, new URL(target).pathname + new URL(target).search);
     if (!result.response.ok) throw new Error(`目录 HTTP ${result.response.status}`);
     const chapters = parseChapters(result.text, result.url);
-    const more = /class=["'][^"']*\bchaplist-more\b/i.test(result.text)
-      ? await fetchMoreChapters(host, result.url).catch(() => [])
-      : [];
+    // 读漫屋的“更多章节”按钮本质上就是 /morechapter POST；即使按钮样式/隐藏状态变化，
+    // 也直接请求一次并与页面已有章节去重，确保详情页能拿到完整目录。
+    const more = await fetchMoreChapters(host, result.url).catch(() => []);
     const seen = new Set<string>();
     return [...chapters, ...more].filter((item: any) => {
       if (!item.url || seen.has(item.url)) return false;
@@ -268,34 +322,29 @@ async function catalog(sourceUrl: unknown, bookUrl: string) {
 
 async function content(sourceUrl: unknown, chapterUrl: string) {
   return tryHosts(sourceUrl, async (host) => {
-    const target = new URL(chapterUrl, host).toString();
+    // chapterUrl 可能来自旧书源缓存，带着已经失效的旧域名。只保留 pathname/search，
+    // 让当前可用站点 host 真正参与轮换，否则 tryHosts 会对同一个旧域名重复请求。
+    const parsedChapter = new URL(chapterUrl, host);
+    const target = new URL(parsedChapter.pathname + parsedChapter.search, host).toString();
     const result = await request(host, new URL(target).pathname + new URL(target).search);
     if (!result.response.ok) throw new Error(`正文 HTTP ${result.response.status}`);
 
-    // 使用平衡标签扫描而不是简单的正则，避免 .main_img 内部嵌套 div 时被提前截断。
-    const open = result.text.match(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\bmain_img\b[^"']*["'][^>]*>/i);
-    if (!open) throw new Error("正文页面没有找到 .main_img");
-    const tag = open[1];
-    const start = (open.index ?? 0) + open[0].length;
-    const token = new RegExp(`<\\/?${tag}\\b[^>]*>`, "gi");
-    token.lastIndex = start;
-    let depth = 1;
-    let cursor = start;
-    let match: RegExpExecArray | null;
-    while ((match = token.exec(result.text))) {
-      if (/^<\//.test(match[0])) {
-        depth -= 1;
-        if (depth === 0) {
-          cursor = match.index;
-          break;
-        }
-      } else if (!/\/\s*>$/.test(match[0])) {
-        depth += 1;
-      }
-    }
-    const html = result.text.slice(start, cursor || result.text.length).trim();
-    if (!html) throw new Error(".main_img 中没有正文图片");
-    return { content: html, baseUrl: result.url };
+    const html = extractElementInnerHtml(result.text, [
+      "main_img",
+      "readerContainer",
+      "comic_warp",
+      "comic-content",
+      "chapter-content",
+      "read-content",
+    ]);
+    if (html) return { content: html, baseUrl: result.url };
+
+    // 个别轮换模板会把正文容器的 class 改掉，但仍会直接输出整章漫画图片。
+    // 只有检测到至少两张图片才启用兜底，避免把详情页的单张封面误当正文。
+    const images = result.text.match(/<img\b[^>]*(?:data-src|data-original|src)\s*=\s*["'][^"']+["'][^>]*>/gi) || [];
+    if (images.length >= 2) return { content: images.join("\n"), baseUrl: result.url };
+
+    throw new Error("正文页面没有找到漫画图片容器（.main_img）");
   });
 }
 
