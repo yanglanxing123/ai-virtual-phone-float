@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>阅记</title>
+<style>
+:root{
+  --bg:#f5f2ed;--paper:#fffdf9;--ink:#292722;--sub:#8b877f;
+  --line:#e5dfd5;--accent:#6d8b74;--accent2:#e8efe9;--danger:#b86b61;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC",sans-serif}
+button,input,textarea{font:inherit}
+button{cursor:pointer}
+.app{height:100%;display:flex;flex-direction:column;max-width:900px;margin:auto}
+.top{padding:12px 14px 8px;background:rgba(245,242,237,.96);position:sticky;top:0;z-index:5}
+.title{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.title h1{font-size:20px;margin:0;font-weight:800}
+.title span{font-size:11px;color:var(--sub)}
+.search{display:flex;gap:7px}
+.search input{flex:1;border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:9px 12px;outline:none}
+.iconbtn{border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:0 13px}
+.tabs{display:flex;gap:6px;padding:7px 14px;border-bottom:1px solid var(--line)}
+.tab{flex:1;border:0;background:transparent;color:var(--sub);padding:8px;border-radius:10px;font-weight:700}
+.tab.on{background:var(--accent2);color:var(--accent)}
+.content{flex:1;min-height:0;overflow:auto;padding:12px 14px 28px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:13px;margin-bottom:10px}
+.cardhead{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.card h3{margin:0 0 4px;font-size:15px}
+.meta{color:var(--sub);font-size:11px}
+.url{color:var(--accent);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:5px}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.tag{background:#eee9e1;border-radius:999px;padding:3px 8px;font-size:11px;color:#6f695f}
+.actions{display:flex;gap:6px;margin-top:10px}
+.btn{border:0;border-radius:10px;padding:8px 11px;background:var(--accent);color:white;font-weight:700}
+.btn.ghost{background:#f0ece5;color:var(--ink)}
+.btn.danger{background:#f7e8e5;color:var(--danger)}
+.empty{text-align:center;color:var(--sub);padding:40px 10px}
+.hidden{display:none!important}
+.modal{position:fixed;inset:0;background:rgba(30,27,23,.38);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet{width:min(900px,100%);background:var(--paper);border-radius:20px 20px 0 0;padding:16px 14px calc(16px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.sheet h2{font-size:18px;margin:0 0 12px}
+.field{margin:9px 0}
+.field label{display:block;color:var(--sub);font-size:12px;margin-bottom:5px}
+.field input,.field textarea{width:100%;border:1px solid var(--line);background:#faf7f2;border-radius:11px;padding:9px 10px;outline:none}
+.field textarea{min-height:120px;resize:vertical}
+.row{display:flex;gap:7px}
+.row>*{flex:1}
+.reader{position:fixed;inset:0;background:var(--paper);z-index:30;display:flex;flex-direction:column}
+.readerbar{display:flex;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--paper)}
+.readerbar input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none}
+.readerbar button{border:1px solid var(--line);background:#f0ece5;border-radius:10px;padding:0 11px}
+.readerframe{flex:1;border:0;width:100%;background:white}
+.noteFab{position:fixed;right:18px;bottom:20px;z-index:31;width:48px;height:48px;border:0;border-radius:50%;background:var(--accent);color:white;font-size:20px;box-shadow:0 5px 18px rgba(0,0,0,.18)}
+small.tip{display:block;color:var(--sub);margin-top:8px;font-size:11px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="title"><h1>阅记</h1><span>网页 · 摘录 · 灵感</span></div>
+    <div class="search"><input id="search" placeholder="搜索收藏、笔记、摘录…"><button class="iconbtn" id="newBtn">＋</button></div>
+  </div>
+  <div class="tabs">
+    <button class="tab on" data-tab="home">首页</button>
+    <button class="tab" data-tab="saved">收藏</button>
+    <button class="tab" data-tab="notes">笔记</button>
+  </div>
+  <main class="content" id="content"></main>
+</div>
+
+<div class="modal hidden" id="modal">
+  <div class="sheet">
+    <h2 id="modalTitle">新建笔记</h2>
+    <div class="field"><label>标题</label><input id="fTitle" placeholder="给这条内容起个名字"></div>
+    <div class="field"><label>网址（可选）</label><input id="fUrl" placeholder="https://…"></div>
+    <div class="field"><label>内容</label><textarea id="fBody" placeholder="写下你的想法、摘录或资料…"></textarea></div>
+    <div class="field"><label>标签（用空格分隔）</label><input id="fTags" placeholder="世界观 角色 灵感"></div>
+    <div class="row"><button class="btn ghost" id="cancelBtn">取消</button><button class="btn" id="saveBtn">保存</button></div>
+  </div>
+</div>
+
+<div class="reader hidden" id="reader">
+  <div class="readerbar">
+    <button id="closeReader">‹</button>
+    <input id="address" placeholder="输入网页地址">
+    <button id="go">打开</button>
+    <button id="savePage">收藏</button>
+  </div>
+  <iframe class="readerframe" id="frame"></iframe>
+  <button class="noteFab" id="quickNote">＋</button>
+</div>
+
+<script>
+(function(){
+  const KEY="reader-note.v1";
+  const api=window.AiPhone;
+  let state=load();
+  let tab="home";
+
+  function load(){
+    try{
+      const x=JSON.parse(localStorage.getItem(KEY)||"null");
+      return x&&Array.isArray(x.items)?x:{items:[]};
+    }catch(e){return {items:[]}}
+  }
+  function persist(){localStorage.setItem(KEY,JSON.stringify(state))}
+  function esc(s){
+    return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+  }
+  function toast(t){
+    if(api&&api.ui&&api.ui.toast) api.ui.toast(t).catch(()=>{});
+    else alert(t);
+  }
+  function openModal(item){
+    document.getElementById("modal").classList.remove("hidden");
+    document.getElementById("modalTitle").textContent=item?"编辑内容":"新建笔记";
+    document.getElementById("fTitle").value=item?.title||"";
+    document.getElementById("fUrl").value=item?.url||"";
+    document.getElementById("fBody").value=item?.body||"";
+    document.getElementById("fTags").value=(item?.tags||[]).join(" ");
+    document.getElementById("saveBtn").dataset.id=item?.id||"";
+  }
+  function closeModal(){document.getElementById("modal").classList.add("hidden")}
+  function save(){
+    const title=document.getElementById("fTitle").value.trim()||"未命名笔记";
+    const url=document.getElementById("fUrl").value.trim();
+    const body=document.getElementById("fBody").value.trim();
+    const tags=document.getElementById("fTags").value.trim().split(/\s+/).filter(Boolean);
+    const id=document.getElementById("saveBtn").dataset.id;
+    if(id){
+      const x=state.items.find(i=>i.id===id);
+      if(x) Object.assign(x,{title,url,body,tags,updated:Date.now()});
+    }else{
+      state.items.unshift({id:crypto.randomUUID(),type:url?"saved":"note",title,url,body,tags,created:Date.now(),updated:Date.now()});
+    }
+    persist();closeModal();render();
+  }
+  function remove(id){
+    state.items=state.items.filter(x=>x.id!==id);persist();render();
+  }
+  function card(x){
+    return `<article class="card">
+      <div class="cardhead"><div><h3>${esc(x.title)}</h3><div class="meta">${new Date(x.updated||x.created).toLocaleString("zh-CN")}</div></div></div>
+      ${x.url?`<div class="url">${esc(x.url)}</div>`:""}
+      ${x.body?`<div style="margin-top:8px;white-space:pre-wrap">${esc(x.body.slice(0,280))}${x.body.length>280?"…":""}</div>`:""}
+      ${(x.tags||[]).length?`<div class="tags">${x.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</div>`:""}
+      <div class="actions">
+        ${x.url?`<button class="btn" onclick="window.__reader(${JSON.stringify(x.url)})">阅读</button>`:""}
+        <button class="btn ghost" onclick="window.__edit('${x.id}')">编辑</button>
+        <button class="btn danger" onclick="window.__remove('${x.id}')">删除</button>
+      </div>
+    </article>`;
+  }
+  function render(){
+    const q=document.getElementById("search").value.trim().toLowerCase();
+    let items=state.items.filter(x=>!q || [x.title,x.url,x.body,(x.tags||[]).join(" ")].join(" ").toLowerCase().includes(q));
+    if(tab==="saved") items=items.filter(x=>x.type==="saved");
+    if(tab==="notes") items=items.filter(x=>x.type==="note"||x.type==="clip");
+    const c=document.getElementById("content");
+    if(tab==="home"&&!q){
+      c.innerHTML=`<div class="card"><h3>今天想记什么？</h3><p class="meta">把网页、摘录和灵感放进同一个地方。</p><div class="actions"><button class="btn" onclick="window.__openReader()">打开网页</button><button class="btn ghost" onclick="window.__newNote()">写一条笔记</button></div><small class="tip">提示：部分网站会禁止被 iframe 嵌入，这是浏览器的安全限制；第一版会先保留收藏和网址记录。</small></div>`+(items.length?items.map(card).join(""):`<div class="empty">还没有内容<br>试试打开一个网页或写第一条笔记。</div>`);
+    }else c.innerHTML=items.length?items.map(card).join(""):`<div class="empty">这里还没有内容</div>`;
+  }
+
+  window.__newNote=()=>openModal();
+  window.__edit=id=>openModal(state.items.find(x=>x.id===id));
+  window.__remove=remove;
+
+  window.__openReader=()=>{
+    document.getElementById("reader").classList.remove("hidden");
+    document.getElementById("address").focus();
+  };
+  window.__reader=url=>{
+    document.getElementById("reader").classList.remove("hidden");
+    document.getElementById("address").value=url;
+    document.getElementById("frame").src=normalize(url);
+  };
+  function normalize(u){return /^https?:\/\//i.test(u)?u:"https://"+u}
+  document.getElementById("go").onclick=()=>{
+    const u=document.getElementById("address").value.trim();
+    if(!u)return;
+    document.getElementById("frame").src=normalize(u);
+  };
+  document.getElementById("savePage").onclick=()=>{
+    const u=document.getElementById("address").value.trim();
+    if(!u)return;
+    const title=u.replace(/^https?:\/\//,"").split("/")[0];
+    state.items.unshift({id:crypto.randomUUID(),type:"saved",title,url:normalize(u),body:"",tags:["网页"],created:Date.now(),updated:Date.now()});
+    persist();toast("网页已收藏");render();
+  };
+  document.getElementById("quickNote").onclick=()=>{
+    const u=document.getElementById("address").value.trim();
+    openModal({url:normalize(u),tags:["摘录"]});
+  };
+  document.getElementById("closeReader").onclick=()=>document.getElementById("reader").classList.add("hidden");
+  document.getElementById("newBtn").onclick=()=>openModal();
+  document.getElementById("cancelBtn").onclick=closeModal;
+  document.getElementById("saveBtn").onclick=save;
+  document.getElementById("search").oninput=render;
+  document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+    tab=b.dataset.tab;
+    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));
+    render();
+  });
+  render();
+})();
+</script>
+</body>
+</html>
