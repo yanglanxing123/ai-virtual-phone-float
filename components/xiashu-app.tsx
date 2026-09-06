@@ -16,8 +16,11 @@ import {
   loadSettings, saveSettings, type XiashuSettings,
   loadCssThemes, saveCssThemes, getActiveCss, type XiashuCssTheme,
 } from "@/lib/xiashu-storage";
+import { loadWorldBooks, saveWorldBooks, loadBindingConfig, saveBindingConfig, resolveBinding } from "@/lib/settings-storage";
+import type { WorldBookConfig, BindingConfig, CharacterBinding } from "@/lib/settings-types";
 import type { XiashuMessage, XiashuStatus, XiashuChatSession, TavernRegexScript } from "@/lib/xiashu-types";
-import { parseTavernCard, parseTavernCardFromJson, convertToCharacter, getCardSummary } from "@/lib/xiashu-import";
+import { XIASHU_APP_ID } from "@/lib/xiashu-types";
+import { parseTavernCard, parseTavernCardFromJson, convertToCharacter, getCardSummary, convertWorldBook } from "@/lib/xiashu-import";
 import { generateReply, generateGreeting, parseStatusFromResponse, formatMessageContent, ChatEngineError } from "@/lib/xiashu-engine";
 
 type Page = "characters" | "chat" | "settings";
@@ -71,7 +74,37 @@ export function XiashuApp({ onClose, onNotice }: XiashuAppProps) {
       const updated = [...characters, newChar];
       setCharacters(updated);
       saveCharacters(updated);
-      onNotice(`角色卡导入成功：${summary.name}`);
+
+      // 导入角色卡内嵌的世界书
+      let wbNotice = "";
+      if (result.worldBook && result.worldBook.entries) {
+        try {
+          const wbConfig = convertWorldBook(result.worldBook, `${summary.name}的世界书`);
+          const allBooks = loadWorldBooks();
+          allBooks.push(wbConfig);
+          saveWorldBooks(allBooks);
+
+          // 将世界书绑定到角色
+          const bindings = loadBindingConfig();
+          let charBinding = bindings.characterBindings.find(b => b.characterId === newChar.id);
+          if (!charBinding) {
+            charBinding = { characterId: newChar.id, defaults: {}, appOverrides: {} };
+            bindings.characterBindings.push(charBinding);
+          }
+          // 绑定到夏书 app
+          const xiashuOverride = charBinding.appOverrides[XIASHU_APP_ID] || {};
+          xiashuOverride.worldBookIds = [...(xiashuOverride.worldBookIds || []), wbConfig.id];
+          charBinding.appOverrides[XIASHU_APP_ID] = xiashuOverride;
+          saveBindingConfig(bindings);
+
+          wbNotice = `，世界书 ${wbConfig.entries.length} 条已导入并绑定`;
+        } catch (e) {
+          console.warn("[夏书] 世界书导入失败:", e);
+          wbNotice = "（世界书导入失败）";
+        }
+      }
+
+      onNotice(`角色卡导入成功：${summary.name}${wbNotice}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError("导入失败：" + msg);
@@ -113,15 +146,46 @@ export function XiashuApp({ onClose, onNotice }: XiashuAppProps) {
     }
   }, [regexScripts, onNotice]);
 
-  // ── 导入 CSS 美化 ───────────────────────────────────
+  // ── 导入 CSS 美化（支持 JSON 和 CSS 两种格式）─────────
   const handleImportCss = useCallback(async (file: File) => {
     try {
-      const css = await file.text();
-      if (!css.trim()) {
-        onNotice("CSS 文件为空");
+      const raw = await file.text();
+      if (!raw.trim()) {
+        onNotice("文件为空");
         return;
       }
-      const name = file.name.replace(/\.css$/i, "") || "未命名美化";
+
+      let css = "";
+      let name = file.name.replace(/\.(css|json)$/i, "") || "未命名美化";
+
+      // 尝试 JSON 解析（酒馆导出的美化通常是 JSON）
+      const isJson = file.name.endsWith(".json") || raw.trim().startsWith("{");
+      if (isJson) {
+        try {
+          const obj = JSON.parse(raw);
+          // 常见字段名：css, embed.css, style, stylesheet, theme_css
+          css = obj.css || obj.CSS || "";
+          if (!css && obj.embed) css = obj.embed.css || obj.embed.CSS || "";
+          if (!css) css = obj.style || obj.stylesheet || obj.theme_css || "";
+          if (obj.name) name = obj.name;
+          if (!css) {
+            // 可能整个 JSON 就是 { "body": "..." } 这种结构，把所有 string 值拼起来当 CSS
+            const strValues = Object.values(obj).filter(v => typeof v === "string" && v.length > 20);
+            if (strValues.length > 0) css = strValues.join("\n\n");
+          }
+        } catch {
+          // JSON 解析失败，当作纯 CSS 处理
+          css = raw;
+        }
+      } else {
+        css = raw;
+      }
+
+      if (!css.trim()) {
+        onNotice("未从文件中提取到 CSS 内容");
+        return;
+      }
+
       const theme: XiashuCssTheme = {
         id: `css_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         name,
@@ -748,7 +812,7 @@ function SettingsPage({ settings, regexScripts, cssThemes, activeCss, onToggleTh
 
       {/* CSS 美化 */}
       <SettingGroup title="CSS 美化（酒馆导出）">
-        <input ref={cssInputRef} type="file" accept=".css,text/css" style={{ display: "none" }}
+        <input ref={cssInputRef} type="file" accept=".json,.css,application/json,text/css" style={{ display: "none" }}
           onChange={(e) => { if (e.target.files?.[0]) onImportCss(e.target.files[0]); e.target.value = ""; }}
         />
         <div onClick={() => cssInputRef.current?.click()} style={{
@@ -758,7 +822,7 @@ function SettingsPage({ settings, regexScripts, cssThemes, activeCss, onToggleTh
           <Palette size={20} style={{ color: "#dc2743", marginBottom: "4px" }} />
           <div style={{ fontSize: "13px", fontWeight: 600 }}>导入 CSS 美化</div>
           <div style={{ fontSize: "11px", color: "#8e8e93", marginTop: "2px" }}>
-            支持 .css 格式，酒馆导出的美化主题
+            支持 .json / .css 格式，酒馆导出的美化主题
           </div>
         </div>
 
