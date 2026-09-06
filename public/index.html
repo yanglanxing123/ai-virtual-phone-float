@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>阅记</title>
+<style>
+:root{
+  --bg:#f5f2ed;--paper:#fffdf9;--ink:#292722;--sub:#8b877f;
+  --line:#e5dfd5;--accent:#6d8b74;--accent2:#e8efe9;--danger:#b86b61;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC",sans-serif}
+button,input,textarea{font:inherit}
+button{cursor:pointer}
+.app{height:100%;display:flex;flex-direction:column;max-width:900px;margin:auto}
+.top{padding:12px 14px 8px;background:rgba(245,242,237,.96);position:sticky;top:0;z-index:5}
+.title{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.title h1{font-size:20px;margin:0;font-weight:800}
+.title span{font-size:11px;color:var(--sub)}
+.search{display:flex;gap:7px}
+.search input{flex:1;border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:9px 12px;outline:none}
+.iconbtn{border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:0 13px}
+.tabs{display:flex;gap:6px;padding:7px 14px;border-bottom:1px solid var(--line)}
+.tab{flex:1;border:0;background:transparent;color:var(--sub);padding:8px;border-radius:10px;font-weight:700}
+.tab.on{background:var(--accent2);color:var(--accent)}
+.content{flex:1;min-height:0;overflow:auto;padding:12px 14px 28px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:13px;margin-bottom:10px}
+.cardhead{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.card h3{margin:0 0 4px;font-size:15px}
+.meta{color:var(--sub);font-size:11px}
+.url{color:var(--accent);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:5px}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.tag{background:#eee9e1;border-radius:999px;padding:3px 8px;font-size:11px;color:#6f695f}
+.actions{display:flex;gap:6px;margin-top:10px}
+.btn{border:0;border-radius:10px;padding:8px 11px;background:var(--accent);color:white;font-weight:700}
+.btn.ghost{background:#f0ece5;color:var(--ink)}
+.btn.danger{background:#f7e8e5;color:var(--danger)}
+.empty{text-align:center;color:var(--sub);padding:40px 10px}
+.hidden{display:none!important}
+.modal{position:fixed;inset:0;background:rgba(30,27,23,.38);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet{width:min(900px,100%);background:var(--paper);border-radius:20px 20px 0 0;padding:16px 14px calc(16px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.sheet h2{font-size:18px;margin:0 0 12px}
+.field{margin:9px 0}
+.field label{display:block;color:var(--sub);font-size:12px;margin-bottom:5px}
+.field input,.field textarea{width:100%;border:1px solid var(--line);background:#faf7f2;border-radius:11px;padding:9px 10px;outline:none}
+.field textarea{min-height:120px;resize:vertical}
+.row{display:flex;gap:7px}
+.row>*{flex:1}
+.reader{position:fixed;inset:0;background:var(--paper);z-index:30;display:flex;flex-direction:column}
+.readerbar{display:flex;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--paper)}
+.readerbar input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none}
+.readerbar button{border:1px solid var(--line);background:#f0ece5;border-radius:10px;padding:0 11px}
+.sidebarActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}.sidebarActions .btn{width:100%;padding:9px 8px}.sidebarBody .meta{line-height:1.5}
+.readerframe{flex:1;border:0;width:100%;background:white}
+.shield{display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:7px 10px;font-size:12px;font-weight:700;color:var(--ink)}
+.shield.on{background:var(--accent2);color:var(--accent)}
+.blockerInfo{margin-top:10px;padding:10px;border-radius:12px;background:#f3f0ea;border:1px solid var(--line);font-size:12px;color:var(--sub)}
+.switchrow{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+.switch{width:46px;height:27px;border:0;border-radius:999px;background:#d9d4cc;padding:3px;position:relative}
+.switch i{display:block;width:21px;height:21px;background:white;border-radius:50%;transition:.18s;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.switch.on{background:var(--accent)}
+.switch.on i{transform:translateX(19px)}
+.rulebox{font-size:11px;color:var(--sub);background:#faf7f2;border:1px solid var(--line);border-radius:10px;padding:9px;white-space:pre-wrap;word-break:break-all}
+.extractPanel{position:fixed;inset:0;background:var(--paper);z-index:32;display:flex;flex-direction:column}.extractHead{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}.extractBody{flex:1;overflow:auto;padding:22px 18px 50px;max-width:900px;width:100%;margin:auto}.extractBody h1{font-size:25px;line-height:1.35;margin:0 0 12px}.extractBody .extractMeta{font-size:12px;color:var(--sub);margin-bottom:18px}.extractBody article{font-size:18px;line-height:1.9}.extractBody img{max-width:100%;height:auto}.noteFab{position:fixed;right:18px;bottom:20px;z-index:31;width:48px;height:48px;border:0;border-radius:50%;background:var(--accent);color:white;font-size:20px;box-shadow:0 5px 18px rgba(0,0,0,.18)}
+small.tip{display:block;color:var(--sub);margin-top:8px;font-size:11px}
+
+    .reader-mode-status{
+      display:inline-flex;align-items:center;justify-content:center;
+      min-width:34px;height:24px;padding:0 7px;border:1px solid #e5dfd5;
+      border-radius:999px;background:#fffdf9;color:#6d665c;font-size:11px;
+      font-weight:700;white-space:nowrap;
+    }
+    .extract-note{
+      margin:12px 0 0;padding:10px 12px;border-radius:12px;
+      background:#f6f1e8;color:#6f675c;font-size:12px;line-height:1.55;
+    }
+    
+
+.sidebarOverlay{position:fixed;inset:0;background:rgba(30,27,23,.28);z-index:45;opacity:1;transition:.18s}
+.sidebarOverlay.hidden{display:none}
+.sidebar{position:absolute;right:0;top:0;height:100%;width:min(360px,88vw);background:var(--paper);box-shadow:-8px 0 28px rgba(0,0,0,.12);display:flex;flex-direction:column}
+.sidebarHead{display:flex;align-items:center;justify-content:space-between;padding:14px;border-bottom:1px solid var(--line)}
+.sidebarHead b{font-size:16px}
+.sidebarBody{flex:1;overflow:auto;padding:10px 14px 24px}
+.sidebarSection{padding:12px 0;border-bottom:1px solid var(--line)}
+.sidebarSection:last-child{border-bottom:0}
+.sidebarItem{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0}
+.sidebarItem b{font-size:13px}
+.sidebarItem .meta{margin-top:2px}
+.sidebarClose{border:1px solid var(--line);background:#f0ece5;border-radius:10px;padding:6px 10px}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="title"><h1>阅记</h1><span>网页 · 摘录 · 灵感</span></div>
+    <div class="search"><input id="search" placeholder="搜索收藏、笔记、摘录…"><button class="iconbtn" id="newBtn">＋</button></div>
+  </div>
+  <div class="tabs">
+    <button class="tab on" data-tab="home">首页</button>
+    <button class="tab" data-tab="saved">收藏</button>
+    <button class="tab" data-tab="notes">笔记</button>
+  </div>
+  <main class="content" id="content"></main>
+</div>
+
+<div class="modal hidden" id="modal">
+  <div class="sheet">
+    <h2 id="modalTitle">新建笔记</h2>
+    <div class="field"><label>标题</label><input id="fTitle" placeholder="给这条内容起个名字"></div>
+    <div class="field"><label>网址（可选）</label><input id="fUrl" placeholder="https://…"></div>
+    <div class="field"><label>内容</label><textarea id="fBody" placeholder="写下你的想法、摘录或资料…"></textarea></div>
+    <div class="field"><label>标签（用空格分隔）</label><input id="fTags" placeholder="世界观 角色 灵感"></div>
+    <div class="row"><button class="btn ghost" id="cancelBtn">取消</button><button class="btn" id="saveBtn">保存</button></div>
+  </div>
+</div>
+
+<div class="sidebarOverlay hidden" id="sidebarOverlay">
+  <aside class="sidebar">
+    <div class="sidebarHead">
+      <b>阅记侧边栏</b>
+      <button class="sidebarClose" id="closeSidebar">关闭</button>
+    </div>
+    <div class="sidebarBody">
+      <section class="sidebarSection">
+        <div class="sidebarItem">
+          <div><b>📖 阅读增强</b><div class="meta">这里统一收纳后加入的阅读功能</div></div>
+        </div>
+        <div class="sidebarActions">
+          <button class="btn" id="readerMode">阅读模式</button>
+          <button class="btn" id="readerExtract">正文阅读</button>
+        </div>
+        <div class="meta" id="readerModeStatus">当前：自动</div>
+      </section>
+
+      <section class="sidebarSection">
+        <div class="sidebarItem">
+          <div><b>🛡️ 广告拦截</b><div class="meta">统一管理广告、追踪和白名单</div></div>
+          <button id="blockSwitch" class="switch"><i></i></button>
+        </div>
+        <div class="blockerInfo">本页已拦截：<b id="blockedCount">0</b> 次
+          <button class="btn ghost" id="resetBlocked" style="float:right;padding:4px 8px;font-size:11px">清零</button>
+        </div>
+      </section>
+
+      <section class="sidebarSection">
+        <div class="field">
+          <label>自定义拦截域名（每行一个）</label>
+          <textarea id="customRules" placeholder="例如：ads.example.com&#10;tracker.example.com"></textarea>
+        </div>
+        <div class="field">
+          <label>白名单域名（每行一个）</label>
+          <textarea id="whitelistRules" placeholder="例如：example.com&#10;news.example.com"></textarea>
+        </div>
+      </section>
+
+      <section class="sidebarSection">
+        <div class="sidebarItem">
+          <div><b>当前网站白名单</b><div class="meta" id="siteStatus">打开网页后可设置</div></div>
+          <button id="siteSwitch" class="switch"><i></i></button>
+        </div>
+      </section>
+
+      <section class="sidebarSection">
+        <div class="field">
+          <label>内置规则</label>
+          <div class="rulebox">已内置常见广告 / 追踪域名规则，并支持同源页面广告元素清理、动态广告观察和正文阅读净化。</div>
+        </div>
+        <small class="tip">纯前端 Vercel 无法绕过浏览器 CORS，也不能拦截目标网站的所有跨域子资源。阅记会在浏览器允许访问的范围内进行拦截和净化。</small>
+      </section>
+    </div>
+  </aside>
+</div>
+
+
+
+<div class="reader hidden" id="reader">
+  <div class="readerbar">
+    <button id="closeReader">‹</button>
+    <input id="address" placeholder="输入网页地址">
+    <button id="go">打开</button>
+    <button id="sidebarBtn" class="shield" title="打开新增功能">⋯</button>
+    <button id="savePage">收藏</button>
+  </div>
+  <iframe class="readerframe" id="frame"></iframe>
+  <button class="noteFab" id="quickNote">＋</button>
+</div>
+
+<div class="extractPanel hidden" id="extractPanel">
+  <div class="extractHead"><button class="iconbtn" id="closeExtract">←</button><b>正文阅读</b><span class="meta" id="extractStatus">仅适用于允许访问内容的网页</span></div>
+  <div class="extractBody" id="extractBody"></div>
+</div>
+
+<script>
+(function(){
+  const KEY="reader-note.v1";
+  const BLOCK_KEY="reader-note.adblock.v7";
+  const api=window.AiPhone;
+  const builtinRules=[
+    "doubleclick.net","googlesyndication.com","googleadservices.com","adservice.google.com",
+    "adnxs.com","adform.net","adsystem.com","taboola.com","outbrain.com",
+    "googletagmanager.com","googletagservices.com","2mdn.net","adsafeprotected.com",
+    "amazon-adsystem.com","criteo.com","criteo.net","scorecardresearch.com",
+    "quantserve.com","zedo.com","moatads.com","rubiconproject.com","pubmatic.com",
+    "openx.net","casalemedia.com","smartadserver.com","sharethrough.com"
+  ];
+  let blocker=loadBlocker();
+  let blockedCount=0;
+  let state=load();
+  let currentHost="";
+  let tab="home";
+
+  function load(){
+    try{
+      const x=JSON.parse(localStorage.getItem(KEY)||"null");
+      return x&&Array.isArray(x.items)?x:{items:[]};
+    }catch(e){return {items:[]}}
+  }
+  function loadBlocker(){
+    try{const x=JSON.parse(localStorage.getItem(BLOCK_KEY)||"null");return x&&typeof x==="object"?{enabled:x.enabled!==false,custom:Array.isArray(x.custom)?x.custom:[],whitelist:Array.isArray(x.whitelist)?x.whitelist:[]}: {enabled:true,custom:[],whitelist:[]}}catch(e){return {enabled:true,custom:[]}}
+  }
+  function persistBlocker(){localStorage.setItem(BLOCK_KEY,JSON.stringify(blocker))}
+  function blockerRules(){return [...builtinRules,...blocker.custom].map(x=>String(x).trim().toLowerCase()).filter(Boolean)}
+  function whitelistRules(){return blocker.whitelist.map(x=>String(x).trim().toLowerCase()).filter(Boolean)}
+  function hostMatches(host,rule){return host===rule||host.endsWith("."+rule)}
+  function isWhitelistedUrl(u){try{const host=new URL(normalize(u)).hostname.toLowerCase();return whitelistRules().some(r=>hostMatches(host,r))}catch(e){return false}}
+  function isBlockedUrl(u){
+    try{const host=new URL(normalize(u)).hostname.toLowerCase();if(isWhitelistedUrl(u))return false;return blockerRules().some(r=>hostMatches(host,r))}catch(e){return false}
+  }
+  function persist(){localStorage.setItem(KEY,JSON.stringify(state))}
+  function esc(s){
+    return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+  }
+  function toast(t){
+    if(api&&api.ui&&api.ui.toast) api.ui.toast(t).catch(()=>{});
+    else alert(t);
+  }
+  function openModal(item){
+    document.getElementById("modal").classList.remove("hidden");
+    document.getElementById("modalTitle").textContent=item?"编辑内容":"新建笔记";
+    document.getElementById("fTitle").value=item?.title||"";
+    document.getElementById("fUrl").value=item?.url||"";
+    document.getElementById("fBody").value=item?.body||"";
+    document.getElementById("fTags").value=(item?.tags||[]).join(" ");
+    document.getElementById("saveBtn").dataset.id=item?.id||"";
+  }
+  function closeModal(){document.getElementById("modal").classList.add("hidden")}
+  function save(){
+    const title=document.getElementById("fTitle").value.trim()||"未命名笔记";
+    const url=document.getElementById("fUrl").value.trim();
+    const body=document.getElementById("fBody").value.trim();
+    const tags=document.getElementById("fTags").value.trim().split(/\s+/).filter(Boolean);
+    const id=document.getElementById("saveBtn").dataset.id;
+    if(id){
+      const x=state.items.find(i=>i.id===id);
+      if(x) Object.assign(x,{title,url,body,tags,updated:Date.now()});
+    }else{
+      state.items.unshift({id:crypto.randomUUID(),type:url?"saved":"note",title,url,body,tags,created:Date.now(),updated:Date.now()});
+    }
+    persist();closeModal();render();
+  }
+  function remove(id){
+    state.items=state.items.filter(x=>x.id!==id);persist();render();
+  }
+  function card(x){
+    return `<article class="card">
+      <div class="cardhead"><div><h3>${esc(x.title)}</h3><div class="meta">${new Date(x.updated||x.created).toLocaleString("zh-CN")}</div></div></div>
+      ${x.url?`<div class="url">${esc(x.url)}</div>`:""}
+      ${x.body?`<div style="margin-top:8px;white-space:pre-wrap">${esc(x.body.slice(0,280))}${x.body.length>280?"…":""}</div>`:""}
+      ${(x.tags||[]).length?`<div class="tags">${x.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</div>`:""}
+      <div class="actions">
+        ${x.url?`<button class="btn" data-read-id="${esc(x.id)}">阅读</button>`:""}
+        <button class="btn ghost" data-edit-id="${esc(x.id)}">编辑</button>
+        <button class="btn danger" data-remove-id="${esc(x.id)}">删除</button>
+      </div>
+    </article>`;
+  }
+  function render(){
+    const q=document.getElementById("search").value.trim().toLowerCase();
+    const c=document.getElementById("content");
+
+    // 首页只负责入口，不展示收藏和笔记。
+    if(tab==="home"){
+      c.innerHTML=`<div class="card">
+        <h3>今天想记什么？</h3>
+        <p class="meta">网页、收藏和笔记分别放在自己的空间里。</p>
+        <div class="actions">
+          <button class="btn" id="homeOpenReader">打开网页</button>
+          <button class="btn ghost" id="homeNewNote">写一条笔记</button>
+        </div>
+        <small class="tip">收藏请进入「收藏」，笔记请进入「笔记」。首页不会自动展示它们。</small>
+      </div>`;
+      document.getElementById("homeOpenReader").onclick=()=>window.__openReader();
+      document.getElementById("homeNewNote").onclick=()=>window.__newNote();
+      return;
+    }
+
+    let items=state.items.filter(x=>!q || [x.title,x.url,x.body,(x.tags||[]).join(" ")].join(" ").toLowerCase().includes(q));
+    if(tab==="saved") items=items.filter(x=>x.type==="saved");
+    if(tab==="notes") items=items.filter(x=>x.type==="note"||x.type==="clip");
+
+    c.innerHTML=items.length?items.map(card).join(""):`<div class="empty">${q?"没有找到匹配内容":"这里还没有内容"}</div>`;
+
+    c.querySelectorAll("[data-read-id]").forEach(btn=>{
+      btn.onclick=()=>{
+        const item=state.items.find(x=>x.id===btn.dataset.readId);
+        if(item&&item.url) openSavedItem(item);
+      };
+    });
+    c.querySelectorAll("[data-edit-id]").forEach(btn=>{
+      btn.onclick=()=>window.__edit(btn.dataset.editId);
+    });
+    c.querySelectorAll("[data-remove-id]").forEach(btn=>{
+      btn.onclick=()=>window.__remove(btn.dataset.removeId);
+    });
+  }
+
+  function openSavedItem(item){
+    const raw=String(item.url||"").trim();
+    if(!raw)return;
+    document.getElementById("reader").classList.remove("hidden");
+    const ok=navigate(raw);
+    if(ok){
+      document.getElementById("address").value=cleanNavigationUrl(raw);
+      document.getElementById("readerMode").textContent="阅读模式";
+      document.getElementById("readerModeStatus").textContent="当前：自动";
+    }
+  }
+
+  function updateBlockerUI(){
+    const on=!!blocker.enabled;
+    document.getElementById("blockSwitch").classList.toggle("on",on);
+    
+    document.getElementById("blockedCount").textContent=blockedCount;
+    document.getElementById("customRules").value=blocker.custom.join("\n");
+    document.getElementById("whitelistRules").value=blocker.whitelist.join("\n");
+    const siteOn=currentHost && whitelistRules().some(r=>hostMatches(currentHost,r));
+    document.getElementById("siteSwitch").classList.toggle("on",!!siteOn);
+    document.getElementById("siteStatus").textContent=currentHost?(siteOn?currentHost+" 已加入白名单":currentHost+" 正在使用拦截规则"):"打开网页后可设置当前网站";
+  }
+  // V4：更保守的广告选择器，避免把正常内容中带有“ad”的 class/id 误删。
+  const adSelectors=[
+    '[id^="ad-"]','[id^="ad_"]','[id$="-ad"]','[id$="_ad"]',
+    '[id^="ads-"]','[id^="ads_"]','[id^="advert-"]','[id^="advert_"]',
+    '[id^="sponsor-"]','[id^="sponsor_"]','[id^="promotion-"]','[id^="promotion_"]',
+    '.ad','.ads','.advert','.advertisement','.ad-banner','.ad-container','.ad-wrapper',
+    '.sponsor','.sponsored','.sponsor-box','.promotion','.promo',
+    '[aria-label*="advertisement" i]','[aria-label*="sponsored" i]','[aria-label*="广告"]','[aria-label*="推广"]',
+    'iframe[src*="doubleclick" i]','iframe[src*="googlesyndication" i]','iframe[src*="adnxs" i]'
+  ];
+  const adText=/^(广告|推广|赞助|sponsored|advertisement|advertising)$/i;
+  function injectPurifier(doc){
+    if(!doc || doc.getElementById("__reader_note_adblock_style"))return;
+    const style=doc.createElement("style");
+    style.id="__reader_note_adblock_style";
+    style.textContent=`
+      [id^="ad-"] ,[id^="ad_"] ,[id$="-ad"] ,[id$="_ad"],
+      [id^="ads-"] ,[id^="ads_"] ,[id^="advert-"] ,[id^="advert_"],
+      [id^="sponsor-"] ,[id^="sponsor_"] ,[id^="promotion-"] ,[id^="promotion_"],
+      .ad,.ads,.advert,.advertisement,.ad-banner,.ad-container,.ad-wrapper,
+      .sponsor,.sponsored,.sponsor-box,.promotion,.promo,
+      [aria-label*="advertisement" i],[aria-label*="sponsored" i],
+      [aria-label*="广告"],[aria-label*="推广"]{display:none!important;visibility:hidden!important;}
+      html.__rn_reader_mode body{max-width:900px!important;margin:auto!important;padding:18px!important;line-height:1.9!important;font-size:18px!important;}
+      html.__rn_reader_mode img{max-width:100%!important;height:auto!important;}
+      html.__rn_reader_mode header,html.__rn_reader_mode footer,html.__rn_reader_mode aside,html.__rn_reader_mode nav{display:none!important;}
+    `;
+    (doc.head||doc.documentElement).appendChild(style);
+  }
+  function elementLooksLikeAd(el){
+    const text=(el.getAttribute?.('aria-label')||'')+' '+(el.textContent||'').trim();
+    const meta=(el.id||'')+' '+(el.className?.toString?.()||'');
+    return adText.test(text.trim()) || /(^|[\s_-])(ad|ads|advert|advertisement|sponsor|sponsored|promo|promotion)([\s_-]|$)/i.test(meta);
+  }
+  function cleanSameOriginFrame(){
+    if(!blocker.enabled)return;
+    const frame=document.getElementById("frame");
+    try{
+      const doc=frame.contentDocument;
+      if(!doc)return;
+      injectPurifier(doc);
+      let removed=0;
+      const seen=new Set();
+      adSelectors.forEach(sel=>{
+        try{doc.querySelectorAll(sel).forEach(el=>{if(el!==doc.body&&el!==doc.documentElement&&!seen.has(el)){seen.add(el);el.remove();removed++;}})}catch(e){}
+      });
+      if(!doc.documentElement.hasAttribute("data-reader-note-observer")){
+        const observer=new MutationObserver(()=>{
+          if(!blocker.enabled)return;
+          let n=0;
+          adSelectors.forEach(sel=>{try{doc.querySelectorAll(sel).forEach(el=>{if(el!==doc.body&&el!==doc.documentElement&&!seen.has(el)){seen.add(el);el.remove();n++;}})}catch(e){}});
+          if(n){blockedCount+=n;updateBlockerUI();}
+        });
+        observer.observe(doc.documentElement,{subtree:true,childList:true});
+        doc.documentElement.setAttribute("data-reader-note-observer","1");
+      }
+      if(removed){blockedCount+=removed;updateBlockerUI();}
+    }catch(e){/* cross-origin: browser security boundary */}
+  }
+  function isProbablyTrackingUrl(u){
+    try{
+      const x=new URL(normalize(u));
+      const badPath=/(^|[\/_-])(ads?|advert|advertise|advertisement|banner|doubleclick|tracking|tracker|pixel|beacon|analytics)([\/_?=&.-]|$)/i.test(x.pathname+x.search);
+      return badPath;
+    }catch(e){return false}
+  }
+  function cleanNavigationUrl(u){
+    const x=new URL(normalize(u));
+    const trackingParams=/^(utm_[a-z0-9_]+|gclid|dclid|fbclid|msclkid|mc_cid|mc_eid|ref|ref_src|spm|from|share_source|share_token)$/i;
+    [...x.searchParams.keys()].forEach(k=>{if(trackingParams.test(k))x.searchParams.delete(k)});
+    x.hash='';
+    return x.href;
+  }
+  function pickArticle(doc){
+    const candidates=[...doc.querySelectorAll('article,main,[role="main"],.article,.post,.entry-content,.article-content,.post-content,.content')];
+    let best=null,score=-1;
+    for(const el of candidates){
+      const text=(el.innerText||'').trim();
+      if(text.length<180)continue;
+      const p=el.querySelectorAll('p').length;
+      const links=el.querySelectorAll('a').length;
+      const scoreNow=Math.min(text.length,12000)+p*160-links*8;
+      if(scoreNow>score){best=el;score=scoreNow;}
+    }
+    return best||doc.body;
+  }
+  function extractMainContent(){
+    const frame=document.getElementById('frame');
+    try{
+      const doc=frame.contentDocument;
+      if(!doc||!doc.body)throw new Error('no document');
+      const root=pickArticle(doc);
+      const clone=root.cloneNode(true);
+      clone.querySelectorAll(adSelectors.join(',')).forEach(el=>el.remove());
+      clone.querySelectorAll('script,style,noscript,iframe,form,nav,aside,footer,header').forEach(el=>el.remove());
+      const title=(doc.querySelector('h1')?.textContent||doc.title||'正文').trim();
+      const body=document.getElementById('extractBody');
+      body.innerHTML='';
+      const h=document.createElement('h1');h.textContent=title;body.appendChild(h);
+      const meta=document.createElement('div');meta.className='extractMeta';meta.textContent=new URL(frame.src).hostname;body.appendChild(meta);
+      const article=document.createElement('article');article.appendChild(clone);body.appendChild(article);
+      document.getElementById('extractPanel').classList.remove('hidden');
+      document.getElementById('extractStatus').textContent='已提取正文';
+    }catch(e){toast('该网页不允许直接提取正文（跨域限制）');}
+  }
+  function toggleReaderMode(){
+    const frame=document.getElementById("frame");
+    try{
+      const doc=frame.contentDocument;
+      if(!doc)throw new Error('no document');
+      injectPurifier(doc);
+      const on=!doc.documentElement.classList.contains('__rn_reader_mode');
+      doc.documentElement.classList.toggle('__rn_reader_mode',on);
+      document.getElementById('readerMode').textContent=on?'恢复原页':'阅读模式';
+      document.getElementById('readerModeStatus').textContent=on?'当前：净化阅读':'当前：原页面';
+      toast(on?'已切换到净化阅读模式':'已恢复原页面样式');
+    }catch(e){toast('该网站跨域，阅记已自动切换为净化网页模式');}
+  }
+  function navigate(url){
+    let clean;
+    try{clean=cleanNavigationUrl(url);}catch(e){toast("网址格式不正确");return false;}
+    if(blocker.enabled&&!isWhitelistedUrl(clean)&&(isBlockedUrl(clean)||isProbablyTrackingUrl(clean))){
+      blockedCount++;updateBlockerUI();toast("🛡️ 已拦截疑似广告/追踪网址");return false;
+    }
+    document.getElementById("frame").src=clean;
+    document.getElementById("address").value=clean;
+    try{currentHost=new URL(clean).hostname.toLowerCase();}catch(e){currentHost="";}
+    updateBlockerUI();
+    return true;
+  }
+  window.__newNote=()=>openModal();
+  window.__edit=id=>openModal(state.items.find(x=>x.id===id));
+  window.__remove=remove;
+
+  window.__openReader=()=>{
+    document.getElementById("reader").classList.remove("hidden");
+    document.getElementById("address").focus();
+  };
+  window.__reader=url=>{
+    const item=state.items.find(x=>x.url===url);
+    if(item){openSavedItem(item);return;}
+    document.getElementById("reader").classList.remove("hidden");
+    navigate(url);
+  };
+  function normalize(u){return /^https?:\/\//i.test(u)?u:"https://"+u}
+  document.getElementById("go").onclick=()=>{
+    const u=document.getElementById("address").value.trim();
+    if(!u)return;
+    navigate(u);
+  };
+  document.getElementById("address").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("go").click();});
+  document.getElementById("savePage").onclick=()=>{
+    const u=document.getElementById("address").value.trim();
+    if(!u)return;
+    const title=u.replace(/^https?:\/\//,"").split("/")[0];
+    state.items.unshift({id:crypto.randomUUID(),type:"saved",title,url:cleanNavigationUrl(u),body:"",tags:["网页"],created:Date.now(),updated:Date.now()});
+    persist();toast("网页已收藏");render();
+  };
+  document.getElementById("quickNote").onclick=()=>{
+    const u=document.getElementById("address").value.trim();
+    openModal({url:cleanNavigationUrl(u),tags:["摘录"]});
+  };
+  document.getElementById("frame").addEventListener("load",()=>{document.getElementById("readerMode").textContent="阅读模式";document.getElementById("readerModeStatus").textContent="当前：自动";try{currentHost=new URL(document.getElementById("frame").src).hostname.toLowerCase();}catch(e){currentHost="";}updateBlockerUI();cleanSameOriginFrame();});
+  document.getElementById("readerMode").onclick=toggleReaderMode;
+  document.getElementById("readerExtract").onclick=()=>{extractMainContent();};
+  document.getElementById("closeExtract").onclick=()=>document.getElementById("extractPanel").classList.add("hidden");
+  document.getElementById("sidebarBtn").onclick=()=>{
+    document.getElementById("sidebarOverlay").classList.remove("hidden");
+    updateBlockerUI();
+  };
+  document.getElementById("closeSidebar").onclick=()=>document.getElementById("sidebarOverlay").classList.add("hidden");
+  document.getElementById("sidebarOverlay").addEventListener("click",e=>{
+    if(e.target===document.getElementById("sidebarOverlay")) document.getElementById("sidebarOverlay").classList.add("hidden");
+  });
+  document.getElementById("blockSwitch").onclick=()=>{
+    blocker.enabled=!blocker.enabled;
+    persistBlocker();
+    updateBlockerUI();
+    if(blocker.enabled)cleanSameOriginFrame();
+    toast(blocker.enabled?"广告拦截已开启":"广告拦截已关闭");
+  };
+  document.getElementById("customRules").onchange=()=>{
+    blocker.custom=document.getElementById("customRules").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    persistBlocker();updateBlockerUI();
+  };
+  document.getElementById("whitelistRules").onchange=()=>{
+    blocker.whitelist=document.getElementById("whitelistRules").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    persistBlocker();updateBlockerUI();
+  };
+  document.getElementById("resetBlocked").onclick=()=>{blockedCount=0;updateBlockerUI();};
+  document.getElementById("siteSwitch").onclick=()=>{
+    if(!currentHost)return;
+    const list=new Set(whitelistRules());
+    if(list.has(currentHost))list.delete(currentHost);else list.add(currentHost);
+    blocker.whitelist=[...list];persistBlocker();updateBlockerUI();
+    toast(list.has(currentHost)?"已加入当前网站白名单":"已恢复当前网站拦截");
+  };
+  document.getElementById("closeReader").onclick=()=>{
+    document.getElementById("reader").classList.add("hidden");
+    document.getElementById("extractPanel").classList.add("hidden");
+    document.getElementById("sidebarOverlay").classList.add("hidden");
+  };
+  document.getElementById("newBtn").onclick=()=>openModal();
+  document.getElementById("cancelBtn").onclick=closeModal;
+  document.getElementById("saveBtn").onclick=save;
+  document.getElementById("search").oninput=render;
+  document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+    tab=b.dataset.tab;
+    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));
+    render();
+  });
+  render();
+  updateBlockerUI();
+})();
+</script>
+</body>
+</html>
