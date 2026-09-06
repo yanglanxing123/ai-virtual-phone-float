@@ -11,7 +11,7 @@ import {
   loadRegexes,
   resolveBinding,
 } from "./settings-storage";
-import type { ApiConfig, PresetConfig, RegexConfig, WorldBookConfig } from "./settings-types";
+import type { ApiConfig, PresetConfig, RegexConfig, WorldBookConfig, BindingSlot } from "./settings-types";
 import type { XiashuMessage, XiashuStatus, TavernRegexScript } from "./xiashu-types";
 import { XIASHU_APP_ID } from "./xiashu-types";
 import { loadRegexScripts } from "./xiashu-storage";
@@ -97,6 +97,7 @@ function buildSystemPrompt(
   character: Character,
   history: XiashuMessage[],
   userName: string,
+  worldBookEntries?: { key: string; content: string }[],
 ): string {
   const persona = character.persona || "";
   const personality = character.personality || "";
@@ -108,6 +109,14 @@ ${persona}`;
 
   if (personality) {
     prompt += `\n\n【角色性格】\n${personality}`;
+  }
+
+  // 注入世界书条目
+  if (worldBookEntries && worldBookEntries.length > 0) {
+    prompt += `\n\n【世界书 / 背景设定】`;
+    for (const entry of worldBookEntries) {
+      prompt += `\n[${entry.key}]\n${entry.content}`;
+    }
   }
 
   prompt += `\n\n【对话规则】
@@ -125,19 +134,69 @@ ${persona}`;
   return prompt;
 }
 
+// ── 加载并过滤世界书条目 ─────────────────────────────
+function loadActiveWorldBookEntries(
+  characterId: string,
+  history: XiashuMessage[],
+  slot: BindingSlot,
+): { key: string; content: string }[] {
+  if (!slot.worldBookIds || slot.worldBookIds.length === 0) return [];
+
+  const allBooks = loadWorldBooks();
+  const boundBooks = allBooks.filter(b => slot.worldBookIds!.includes(b.id));
+  if (boundBooks.length === 0) return [];
+
+  // 取最近几条对话文本作为关键词匹配源
+  const recentText = history.slice(-5).map(m => m.content).join(" ");
+
+  const result: { key: string; content: string }[] = [];
+  for (const book of boundBooks) {
+    for (const entry of book.entries) {
+      if (entry.disable) continue;
+      // constant 条目始终注入
+      if (entry.constant) {
+        result.push({ key: entry.comment || entry.key, content: entry.content });
+        continue;
+      }
+      // 关键词匹配
+      if (entry.key) {
+        const keys = entry.use_regex
+          ? [entry.key]
+          : entry.key.split(",").map(k => k.trim()).filter(Boolean);
+        for (const k of keys) {
+          try {
+            if (entry.use_regex) {
+              const regex = new RegExp(k, "i");
+              if (regex.test(recentText)) {
+                result.push({ key: entry.comment || entry.key, content: entry.content });
+                break;
+              }
+            } else if (recentText.includes(k)) {
+              result.push({ key: entry.comment || entry.key, content: entry.content });
+              break;
+            }
+          } catch { /* regex error, skip */ }
+        }
+      }
+    }
+  }
+  return result;
+}
+
 // ── 构建聊天消息列表 ─────────────────────────────────
 function buildChatMessages(
   character: Character,
   history: XiashuMessage[],
   userMessage: string,
   userName: string,
+  worldBookEntries?: { key: string; content: string }[],
 ): { role: string; content: string }[] {
   const messages: { role: string; content: string }[] = [];
 
   // 系统提示词
   messages.push({
     role: "system",
-    content: buildSystemPrompt(character, history, userName),
+    content: buildSystemPrompt(character, history, userName, worldBookEntries),
   });
 
   // 历史对话（最多取最近 20 条）
@@ -175,6 +234,9 @@ export async function generateReply(
   const bindings = loadBindingConfig();
   const slot = resolveBinding(bindings, characterId, XIASHU_APP_ID);
 
+  // 加载世界书条目（常驻 + 关键词匹配）
+  const worldBookEntries = loadActiveWorldBookEntries(characterId, history, slot);
+
   // 加载 API 配置
   const apiConfigs = loadApiConfigs();
   let apiConfig: ApiConfig | undefined;
@@ -203,7 +265,7 @@ export async function generateReply(
   }
 
   // 构建聊天消息
-  const messages = buildChatMessages(character, history, userMessage, userName);
+  const messages = buildChatMessages(character, history, userMessage, userName, worldBookEntries);
 
   // 调用 LLM
   const rawText = await sendLLMRequest(

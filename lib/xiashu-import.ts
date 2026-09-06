@@ -1,7 +1,8 @@
 // lib/xiashu-import.ts — 酒馆格式导入器
 // 解析 SillyTavern V2/V3 PNG 角色卡，转换为仓库 Character 格式
 import type { Character } from "./character-types";
-import type { XiashuImportResult, TavernCardV2, TavernWorldBook } from "./xiashu-types";
+import type { XiashuImportResult, TavernCardV2, TavernWorldBook, TavernWorldBookEntry } from "./xiashu-types";
+import type { WorldBookConfig, WorldBookEntry } from "./settings-types";
 
 // ── PNG tEXt chunk 读取 ──────────────────────────────
 function readPngTextChunk(u8: Uint8Array, keywords: string[]): string | null {
@@ -212,4 +213,50 @@ export function parseTavernCardFromJson(text: string): XiashuImportResult | null
   } catch {
     return null;
   }
+}
+
+// ── 转换酒馆世界书为宿主 WorldBookConfig 格式 ───────
+export function convertWorldBook(
+  wb: TavernWorldBook,
+  fallbackName: string,
+): WorldBookConfig {
+  const now = Date.now();
+  const id = `wb_${now}_${Math.random().toString(36).slice(2, 7)}`;
+
+  // entries 可能是数组或字典
+  let rawEntries: TavernWorldBookEntry[];
+  if (Array.isArray(wb.entries)) {
+    rawEntries = wb.entries;
+  } else if (wb.entries && typeof wb.entries === "object") {
+    rawEntries = Object.values(wb.entries);
+  } else {
+    rawEntries = [];
+  }
+
+  const entries: WorldBookEntry[] = rawEntries.map((e, i) => ({
+    uid: `wbe_${now}_${i}`,
+    key: Array.isArray(e.keys) ? e.keys.join(",") : (e.keys as unknown as string || ""),
+    content: e.content || "",
+    comment: e.comment || "",
+    use_regex: e.use_regex || false,
+    disable: e.enabled === false,
+    constant: e.constant || false,
+    position: typeof e.position === "number"
+      ? e.position
+      : (e.position as string) || "before_char",
+    depth: 0,
+    probability: 100,
+    useProbability: false,
+    role: 0,
+    insertion_order: e.insertion_order || 50,
+  }));
+
+  return {
+    id,
+    name: wb.name || fallbackName,
+    description: wb.description || "",
+    createdAt: now,
+    updatedAt: now,
+    entries,
+  };
 }
