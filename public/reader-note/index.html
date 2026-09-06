@@ -63,6 +63,18 @@ button{cursor:pointer}
 .rulebox{font-size:11px;color:var(--sub);background:#faf7f2;border:1px solid var(--line);border-radius:10px;padding:9px;white-space:pre-wrap;word-break:break-all}
 .extractPanel{position:fixed;inset:0;background:var(--paper);z-index:32;display:flex;flex-direction:column}.extractHead{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}.extractBody{flex:1;overflow:auto;padding:22px 18px 50px;max-width:900px;width:100%;margin:auto}.extractBody h1{font-size:25px;line-height:1.35;margin:0 0 12px}.extractBody .extractMeta{font-size:12px;color:var(--sub);margin-bottom:18px}.extractBody article{font-size:18px;line-height:1.9}.extractBody img{max-width:100%;height:auto}.noteFab{position:fixed;right:18px;bottom:20px;z-index:31;width:48px;height:48px;border:0;border-radius:50%;background:var(--accent);color:white;font-size:20px;box-shadow:0 5px 18px rgba(0,0,0,.18)}
 small.tip{display:block;color:var(--sub);margin-top:8px;font-size:11px}
+
+    .reader-mode-status{
+      display:inline-flex;align-items:center;justify-content:center;
+      min-width:34px;height:24px;padding:0 7px;border:1px solid #e5dfd5;
+      border-radius:999px;background:#fffdf9;color:#6d665c;font-size:11px;
+      font-weight:700;white-space:nowrap;
+    }
+    .extract-note{
+      margin:12px 0 0;padding:10px 12px;border-radius:12px;
+      background:#f6f1e8;color:#6f675c;font-size:12px;line-height:1.55;
+    }
+    
 </style>
 </head>
 <body>
@@ -114,7 +126,7 @@ news.example.com"></textarea></div>
     <button id="go">打开</button>
     <button id="shield" class="shield" title="广告拦截">🛡️</button>
     <button id="readerMode" title="净化阅读">阅读</button>
-    <button id="readerExtract" title="提取正文">正文</button>
+    <span id="readerModeStatus" class="reader-mode-status">自动</span><button id="readerExtract" title="提取正文">正文</button>
     <button id="savePage">收藏</button>
   </div>
   <iframe class="readerframe" id="frame"></iframe>
@@ -347,7 +359,7 @@ news.example.com"></textarea></div>
       doc.documentElement.classList.toggle('__rn_reader_mode',on);
       document.getElementById('readerMode').textContent=on?'原页':'阅读';
       toast(on?'已切换到净化阅读模式':'已恢复原页面样式');
-    }catch(e){toast('该网页不允许阅记直接进入阅读模式（跨域限制）');}
+    }catch(e){toast('该网站跨域，阅记已自动切换为净化网页模式');}
   }
   function navigate(url){
     let clean;
@@ -393,7 +405,7 @@ news.example.com"></textarea></div>
   };
   document.getElementById("frame").addEventListener("load",()=>{document.getElementById("readerMode").textContent="阅读";try{currentHost=new URL(document.getElementById("frame").src).hostname.toLowerCase();}catch(e){currentHost="";}updateBlockerUI();cleanSameOriginFrame();});
   document.getElementById("readerMode").onclick=toggleReaderMode;
-  document.getElementById("readerExtract").onclick=extractMainContent;
+  document.getElementById("readerExtract").onclick=()=>{extractMainContent();};
   document.getElementById("closeExtract").onclick=()=>document.getElementById("extractPanel").classList.add("hidden");
   document.getElementById("shield").onclick=()=>{document.getElementById("blockerModal").classList.remove("hidden");updateBlockerUI();};
   document.getElementById("blockSwitch").onclick=()=>{blocker.enabled=!blocker.enabled;persistBlocker();updateBlockerUI();if(blocker.enabled)cleanSameOriginFrame();toast(blocker.enabled?"广告拦截已开启":"广告拦截已关闭");};
