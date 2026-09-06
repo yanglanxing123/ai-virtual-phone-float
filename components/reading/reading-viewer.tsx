@@ -269,60 +269,8 @@ type Props = {
     onBack: () => void;
 };
 
-function MangaImage({ url }: { url: string }) {
-    const [src, setSrc] = useState(url);
-    const objectUrlRef = useRef<string | null>(null);
-
-    useEffect(() => {
-        let cancelled = false;
-        const load = async () => {
-            try {
-                const response = await fetch("/api/reading/source", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        url,
-                        asset: true,
-                        timeoutMs: 20000,
-                        headers: { Referer: "https://guiwb.nnmh.info/" },
-                    }),
-                });
-                if (!response.ok) return;
-                const blob = await response.blob();
-                if (!blob.size || cancelled) return;
-                const objectUrl = URL.createObjectURL(blob);
-                objectUrlRef.current = objectUrl;
-                setSrc(objectUrl);
-            } catch {
-                // 代理失败时保留原图地址作为回退。
-            }
-        };
-        void load();
-        return () => {
-            cancelled = true;
-            if (objectUrlRef.current) {
-                URL.revokeObjectURL(objectUrlRef.current);
-                objectUrlRef.current = null;
-            }
-        };
-    }, [url]);
-
-    return (
-        <div className="reading-manga-image-wrap" data-no-nav="true">
-            <img
-                className="reading-manga-image"
-                src={src}
-                alt=""
-                loading="lazy"
-                referrerPolicy="no-referrer"
-            />
-        </div>
-    );
-}
-
 export function ReadingViewer({ book, onBack }: Props) {
     const isPdf = book.format === "pdf";
-    const isManga = (book as Book & { readerType?: string }).readerType === "manga";
     const [readingConfig, setReadingConfig] = useState(() => loadReadingInteractionConfig());
     const [chapters, setChapters] = useState<BookChapter[]>([]);
     const [chapterIndex, setChapterIndex] = useState(0);
@@ -500,7 +448,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                     )}
                                 </div>
                             )
-                            : item.text.startsWith("[[MANGA_IMAGE]]") ? <MangaImage key={i} url={item.text.slice("[[MANGA_IMAGE]]".length).trim()} /> : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
+                            : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
                 ))}
             </div>
         );
@@ -528,7 +476,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                     data-chapter-index={chapterIdx}
                                     data-paragraph-index={paragraphIndex}
                                 >
-                                    {segment.startsWith("[[MANGA_IMAGE]]") ? <MangaImage url={segment.slice("[[MANGA_IMAGE]]".length).trim()} /> : segment}
+                                    {segment}
                                 </p>
                             ))}
                             {(annotationMap.get(paragraphIndex) || []).map((annotation) => (
@@ -584,7 +532,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                             <span className="reading-annotation-name">{item.annotation.characterName}</span>
                             <span className="reading-annotation-text">{item.annotation.content}</span>
                         </div>
-                        : item.text.startsWith("[[MANGA_IMAGE]]") ? <MangaImage key={i} url={item.text.slice("[[MANGA_IMAGE]]".length).trim()} /> : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
+                        : <p key={i} className={`reading-line${item.indent ? " reading-line-indent" : ""}${item.segEnd ? " reading-line-seg-end" : ""}`} data-paragraph-index={item.paragraphIndex}>{item.text}</p>
             )}
         </div>
     );
@@ -1912,7 +1860,7 @@ export function ReadingViewer({ book, onBack }: Props) {
     }, [flipAnim, isPdf, txtPages, txtPage, txtTotalPages, chapterIndex, chapters.length]);
 
     const switchReadingMode = useCallback((mode: "continuous" | "page") => {
-        if (isPdf || isManga || mode === readingMode) return;
+        if (isPdf || mode === readingMode) return;
         const body = scrollRef.current;
         if (mode === "page") {
             if (body && txtPages.length > 1) {
@@ -1926,7 +1874,7 @@ export function ReadingViewer({ book, onBack }: Props) {
         }
         setReadingMode(mode);
         try { window.localStorage.setItem(`reading-mode:${book.id}`, mode); } catch { /* ignore */ }
-    }, [book.id, isPdf, isManga, readingMode, txtPage, txtPages.length]);
+    }, [book.id, isPdf, readingMode, txtPage, txtPages.length]);
 
     const handleReadingMarginChange = useCallback((value: number) => {
         const next = Math.max(8, Math.min(48, Math.round(value)));

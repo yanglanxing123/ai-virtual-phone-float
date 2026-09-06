@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { BookOpen, Library, Search, Palette, Compass, X, Upload, Trash2, MoreVertical, LogIn, Plus, ChevronRight, RefreshCw } from "lucide-react";
+import { BookOpen, Library, Search, Palette, X, Upload, Trash2, MoreVertical, LogIn, Plus, ChevronRight, RefreshCw } from "lucide-react";
 import { hydrateReadingStorage } from "@/lib/reading-storage";
 import { ReadingShelf } from "./reading-shelf";
 import { ReadingViewer } from "./reading-viewer";
@@ -37,19 +37,19 @@ import { importReadingSources, loadReadingSources, removeReadingSource, setReadi
 import { fetchReadingSourceModule, getGenericCatalog, getGenericDetail, searchGenericSource, type GenericSourceBook, type GenericSourceChapter, type GenericSourceDetail } from "@/lib/reading-source-engine";
 import "./reading-hub.css";
 
-type Tab = "home" | "discovery" | "shelf" | "sources" | "appearance";
+type Tab = "home" | "shelf" | "sources" | "appearance";
 
 type HomeModule = { id: string; title: string; url: string; sourceId: string; enabled: boolean; };
 
 type LoginField = { name: string; type: string; action?: string };
 
 const SHUSHAN_SOURCE_VALUES: Record<string, string> = {
-  sou0: "", sou1: "番茄小说", sou2: "番茄听书", sou3: "番茄畅听", sou4: "番茄漫画", sou5: "番茄短剧",
+  sou0: "", sou1: "番茄小说", sou2: "番茄听书", sou3: "番茄畅听", sou5: "番茄短剧",
   sou6: "七猫", sou7: "起点", sou8: "企鹅看书", sou9: "书旗", sou10: "60看书", sou11: "半夏", sou12: "69书吧",
   sou13: "得间", sou14: "知乎", sou15: "茶马", sou16: "爱下电子书", sou17: "笔趣阁", sou18: "米读", sou19: "追书神器",
   sou20: "小米阅读", sou21: "猫眼看书", sou22: "圣武书屋", sou23: "疯读", sou24: "淘小说", sou25: "思兔", sou26: "甜梦文库",
-  sou27: "三七轻小说", sou28: "歪瑞古德", sou29: "包子漫画", sou30: "西瓜", sou31: "速读谷", sou32: "919", sou33: "七猫短剧",
-  sou34: "69书吧co", sou35: "笔下小说", sou36: "百度", sou37: "酷我", sou38: "笔趣阁78", sou39: "全面漫画", sou40: "书音",
+  sou27: "三七轻小说", sou28: "歪瑞古德", sou30: "西瓜", sou31: "速读谷", sou32: "919", sou33: "七猫短剧",
+  sou34: "69书吧co", sou35: "笔下小说", sou36: "百度", sou37: "酷我", sou38: "笔趣阁78", sou40: "书音",
   sou41: "云端", sou42: "全本", sou43: "红牛小说", sou44: "3a中文", sou45: "萝卜", sou46: "精品", sou47: "喜马拉雅",
   sou48: "万相书城", sou49: "得奇", sou50: "台湾", sou51: "QQ阅读", sou52: "书耽网", sou53: "云图有声", sou54: "番薯小说", sou55: "晋江",
 };
@@ -87,24 +87,11 @@ const DEFAULT_READING_CUSTOM_CSS = `/* 阅读 APP 全局主题：参考聊天 AP
 
 
 
-function sourceReaderType(source: ReadingBookSource | null | undefined): "manga" | "text" {
-  return source && (source.raw as any)?.bookSourceType === 2 ? "manga" : "text";
-}
-
-function isMangaSource(source: ReadingBookSource | null | undefined) {
-  if (!source) return false;
-  const raw = source.raw as any;
-  return raw?.bookSourceType === 2 || /楠楠漫画|nnmh\.info/i.test(`${source.name} ${source.url}`);
-}
-
-function getSourceTypeLabel(source: ReadingBookSource | null | undefined) {
-  return sourceReaderType(source) === "manga" ? "漫画" : "小说";
-}
 
 /**
  * loginUi 在 Legado 书源里并不等于“需要登录”。
  * 很多书源会用 loginUi 保存地址、测速、发布页等普通设置，甚至 loginUrl 只是空函数。
- * 因此只有真正存在登录动作/凭据字段时才显示“登录”，避免无登录漫画源被误判。
+ * 因此只有真正存在登录动作/凭据字段时才显示“登录”，避免无登录书源被误判。
  */
 function sourceNeedsLogin(source: ReadingBookSource | null | undefined) {
   if (!source) return false;
@@ -140,8 +127,6 @@ function getTitle(tab: Tab) {
   switch (tab) {
     case "home":
       return "首页";
-    case "discovery":
-      return "发现";
     case "shelf":
       return "书架";
     case "sources":
@@ -334,7 +319,7 @@ function discoverSourceModules(source: ReadingBookSource): Array<{ title: string
     return items;
   }
 
-  // 楠楠漫画的 exploreUrl 是标准 Legado 发现页 JSON 数组，
+  // 部分书源的 exploreUrl 是标准 Legado 发现页 JSON 数组，
   // 这里原样读取模块标题与请求地址，不把分类硬编码进 App。
   if ((source.raw as any)?.enabledExplore) {
     try {
@@ -369,10 +354,9 @@ export default function ReadingApp({ onClose }: Props) {
   const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceMessage, setSourceMessage] = useState("");
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false);
-  const [sourceDrawerMode, setSourceDrawerMode] = useState<"home" | "discovery" | "search">("search");
-  const [sourceImportTarget, setSourceImportTarget] = useState<"home" | "discovery" | "search">("search");
+  const [sourceDrawerMode, setSourceDrawerMode] = useState<"home" | "search">("search");
+  const [sourceImportTarget, setSourceImportTarget] = useState<"home" | "search">("search");
   const [homeSourceIds, setHomeSourceIds] = useState<string[]>([]);
-  const [discoverySourceIds, setDiscoverySourceIds] = useState<string[]>([]);
   const [sourceLoginOpen, setSourceLoginOpen] = useState(false);
   const [loginFields, setLoginFields] = useState<Record<string, string>>({});
   const [homeModules, setHomeModules] = useState<HomeModule[]>([]);
@@ -382,7 +366,6 @@ export default function ReadingApp({ onClose }: Props) {
   const [homeModuleTitle, setHomeModuleTitle] = useState("");
   const [homeModuleUrl, setHomeModuleUrl] = useState("");
   const [homeModuleSourceId, setHomeModuleSourceId] = useState("");
-  const [discoveryModuleSourceId, setDiscoveryModuleSourceId] = useState("");
   const [selectedSourceBook, setSelectedSourceBook] = useState<ShushanSearchBook | null>(null);
   const [sourceDetail, setSourceDetail] = useState<ShushanSearchBook | null>(null);
   const [sourceChapters, setSourceChapters] = useState<ShushanChapter[]>([]);
@@ -472,7 +455,10 @@ export default function ReadingApp({ onClose }: Props) {
       const savedCss = window.localStorage.getItem(READING_CUSTOM_CSS_KEY);
       if (savedCss !== null) setCustomCss(savedCss);
     } catch {}
-    const installed = loadReadingSources();
+    const installed = loadReadingSources().filter((item) => {
+      const raw = item.raw as any;
+      return raw?.bookSourceType !== 2 && !/楠楠漫画|nnmh\.info/i.test(`${item.name} ${item.url}`);
+    });
     try {
       const savedModules = JSON.parse(window.localStorage.getItem("reading-home-modules-v2") || "[]");
       if (Array.isArray(savedModules)) setHomeModules(savedModules);
@@ -480,78 +466,31 @@ export default function ReadingApp({ onClose }: Props) {
     setBookSources(installed);
     const installedIds = new Set(installed.map((item) => item.id));
     let savedHomeSourceIds: string[] | null = null;
-    let savedDiscoverySourceIds: string[] | null = null;
     try {
       const homeRaw = JSON.parse(window.localStorage.getItem("reading-home-source-ids-v1") || "null");
       if (Array.isArray(homeRaw)) savedHomeSourceIds = homeRaw.filter((id): id is string => typeof id === "string" && installedIds.has(id));
     } catch {}
-    try {
-      const discoveryRaw = JSON.parse(window.localStorage.getItem("reading-discovery-source-ids-v1") || "null");
-      if (Array.isArray(discoveryRaw)) savedDiscoverySourceIds = discoveryRaw.filter((id): id is string => typeof id === "string" && installedIds.has(id));
-    } catch {}
-    const defaultHomeSourceIds = installed.filter((item) => !isMangaSource(item)).map((item) => item.id);
-    const defaultDiscoverySourceIds = installed.filter((item) => isMangaSource(item)).map((item) => item.id);
-    const nextHomeSourceIds = savedHomeSourceIds ?? defaultHomeSourceIds;
-    const nextDiscoverySourceIds = savedDiscoverySourceIds ?? defaultDiscoverySourceIds;
+    const nextHomeSourceIds = savedHomeSourceIds ?? installed.map((item) => item.id);
     setHomeSourceIds(nextHomeSourceIds);
-    setDiscoverySourceIds(nextDiscoverySourceIds);
     try {
       window.localStorage.setItem("reading-home-source-ids-v1", JSON.stringify(nextHomeSourceIds));
-      window.localStorage.setItem("reading-discovery-source-ids-v1", JSON.stringify(nextDiscoverySourceIds));
+      window.localStorage.removeItem("reading-discovery-source-ids-v1");
     } catch {}
-    const firstNovelSource = installed.find((item) => item.enabled && !isMangaSource(item)) || installed.find((item) => !isMangaSource(item));
-    const firstSourceId = firstNovelSource?.id || installed.find((item) => item.enabled)?.id || installed[0]?.id || "";
+
+    const firstSource = installed.find((item) => item.enabled) || installed[0];
+    const firstSourceId = firstSource?.id || "";
     setSelectedSourceId(firstSourceId);
-    setHomeModuleSourceId(firstNovelSource?.id || firstSourceId);
-    const firstMangaSource = installed.find((item) => item.enabled && isMangaSource(item)) || installed.find(isMangaSource);
-    setDiscoveryModuleSourceId(firstMangaSource?.id || "");
+    setHomeModuleSourceId(firstSourceId);
+
     let savedModules: unknown[] = [];
     try {
       const rawModules = JSON.parse(window.localStorage.getItem("reading-home-modules-v2") || "[]");
       savedModules = Array.isArray(rawModules) ? rawModules : [];
     } catch {}
-    // 首次使用时给一个真正来自发现页的细分榜单示例；之后完全由用户管理。
-    const shouldRepairDiscoverModules = savedModules.length > 0 && savedModules.every((item: any) => {
-      const url = String(item?.url || "");
-      const title = String(item?.title || "");
-      return /vossc\.com/i.test(url) && (/女频|男频|榜|快穿|年代|玄幻|都市|分类/.test(title));
-    });
-    {
-      const selected = installed.find(item => item.id === firstSourceId);
-      if (selected) {
-        const discovered = discoverSourceModules(selected);
-        const sourceSaved = savedModules.filter((item: any) => item && item.sourceId === firstSourceId);
-        let finalModules = savedModules as HomeModule[];
-
-        if (selected.adapter === "shushan") {
-          const byTitle = new Map(discovered.map(item => [item.title, item.url]));
-          const isDiscoverTitle = (title: string) => /^(?:女频|男频)(?:阅读榜|新书榜)\s*·/.test(title);
-          const repaired = savedModules.map((item: any) => {
-            if (!item || typeof item !== "object") return item;
-            const title = String(item.title || "");
-            const freshUrl = byTitle.get(title);
-            if (!freshUrl || !isDiscoverTitle(title) || item.sourceId !== firstSourceId) return item;
-            return { ...item, url: freshUrl, enabled: item.enabled !== false };
-          });
-          const hasDiscover = repaired.some((item: any) => item && item.sourceId === firstSourceId && isDiscoverTitle(String(item.title || "")));
-          finalModules = repaired as HomeModule[];
-          if (!hasDiscover) {
-            const preferred = discovered.find(item => /女频新书榜\s*·\s*快穿/.test(item.title));
-            const defaults = discovered.filter(item => /女频(?:阅读榜|新书榜)\s*·/.test(item.title)).slice(0, 4);
-            const initial = [preferred, ...defaults].filter((item, i, arr) => item && arr.findIndex(x => x?.url === item.url) === i).slice(0, 5);
-            const additions = initial.map((item, i) => ({ id: `${firstSourceId}_discover_${i}`, title: item!.title, url: item!.url, sourceId: firstSourceId, enabled: true }));
-            finalModules = [...additions, ...finalModules];
-          }
-        } else if (discovered.length && sourceSaved.length === 0) {
-          const additions = discovered.slice(0, 8).map((item, i) => ({ id: `${firstSourceId}_discover_${i}`, title: item.title, url: item.url, sourceId: firstSourceId, enabled: true }));
-          finalModules = [...additions, ...finalModules];
-        }
-
-        if (JSON.stringify(finalModules) !== JSON.stringify(savedModules)) {
-          setHomeModules(finalModules);
-          try { window.localStorage.setItem("reading-home-modules-v2", JSON.stringify(finalModules)); } catch {}
-        }
-      }
+    const validModules = (savedModules as any[]).filter((item) => item && installedIds.has(String(item.sourceId)));
+    if (JSON.stringify(validModules) !== JSON.stringify(savedModules)) {
+      setHomeModules(validModules as HomeModule[]);
+      try { window.localStorage.setItem("reading-home-modules-v2", JSON.stringify(validModules)); } catch {}
     }
 
     void loadReadingBackground().then((blob) => {
@@ -633,32 +572,21 @@ export default function ReadingApp({ onClose }: Props) {
     }
   };
 
-  const persistSourceSet = (kind: "home" | "discovery", ids: string[]) => {
+  const persistSourceSet = (kind: "home", ids: string[]) => {
     const unique = [...new Set(ids)];
-    if (kind === "home") setHomeSourceIds(unique);
-    else setDiscoverySourceIds(unique);
-    try {
-      window.localStorage.setItem(kind === "home" ? "reading-home-source-ids-v1" : "reading-discovery-source-ids-v1", JSON.stringify(unique));
-    } catch {}
+    setHomeSourceIds(unique);
+    try { window.localStorage.setItem("reading-home-source-ids-v1", JSON.stringify(unique)); } catch {}
   };
 
-  const sourceIdsForDrawer = sourceDrawerMode === "home" ? homeSourceIds : sourceDrawerMode === "discovery" ? discoverySourceIds : bookSources.map((source) => source.id);
-  const drawerSources = bookSources.filter((source) => {
-    if (!sourceIdsForDrawer.includes(source.id)) return false;
-    if (sourceDrawerMode === "home") return !isMangaSource(source);
-    if (sourceDrawerMode === "discovery") return isMangaSource(source);
-    return true;
-  });
-  const openSourceDrawer = (mode: "home" | "discovery" | "search") => {
+  const sourceIdsForDrawer = sourceDrawerMode === "home" ? homeSourceIds : bookSources.map((source) => source.id);
+  const drawerSources = bookSources.filter((source) => sourceIdsForDrawer.includes(source.id));
+
+  const openSourceDrawer = (mode: "home" | "search") => {
     setSourceDrawerMode(mode);
     setSourceImportTarget(mode);
     if (mode === "home" && !homeModuleSourceId) {
-      const first = bookSources.find((source) => homeSourceIds.includes(source.id)) || bookSources.find((source) => source.enabled && !isMangaSource(source)) || bookSources.find((source) => !isMangaSource(source));
+      const first = bookSources.find((source) => homeSourceIds.includes(source.id)) || bookSources.find((source) => source.enabled);
       if (first) setHomeModuleSourceId(first.id);
-    }
-    if (mode === "discovery" && !discoveryModuleSourceId) {
-      const first = bookSources.find((source) => discoverySourceIds.includes(source.id)) || bookSources.find(isMangaSource);
-      if (first) setDiscoveryModuleSourceId(first.id);
     }
     setSourceDrawerOpen(true);
   };
@@ -824,7 +752,7 @@ export default function ReadingApp({ onClose }: Props) {
     if (!homeDetailBook) return;
     const source = bookSources.find((item) => item.id === homeDetailSourceId);
     if (!source) {
-      setHomeDetailMessage("书源不存在，请重新打开这本漫画");
+      setHomeDetailMessage("书源不存在，请重新打开这本书");
       return;
     }
     const chapters = homeDetailChapters.filter((chapter) => !chapter.isVolume);
@@ -873,7 +801,7 @@ export default function ReadingApp({ onClose }: Props) {
         chapters,
       });
     } else {
-      // 漫画/普通通用书源不能写入书山专用存储，否则 ReadingViewer 找不到 sourceId，
+      // 普通通用书源不能写入书山专用存储，否则 ReadingViewer 找不到 sourceId，
       // 结果就是“详情能打开，但加入书架/开始阅读没有实际作用”。
       saveReadingRemoteBook(id, {
         sourceId: source.id,
@@ -930,33 +858,6 @@ export default function ReadingApp({ onClose }: Props) {
     }
   };
 
-  const refreshDiscoveryModule = async (module: HomeModule) => {
-    setHomeModuleLoading(module.id);
-    try {
-      const source = bookSources.find((item) => item.id === module.sourceId);
-      if (!source) throw new Error("发现页书源不存在");
-      if (sourceReaderType(source) !== "manga") throw new Error("发现页仅支持漫画书源");
-      const parsed = await fetchReadingSourceModule(source, module.url, 1);
-      const rawBooks = extractHomeBooks(parsed);
-      // 发现页是漫画列表：站点返回对象经常同时出现在外层和嵌套字段里，
-      // 这里按“书名”再去重一次，避免同一本漫画出现“有封面 + 无封面”两张卡。
-      const seenTitles = new Set<string>();
-      const books = rawBooks.filter((book) => {
-        const key = String(book.title || "").replace(/\s+/g, "").trim().toLowerCase();
-        if (!key || seenTitles.has(key)) return false;
-        seenTitles.add(key);
-        return true;
-      });
-      setHomeModuleData((prev) => ({ ...prev, [module.id]: books }));
-      if (!books.length) throw new Error("漫画发现接口已返回，但没有识别到漫画数据");
-    } catch (error) {
-      setHomeModuleData((prev) => ({ ...prev, [module.id]: [] }));
-      setSourceMessage(error instanceof Error ? error.message : "发现模块加载失败");
-    } finally {
-      setHomeModuleLoading(null);
-    }
-  };
-
   const extractHomeBooks = (value: unknown): GenericSourceBook[] => {
     let normalized: any = value;
     for (let i = 0; i < 3 && typeof normalized === "string"; i += 1) {
@@ -997,53 +898,18 @@ export default function ReadingApp({ onClose }: Props) {
     return list.slice(0, 20);
   };
 
-  // 发现页与首页彻底分源：楠楠漫画只在发现页出现，并首次安装后自动生成它自己的发现模块。
-  useEffect(() => {
-    if (!ready || !bookSources.length) return;
-    const mangaSource = bookSources.find((item) => item.enabled && isMangaSource(item)) || bookSources.find(isMangaSource);
-    if (!mangaSource) return;
-    const discovered = discoverSourceModules(mangaSource);
-    if (!discovered.length) return;
-    setHomeModules((current) => {
-      const existing = new Set(current.filter((item) => item.sourceId === mangaSource.id).map((item) => `${item.title}|${item.url}`));
-      const additions = discovered.filter((item) => !existing.has(`${item.title}|${item.url}`)).map((item, index) => ({
-        id: `${mangaSource.id}_discovery_${index}_${Date.now()}`,
-        title: item.title,
-        url: item.url,
-        sourceId: mangaSource.id,
-        enabled: true,
-      }));
-      if (!additions.length) return current;
-      const next = [...current, ...additions];
-      try { window.localStorage.setItem("reading-home-modules-v2", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }, [ready, bookSources]);
-
   useEffect(() => {
     if (!ready || !homeModules.length || !bookSources.length) return;
-    // 首页自动加载小说模块；漫画模块由发现页单独加载。
+    // 首页自动加载已启用的书源模块。
     const pending = homeModules.filter((module) => {
       const source = bookSources.find((item) => item.id === module.sourceId);
-      return module.enabled && !!source && !isMangaSource(source) && homeModuleData[module.id] === undefined;
+      return module.enabled && !!source && homeModuleData[module.id] === undefined;
     });
     if (!pending.length) return;
     void Promise.all(pending.map((module) => refreshHomeModule(module)));
     // 只在模块数据尚未存在时自动首刷；手动刷新仍由右侧按钮触发。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, homeModules, bookSources]);
-
-  // 进入独立发现页后自动加载首个尚未加载的模块。
-  // 必须放在 ReadingApp 内，不能放进 NavButton，否则会访问不到页面状态。
-  useEffect(() => {
-    if (tab !== "discovery" || homeModuleLoading) return;
-    const pending = homeModules.find((module) => {
-      const source = bookSources.find((item) => item.id === module.sourceId);
-      return module.enabled && isMangaSource(source) && !homeModuleData[module.id];
-    });
-    if (pending) void refreshDiscoveryModule(pending);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, homeModules, homeModuleData, homeModuleLoading]);
 
   if (!ready) {
     return (
@@ -1194,60 +1060,10 @@ export default function ReadingApp({ onClose }: Props) {
                 <button type="button" className="reading-hub-desktop-back" onClick={onClose}>
                   ← 返回桌面
                 </button>
-                <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>排行榜</h2><p>首页管理小说书源，和发现页漫画源完全分开。</p></div><button type="button" className="reading-hub-icon-btn" onClick={() => openSourceDrawer("home")} aria-label="管理首页书源"><MoreVertical size={20} /></button></div>
-                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled && homeSourceIds.includes(x.sourceId) && !isMangaSource(bookSources.find(source => source.id === x.sourceId))).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={() => { void openHomeBookDetail(module, book); }}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
+                <div className="reading-hub-section"><div className="reading-hub-section-head"><div><h2>排行榜</h2><p>首页管理书源。</p></div><button type="button" className="reading-hub-icon-btn" onClick={() => openSourceDrawer("home")} aria-label="管理首页书源"><MoreVertical size={20} /></button></div>
+                  <div className="reading-hub-module-list">{homeModules.filter(x=>x.enabled && homeSourceIds.includes(x.sourceId)).map(module=><div key={module.id} className="reading-hub-module"><div className="reading-hub-module-head"><strong>{module.title}</strong><div className="reading-hub-module-actions"><button type="button" title="上移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>0){const next=[...homeModules];[next[i-1],next[i]]=[next[i],next[i-1]];persistHomeModules(next);}}}>↑</button><button type="button" title="下移" onClick={()=>{const i=homeModules.findIndex(x=>x.id===module.id);if(i>=0&&i<homeModules.length-1){const next=[...homeModules];[next[i],next[i+1]]=[next[i+1],next[i]];persistHomeModules(next);}}}>↓</button><button type="button" title="删除" onClick={()=>{persistHomeModules(homeModules.filter(x=>x.id!==module.id));setHomeModuleData(prev=>{const copy={...prev};delete copy[module.id];return copy;});}}>×</button><button type="button" title="刷新" onClick={() => { void refreshHomeModule(module); }}>{homeModuleLoading===module.id?<RefreshCw size={14} className="reading-spin"/>:<RefreshCw size={14}/>}</button></div></div>{homeModuleLoading===module.id&&!homeModuleData[module.id]&&<div className="reading-hub-module-empty">正在加载…</div>}{homeModuleData[module.id]?.length>0&&<div className="reading-hub-module-grid">{homeModuleData[module.id].map((book,i)=><button key={`${book.title}-${i}`} type="button" onClick={() => { void openHomeBookDetail(module, book); }}><div className="reading-hub-module-cover">{book.cover?<img src={book.cover} alt=""/>:<BookOpen size={19}/>}</div><strong>{book.title}</strong><small>{book.author||"未知作者"}</small></button>)}</div>}{!homeModuleData[module.id]&&<div className="reading-hub-module-empty">点击右侧刷新加载</div>}</div>)}</div>
                 </div>
                 </>
-                )}
-              </section>
-            )}
-
-            {tab === "discovery" && (
-              <section className="reading-hub-discovery-page">
-                <div className="reading-hub-search-hero">
-                  <div>
-                    <span>DISCOVER</span>
-                    <h2>发现漫画</h2>
-                    <p>{homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length} 个漫画发现模块 · 来自 {bookSources.find(source => discoverySourceIds.includes(source.id) && isMangaSource(source))?.name || "漫画书源"}</p>
-                  </div>
-                  <button type="button" className="reading-hub-icon-btn" onClick={() => openSourceDrawer("discovery")} aria-label="管理发现模块">
-                    <MoreVertical size={20} />
-                  </button>
-                </div>
-                {homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).length === 0 ? (
-                  <div className="reading-hub-section reading-hub-discovery-empty">
-                    <Compass size={28} />
-                    <strong>还没有发现内容</strong>
-                    <span>打开右上角书源管理，从当前书源的发现页添加榜单或分类。</span>
-                  </div>
-                ) : (
-                  <div className="reading-hub-discovery-modules">
-                    {homeModules.filter(x => x.enabled && discoverySourceIds.includes(x.sourceId) && isMangaSource(bookSources.find(source => source.id === x.sourceId))).map(module => (
-                      <section key={module.id} className="reading-hub-module">
-                        <div className="reading-hub-module-head">
-                          <strong>{module.title}</strong>
-                          <button type="button" onClick={() => { void refreshDiscoveryModule(module); }} disabled={homeModuleLoading === module.id}>
-                            {homeModuleLoading === module.id ? <RefreshCw size={14} className="reading-spin" /> : <RefreshCw size={14} />}
-                          </button>
-                        </div>
-                        {homeModuleData[module.id]?.length ? (
-                          <div className="reading-hub-module-grid">
-                            {homeModuleData[module.id].map((book, i) => (
-                              <button key={`${book.bookUrl}-${i}`} type="button" onClick={() => { void openHomeBookDetail(module, book); }}>
-                                <div className="reading-hub-module-cover">{book.cover ? <img src={normalizeRemoteUrl(book.cover, book.bookUrl)} alt="" /> : <BookOpen size={19} />}</div>
-                                <strong>{book.title}</strong>
-                                <small>{book.author || "未知作者"}</small>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <button type="button" className="reading-hub-module-empty" onClick={() => { void refreshDiscoveryModule(module); }} disabled={homeModuleLoading === module.id}>
-                            {homeModuleLoading === module.id ? "正在加载…" : "点击加载发现内容"}
-                          </button>
-                        )}
-                      </section>
-                    ))}
-                  </div>
                 )}
               </section>
             )}
@@ -1325,7 +1141,7 @@ export default function ReadingApp({ onClose }: Props) {
                       setSourceResults(shushanResults);
                       setGenericResults(genericResultsMerged);
                       const total = shushanResults.length + genericResultsMerged.length;
-                      setSourceMessage(total ? `共找到 ${total} 条结果${failures ? `，${failures} 个书源请求失败` : ""}` : (account.apiKey || !shushanTargets.length ? "没有找到结果" : "楠楠漫画有结果；书山请先登录后再搜索"));
+                      setSourceMessage(total ? `共找到 ${total} 条结果${failures ? `，${failures} 个书源请求失败` : ""}` : (account.apiKey || !shushanTargets.length ? "没有找到结果" : "部分书源有结果；书山请先登录后再搜索"));
                     } catch (error) { setSourceMessage(error instanceof Error ? error.message : "搜索失败"); }
                     finally { setSourceLoading(false); }
                   }}>{sourceLoading ? "搜索中…" : "搜索"}</button>
@@ -1504,23 +1320,22 @@ export default function ReadingApp({ onClose }: Props) {
                 const text = await file.text();
                 const parsed = JSON.parse(text);
                 const result = importReadingSources(parsed);
-                const next = result.sources;
+                const next = result.sources.filter((item) => {
+                  const raw = item.raw as any;
+                  return raw?.bookSourceType !== 2 && !/楠楠漫画|nnmh\.info/i.test(`${item.name} ${item.url}`);
+                });
                 setBookSources(next);
                 const importedItems = Array.isArray(parsed) ? parsed : [parsed];
                 const importedKeys = new Set(importedItems.filter((item: any) => item && typeof item === "object").map((item: any) => `${String(item.bookSourceName || item.name || "").trim()}|${String(item.bookSourceUrl || item.url || "").trim()}`));
                 const importedIds = next.filter((item) => importedKeys.has(`${item.name}|${item.url}`)).map((item) => item.id);
-                const allowedImportedIds = importedIds.filter((id) => {
-                  const source = next.find((item) => item.id === id);
-                  return sourceImportTarget === "home" ? !isMangaSource(source) : sourceImportTarget === "discovery" ? isMangaSource(source) : true;
-                });
-                if (sourceImportTarget === "home" || sourceImportTarget === "discovery") {
-                  const base = sourceImportTarget === "home" ? homeSourceIds : discoverySourceIds;
-                  persistSourceSet(sourceImportTarget, [...base, ...allowedImportedIds]);
-                }
+                const allowedImportedIds = importedIds;
+                  if (sourceImportTarget === "home") {
+                    persistSourceSet("home", [...homeSourceIds, ...allowedImportedIds]);
+                  }
                 const first = next.find((item) => item.enabled)?.id || "";
                 if (!selectedSourceId && first) setSelectedSourceId(first);
                 if (!homeModuleSourceId && first) setHomeModuleSourceId(first);
-                setSourceMessage(`已导入 ${result.added} 个书源${result.skipped ? `，跳过 ${result.skipped} 个` : ""}；仅加入当前${sourceImportTarget === "home" ? "首页" : sourceImportTarget === "discovery" ? "发现页" : "搜索库"}`);
+                setSourceMessage(`已导入 ${result.added} 个书源${result.skipped ? `，跳过 ${result.skipped} 个` : ""}；仅加入当前${sourceImportTarget === "home" ? "首页" : "搜索库"}`);
               } catch (error) {
                 setSourceMessage(error instanceof Error ? `书源导入失败：${error.message}` : "书源导入失败");
               }
@@ -1560,13 +1375,13 @@ export default function ReadingApp({ onClose }: Props) {
                   <button type="button" onClick={() => setTab("appearance")}><Palette size={16} /> 阅读外观</button>
                 </div>
                 {sourceDrawerMode !== "search" && <div className="reading-hub-drawer-section">
-                  <div className="reading-hub-drawer-title">{sourceDrawerMode === "discovery" ? "发现页模块" : "首页排行榜"}</div>
-                  <label className="reading-hub-field reading-hub-drawer-source-select"><span>选择书源</span><select value={sourceDrawerMode === "home" ? homeModuleSourceId : discoveryModuleSourceId} onChange={e => sourceDrawerMode === "home" ? setHomeModuleSourceId(e.target.value) : setDiscoveryModuleSourceId(e.target.value)}>{bookSources.filter(source => (sourceDrawerMode === "home" ? homeSourceIds : discoverySourceIds).includes(source.id)).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
+                  <div className="reading-hub-drawer-title">首页排行榜</div>
+                  <label className="reading-hub-field reading-hub-drawer-source-select"><span>选择书源</span><select value={homeModuleSourceId} onChange={e => setHomeModuleSourceId(e.target.value)}>{bookSources.filter(source => homeSourceIds.includes(source.id)).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
                   <div className="reading-hub-drawer-discovered">
-                    <div className="reading-hub-drawer-subtitle">{sourceDrawerMode === "discovery" ? "漫画发现模块" : "小说排行榜"}</div>
+                    <div className="reading-hub-drawer-subtitle">小说排行榜</div>
                     <div className="reading-hub-drawer-discovered-list">
                       {(() => {
-                        const sourceId = sourceDrawerMode === "home" ? homeModuleSourceId : discoveryModuleSourceId;
+                        const sourceId = homeModuleSourceId;
                         const source = bookSources.find(x => x.id === sourceId);
                         const items = source ? discoverSourceModules(source) : [];
                         return items.map(item => {
@@ -1582,12 +1397,12 @@ export default function ReadingApp({ onClose }: Props) {
                   </div>
                   {sourceDrawerMode === "home" && <button type="button" className="reading-hub-drawer-wide-action" onClick={() => { setTab("home"); setHomeModuleEditorOpen(v => !v); }}>＋ 自定义首页模块</button>}
                   <div className="reading-hub-drawer-module-list">
-                    {homeModules.filter(module => (sourceDrawerMode === "home" ? homeSourceIds : discoverySourceIds).includes(module.sourceId)).map((module, index) => (
+                    {homeModules.filter(module => homeSourceIds.includes(module.sourceId)).map((module, index) => (
                       <div key={module.id} className="reading-hub-drawer-module">
                         <span>{module.title}</span>
                         <div>
-                          <button type="button" onClick={() => { if (index <= 0) return; const allowedIds = sourceDrawerMode === "home" ? homeSourceIds : discoverySourceIds; const visible = homeModules.filter(x => allowedIds.includes(x.sourceId)); const pos = visible.findIndex(x => x.id === module.id); if (pos <= 0) return; const swap = visible[pos - 1]; const next=[...homeModules]; const a=next.findIndex(x=>x.id===module.id); const b=next.findIndex(x=>x.id===swap.id); [next[a],next[b]]=[next[b],next[a]]; persistHomeModules(next); }}>↑</button>
-                          <button type="button" onClick={() => { const allowedIds = sourceDrawerMode === "home" ? homeSourceIds : discoverySourceIds; const visible = homeModules.filter(x => allowedIds.includes(x.sourceId)); const pos = visible.findIndex(x => x.id === module.id); if (pos < 0 || pos >= visible.length - 1) return; const swap = visible[pos + 1]; const next=[...homeModules]; const a=next.findIndex(x=>x.id===module.id); const b=next.findIndex(x=>x.id===swap.id); [next[a],next[b]]=[next[b],next[a]]; persistHomeModules(next); }}>↓</button>
+                          <button type="button" onClick={() => { if (index <= 0) return; const allowedIds = homeSourceIds; const visible = homeModules.filter(x => allowedIds.includes(x.sourceId)); const pos = visible.findIndex(x => x.id === module.id); if (pos <= 0) return; const swap = visible[pos - 1]; const next=[...homeModules]; const a=next.findIndex(x=>x.id===module.id); const b=next.findIndex(x=>x.id===swap.id); [next[a],next[b]]=[next[b],next[a]]; persistHomeModules(next); }}>↑</button>
+                          <button type="button" onClick={() => { const allowedIds = homeSourceIds; const visible = homeModules.filter(x => allowedIds.includes(x.sourceId)); const pos = visible.findIndex(x => x.id === module.id); if (pos < 0 || pos >= visible.length - 1) return; const swap = visible[pos + 1]; const next=[...homeModules]; const a=next.findIndex(x=>x.id===module.id); const b=next.findIndex(x=>x.id===swap.id); [next[a],next[b]]=[next[b],next[a]]; persistHomeModules(next); }}>↓</button>
                           <button type="button" onClick={() => { persistHomeModules(homeModules.filter(x => x.id !== module.id)); setHomeModuleData(prev => { const copy={...prev}; delete copy[module.id]; return copy; }); }}>×</button>
                         </div>
                       </div>
@@ -1622,8 +1437,7 @@ export default function ReadingApp({ onClose }: Props) {
                         setBookSources(loadReadingSources());
                       }} />
                       {sourceDrawerMode !== "search" && <button type="button" className="reading-hub-drawer-source-remove" title="从当前页面移除" onClick={() => {
-                        const kind = sourceDrawerMode as "home" | "discovery";
-                        persistSourceSet(kind, (kind === "home" ? homeSourceIds : discoverySourceIds).filter((id) => id !== source.id));
+                        persistSourceSet("home", homeSourceIds.filter((id) => id !== source.id));
                       }}>−</button>}
                     </div>
                   ))}
@@ -1673,7 +1487,7 @@ export default function ReadingApp({ onClose }: Props) {
                         setSourceDrawerOpen(false);
                         return;
                       }
-                      if (/^type[1-4]\(/i.test(action)) { const type = action.match(/^type([1-4])/i)?.[1] || "1"; persist({ type }); setSourceMessage(`已切换模式：${["", "小说", "听书", "漫画", "视频"][Number(type)]}`); return; }
+                      if (/^type[1-4]\(/i.test(action)) { const type = action.match(/^type([1-4])/i)?.[1] || "1"; persist({ type }); setSourceMessage(`已切换模式：${["", "小说", "听书", "", "视频"][Number(type)]}`); return; }
                       if (/^boy\(/i.test(action) || /^girl\(/i.test(action)) { const gender = /^boy/i.test(action) ? "boy" : "girl"; persist({ gender }); setSourceMessage(gender === "boy" ? "已切换男频" : "已切换女频"); return; }
                       if (/^toggleParacomment\(/i.test(action)) { const next = vars.yunpara === "on" ? "off" : "on"; persist({ yunpara: next }); setSourceMessage(next === "on" ? "已开启段评兼容" : "已关闭段评兼容"); return; }
                       if (/^toggleBookSync\(/i.test(action)) { const next = vars.book_sync === "on" ? "off" : "on"; persist({ book_sync: next }); setSourceMessage(next === "on" ? "已开启番茄阅读记录同步" : "已关闭番茄阅读记录同步"); return; }
@@ -1768,12 +1582,6 @@ export default function ReadingApp({ onClose }: Props) {
               label="书源"
               icon={<Search size={19} />}
               onClick={() => setTab("sources")}
-            />
-            <NavButton
-              active={tab === "discovery"}
-              label="发现"
-              icon={<Compass size={19} />}
-              onClick={() => setTab("discovery")}
             />
             <NavButton
               active={tab === "shelf"}

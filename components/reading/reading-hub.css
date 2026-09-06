@@ -1048,27 +1048,6 @@
   background: transparent !important;
 }
 
-/* 楠楠漫画：长图正文，不受普通 TXT 段落宽度限制 */
-.reading-app-surface .reading-manga-image-wrap {
-  display: block;
-  width: 100%;
-  margin: 0 auto;
-  padding: 0;
-  line-height: 0;
-  text-align: center;
-}
-.reading-app-surface .reading-manga-image {
-  display: block;
-  width: 100%;
-  max-width: 900px;
-  height: auto;
-  margin: 0 auto;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  object-fit: contain;
-}
-
 
 /* v45：书架同款「壁纸作为底层」最终版
    规则：功能区（首页 / 书源 / 书架 / 外观）全部透出同一张原有阅读壁纸；
@@ -1167,12 +1146,6 @@
 .reading-app-surface.reading-hub-root.is-viewing .reading-page-surface--continuous {
   background-color: transparent !important;
   color: var(--reading-text-color, var(--reading-text, #111)) !important;
-}
-
-/* 漫画正文图片本身仍然独立显示，不给图片叠加玻璃层。 */
-.reading-app-surface.reading-hub-root.is-viewing .reading-manga-image-wrap,
-.reading-app-surface.reading-hub-root.is-viewing .reading-manga-image {
-  background: transparent !important;
 }
 
 /* 当前版本的旧规则会把功能页壁纸清空，这里最后覆盖掉。 */
