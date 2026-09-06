@@ -75,6 +75,20 @@ small.tip{display:block;color:var(--sub);margin-top:8px;font-size:11px}
       background:#f6f1e8;color:#6f675c;font-size:12px;line-height:1.55;
     }
     
+
+.sidebarOverlay{position:fixed;inset:0;background:rgba(30,27,23,.28);z-index:45;opacity:1;transition:.18s}
+.sidebarOverlay.hidden{display:none}
+.sidebar{position:absolute;right:0;top:0;height:100%;width:min(360px,88vw);background:var(--paper);box-shadow:-8px 0 28px rgba(0,0,0,.12);display:flex;flex-direction:column}
+.sidebarHead{display:flex;align-items:center;justify-content:space-between;padding:14px;border-bottom:1px solid var(--line)}
+.sidebarHead b{font-size:16px}
+.sidebarBody{flex:1;overflow:auto;padding:10px 14px 24px}
+.sidebarSection{padding:12px 0;border-bottom:1px solid var(--line)}
+.sidebarSection:last-child{border-bottom:0}
+.sidebarItem{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0}
+.sidebarItem b{font-size:13px}
+.sidebarItem .meta{margin-top:2px}
+.sidebarClose{border:1px solid var(--line);background:#f0ece5;border-radius:10px;padding:6px 10px}
+
 </style>
 </head>
 <body>
@@ -102,29 +116,60 @@ small.tip{display:block;color:var(--sub);margin-top:8px;font-size:11px}
   </div>
 </div>
 
-<div class="modal hidden" id="blockerModal">
-  <div class="sheet">
-    <h2>广告拦截</h2>
-    <div class="switchrow"><div><b>开启广告拦截</b><div class="meta">拦截明显的广告网址，并尝试清理可访问网页中的广告元素。</div></div><button id="blockSwitch" class="switch"><i></i></button></div>
-    <div class="blockerInfo">本页已拦截：<b id="blockedCount">0</b> 次 <button class="btn ghost" id="resetBlocked" style="float:right;padding:4px 8px;font-size:11px">清零</button></div>
-    <div class="field"><label>自定义拦截域名（每行一个）</label><textarea id="customRules" placeholder="例如：ads.example.com
-tracker.example.com"></textarea></div>
-    <div class="field"><label>白名单域名（每行一个）</label><textarea id="whitelistRules" placeholder="例如：example.com
-news.example.com"></textarea></div>
-    <div class="switchrow"><div><b>当前网站暂不拦截</b><div class="meta" id="siteStatus">未添加当前网站白名单</div></div><button id="siteSwitch" class="switch"><i></i></button></div>
-    <div class="field"><label>内置规则</label><div class="rulebox">广告 / 追踪域名规则已内置，可通过下方自定义规则继续增加。
-支持：域名、子域名匹配；同源页面元素清理；动态广告元素观察；正文阅读模式。</div></div>
-    <small class="tip">说明：阅记目前基于网页 iframe 运行。跨域网页受浏览器安全策略限制，无法直接修改对方页面或拦截所有子资源；此版本会拦截已知广告域名的打开请求，并在同源网页中自动清理广告元素。</small>
-    <div class="row"><button class="btn ghost" id="closeBlocker">完成</button></div>
-  </div>
+<div class="sidebarOverlay hidden" id="sidebarOverlay">
+  <aside class="sidebar">
+    <div class="sidebarHead">
+      <b>阅记侧边栏</b>
+      <button class="sidebarClose" id="closeSidebar">关闭</button>
+    </div>
+    <div class="sidebarBody">
+      <section class="sidebarSection">
+        <div class="sidebarItem">
+          <div><b>🛡️ 广告拦截</b><div class="meta">统一管理广告、追踪和白名单</div></div>
+          <button id="blockSwitch" class="switch"><i></i></button>
+        </div>
+        <div class="blockerInfo">本页已拦截：<b id="blockedCount">0</b> 次
+          <button class="btn ghost" id="resetBlocked" style="float:right;padding:4px 8px;font-size:11px">清零</button>
+        </div>
+      </section>
+
+      <section class="sidebarSection">
+        <div class="field">
+          <label>自定义拦截域名（每行一个）</label>
+          <textarea id="customRules" placeholder="例如：ads.example.com&#10;tracker.example.com"></textarea>
+        </div>
+        <div class="field">
+          <label>白名单域名（每行一个）</label>
+          <textarea id="whitelistRules" placeholder="例如：example.com&#10;news.example.com"></textarea>
+        </div>
+      </section>
+
+      <section class="sidebarSection">
+        <div class="sidebarItem">
+          <div><b>当前网站白名单</b><div class="meta" id="siteStatus">打开网页后可设置</div></div>
+          <button id="siteSwitch" class="switch"><i></i></button>
+        </div>
+      </section>
+
+      <section class="sidebarSection">
+        <div class="field">
+          <label>内置规则</label>
+          <div class="rulebox">已内置常见广告 / 追踪域名规则，并支持同源页面广告元素清理、动态广告观察和正文阅读净化。</div>
+        </div>
+        <small class="tip">纯前端 Vercel 无法绕过浏览器 CORS，也不能拦截目标网站的所有跨域子资源。阅记会在浏览器允许访问的范围内进行拦截和净化。</small>
+      </section>
+    </div>
+  </aside>
 </div>
+
+
 
 <div class="reader hidden" id="reader">
   <div class="readerbar">
     <button id="closeReader">‹</button>
     <input id="address" placeholder="输入网页地址">
     <button id="go">打开</button>
-    <button id="shield" class="shield" title="广告拦截">🛡️</button>
+    <button id="sidebarBtn" class="shield" title="打开侧边栏">☰</button>
     <button id="readerMode" title="净化阅读">阅读</button>
     <span id="readerModeStatus" class="reader-mode-status">自动</span><button id="readerExtract" title="提取正文">正文</button>
     <button id="savePage">收藏</button>
@@ -141,7 +186,7 @@ news.example.com"></textarea></div>
 <script>
 (function(){
   const KEY="reader-note.v1";
-  const BLOCK_KEY="reader-note.adblock.v5";
+  const BLOCK_KEY="reader-note.adblock.v7";
   const api=window.AiPhone;
   const builtinRules=[
     "doubleclick.net","googlesyndication.com","googleadservices.com","adservice.google.com",
@@ -216,27 +261,68 @@ news.example.com"></textarea></div>
       ${x.body?`<div style="margin-top:8px;white-space:pre-wrap">${esc(x.body.slice(0,280))}${x.body.length>280?"…":""}</div>`:""}
       ${(x.tags||[]).length?`<div class="tags">${x.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</div>`:""}
       <div class="actions">
-        ${x.url?`<button class="btn" onclick="window.__reader(${JSON.stringify(x.url)})">阅读</button>`:""}
-        <button class="btn ghost" onclick="window.__edit('${x.id}')">编辑</button>
-        <button class="btn danger" onclick="window.__remove('${x.id}')">删除</button>
+        ${x.url?`<button class="btn" data-read-id="${esc(x.id)}">阅读</button>`:""}
+        <button class="btn ghost" data-edit-id="${esc(x.id)}">编辑</button>
+        <button class="btn danger" data-remove-id="${esc(x.id)}">删除</button>
       </div>
     </article>`;
   }
   function render(){
     const q=document.getElementById("search").value.trim().toLowerCase();
+    const c=document.getElementById("content");
+
+    // 首页只负责入口，不展示收藏和笔记。
+    if(tab==="home"){
+      c.innerHTML=`<div class="card">
+        <h3>今天想记什么？</h3>
+        <p class="meta">网页、收藏和笔记分别放在自己的空间里。</p>
+        <div class="actions">
+          <button class="btn" id="homeOpenReader">打开网页</button>
+          <button class="btn ghost" id="homeNewNote">写一条笔记</button>
+        </div>
+        <small class="tip">收藏请进入「收藏」，笔记请进入「笔记」。首页不会自动展示它们。</small>
+      </div>`;
+      document.getElementById("homeOpenReader").onclick=()=>window.__openReader();
+      document.getElementById("homeNewNote").onclick=()=>window.__newNote();
+      return;
+    }
+
     let items=state.items.filter(x=>!q || [x.title,x.url,x.body,(x.tags||[]).join(" ")].join(" ").toLowerCase().includes(q));
     if(tab==="saved") items=items.filter(x=>x.type==="saved");
     if(tab==="notes") items=items.filter(x=>x.type==="note"||x.type==="clip");
-    const c=document.getElementById("content");
-    if(tab==="home"&&!q){
-      c.innerHTML=`<div class="card"><h3>今天想记什么？</h3><p class="meta">把网页、摘录和灵感放进同一个地方。</p><div class="actions"><button class="btn" onclick="window.__openReader()">打开网页</button><button class="btn ghost" onclick="window.__newNote()">写一条笔记</button></div><small class="tip">提示：部分网站会禁止被 iframe 嵌入，这是浏览器的安全限制；第一版会先保留收藏和网址记录。</small></div>`+(items.length?items.map(card).join(""):`<div class="empty">还没有内容<br>试试打开一个网页或写第一条笔记。</div>`);
-    }else c.innerHTML=items.length?items.map(card).join(""):`<div class="empty">这里还没有内容</div>`;
+
+    c.innerHTML=items.length?items.map(card).join(""):`<div class="empty">${q?"没有找到匹配内容":"这里还没有内容"}</div>`;
+
+    c.querySelectorAll("[data-read-id]").forEach(btn=>{
+      btn.onclick=()=>{
+        const item=state.items.find(x=>x.id===btn.dataset.readId);
+        if(item&&item.url) openSavedItem(item);
+      };
+    });
+    c.querySelectorAll("[data-edit-id]").forEach(btn=>{
+      btn.onclick=()=>window.__edit(btn.dataset.editId);
+    });
+    c.querySelectorAll("[data-remove-id]").forEach(btn=>{
+      btn.onclick=()=>window.__remove(btn.dataset.removeId);
+    });
+  }
+
+  function openSavedItem(item){
+    const raw=String(item.url||"").trim();
+    if(!raw)return;
+    document.getElementById("reader").classList.remove("hidden");
+    const ok=navigate(raw);
+    if(ok){
+      document.getElementById("address").value=cleanNavigationUrl(raw);
+      document.getElementById("readerMode").textContent="阅读";
+      document.getElementById("readerModeStatus").textContent="自动";
+    }
   }
 
   function updateBlockerUI(){
     const on=!!blocker.enabled;
     document.getElementById("blockSwitch").classList.toggle("on",on);
-    document.getElementById("shield").classList.toggle("on",on);
+    
     document.getElementById("blockedCount").textContent=blockedCount;
     document.getElementById("customRules").value=blocker.custom.join("\n");
     document.getElementById("whitelistRules").value=blocker.whitelist.join("\n");
@@ -382,6 +468,8 @@ news.example.com"></textarea></div>
     document.getElementById("address").focus();
   };
   window.__reader=url=>{
+    const item=state.items.find(x=>x.url===url);
+    if(item){openSavedItem(item);return;}
     document.getElementById("reader").classList.remove("hidden");
     navigate(url);
   };
@@ -407,14 +495,42 @@ news.example.com"></textarea></div>
   document.getElementById("readerMode").onclick=toggleReaderMode;
   document.getElementById("readerExtract").onclick=()=>{extractMainContent();};
   document.getElementById("closeExtract").onclick=()=>document.getElementById("extractPanel").classList.add("hidden");
-  document.getElementById("shield").onclick=()=>{document.getElementById("blockerModal").classList.remove("hidden");updateBlockerUI();};
-  document.getElementById("blockSwitch").onclick=()=>{blocker.enabled=!blocker.enabled;persistBlocker();updateBlockerUI();if(blocker.enabled)cleanSameOriginFrame();toast(blocker.enabled?"广告拦截已开启":"广告拦截已关闭");};
-  document.getElementById("customRules").onchange=()=>{blocker.custom=document.getElementById("customRules").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);persistBlocker();updateBlockerUI();};
-  document.getElementById("whitelistRules").onchange=()=>{blocker.whitelist=document.getElementById("whitelistRules").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);persistBlocker();updateBlockerUI();};
+  document.getElementById("sidebarBtn").onclick=()=>{
+    document.getElementById("sidebarOverlay").classList.remove("hidden");
+    updateBlockerUI();
+  };
+  document.getElementById("closeSidebar").onclick=()=>document.getElementById("sidebarOverlay").classList.add("hidden");
+  document.getElementById("sidebarOverlay").addEventListener("click",e=>{
+    if(e.target===document.getElementById("sidebarOverlay")) document.getElementById("sidebarOverlay").classList.add("hidden");
+  });
+  document.getElementById("blockSwitch").onclick=()=>{
+    blocker.enabled=!blocker.enabled;
+    persistBlocker();
+    updateBlockerUI();
+    if(blocker.enabled)cleanSameOriginFrame();
+    toast(blocker.enabled?"广告拦截已开启":"广告拦截已关闭");
+  };
+  document.getElementById("customRules").onchange=()=>{
+    blocker.custom=document.getElementById("customRules").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    persistBlocker();updateBlockerUI();
+  };
+  document.getElementById("whitelistRules").onchange=()=>{
+    blocker.whitelist=document.getElementById("whitelistRules").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    persistBlocker();updateBlockerUI();
+  };
   document.getElementById("resetBlocked").onclick=()=>{blockedCount=0;updateBlockerUI();};
-  document.getElementById("siteSwitch").onclick=()=>{if(!currentHost)return;const list=new Set(whitelistRules());if(list.has(currentHost))list.delete(currentHost);else list.add(currentHost);blocker.whitelist=[...list];persistBlocker();updateBlockerUI();toast(list.has(currentHost)?"已加入当前网站白名单":"已恢复当前网站拦截");};
-  document.getElementById("closeBlocker").onclick=()=>document.getElementById("blockerModal").classList.add("hidden");
-  document.getElementById("closeReader").onclick=()=>document.getElementById("reader").classList.add("hidden");
+  document.getElementById("siteSwitch").onclick=()=>{
+    if(!currentHost)return;
+    const list=new Set(whitelistRules());
+    if(list.has(currentHost))list.delete(currentHost);else list.add(currentHost);
+    blocker.whitelist=[...list];persistBlocker();updateBlockerUI();
+    toast(list.has(currentHost)?"已加入当前网站白名单":"已恢复当前网站拦截");
+  };
+  document.getElementById("closeReader").onclick=()=>{
+    document.getElementById("reader").classList.add("hidden");
+    document.getElementById("extractPanel").classList.add("hidden");
+    document.getElementById("sidebarOverlay").classList.add("hidden");
+  };
   document.getElementById("newBtn").onclick=()=>openModal();
   document.getElementById("cancelBtn").onclick=closeModal;
   document.getElementById("saveBtn").onclick=save;
