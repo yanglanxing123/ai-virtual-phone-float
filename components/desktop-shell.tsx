@@ -39,6 +39,7 @@ import { AppMarketApp } from "@/components/app-market/app-market-app";
 import { CustomAppRunner } from "@/components/app-market/custom-app-runner";
 import { RaidApp } from "@/components/raid/raid-app";
 import { ReaderNoteApp } from "@/components/reader-note/reader-note-app";
+import { XiashuApp } from "@/components/xiashu-app";
 import { hydrateKvDb, kvGet, kvSet, kvRemove, kvKeysWithPrefix } from "@/lib/kv-db";
 import { deleteDatabase } from "@/lib/data-management/idb";
 import { hydrateStoryStorage } from "@/lib/story-storage";
@@ -4083,6 +4084,10 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
     if (activeApp === "reader_note") {
       return <ReaderNoteApp onClose={() => setActiveApp(null)} />;
+    }
+
+    if (activeApp === "xiashu") {
+      return <XiashuApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
 
     if (activeApp === "appmarket") {
