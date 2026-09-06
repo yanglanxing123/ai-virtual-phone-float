@@ -61,7 +61,7 @@ button{cursor:pointer}
 .switch.on{background:var(--accent)}
 .switch.on i{transform:translateX(19px)}
 .rulebox{font-size:11px;color:var(--sub);background:#faf7f2;border:1px solid var(--line);border-radius:10px;padding:9px;white-space:pre-wrap;word-break:break-all}
-.noteFab{position:fixed;right:18px;bottom:20px;z-index:31;width:48px;height:48px;border:0;border-radius:50%;background:var(--accent);color:white;font-size:20px;box-shadow:0 5px 18px rgba(0,0,0,.18)}
+.extractPanel{position:fixed;inset:0;background:var(--paper);z-index:32;display:flex;flex-direction:column}.extractHead{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}.extractBody{flex:1;overflow:auto;padding:22px 18px 50px;max-width:900px;width:100%;margin:auto}.extractBody h1{font-size:25px;line-height:1.35;margin:0 0 12px}.extractBody .extractMeta{font-size:12px;color:var(--sub);margin-bottom:18px}.extractBody article{font-size:18px;line-height:1.9}.extractBody img{max-width:100%;height:auto}.noteFab{position:fixed;right:18px;bottom:20px;z-index:31;width:48px;height:48px;border:0;border-radius:50%;background:var(--accent);color:white;font-size:20px;box-shadow:0 5px 18px rgba(0,0,0,.18)}
 small.tip{display:block;color:var(--sub);margin-top:8px;font-size:11px}
 </style>
 </head>
@@ -94,18 +94,14 @@ small.tip{display:block;color:var(--sub);margin-top:8px;font-size:11px}
   <div class="sheet">
     <h2>广告拦截</h2>
     <div class="switchrow"><div><b>开启广告拦截</b><div class="meta">拦截明显的广告网址，并尝试清理可访问网页中的广告元素。</div></div><button id="blockSwitch" class="switch"><i></i></button></div>
-    <div class="blockerInfo">本页已拦截：<b id="blockedCount">0</b> 次</div>
+    <div class="blockerInfo">本页已拦截：<b id="blockedCount">0</b> 次 <button class="btn ghost" id="resetBlocked" style="float:right;padding:4px 8px;font-size:11px">清零</button></div>
     <div class="field"><label>自定义拦截域名（每行一个）</label><textarea id="customRules" placeholder="例如：ads.example.com
 tracker.example.com"></textarea></div>
-    <div class="field"><label>内置规则（示例）</label><div class="rulebox">doubleclick.net
-googlesyndication.com
-googleadservices.com
-adservice.google.com
-adnxs.com
-adform.net
-adsystem.com
-taboola.com
-outbrain.com</div></div>
+    <div class="field"><label>白名单域名（每行一个）</label><textarea id="whitelistRules" placeholder="例如：example.com
+news.example.com"></textarea></div>
+    <div class="switchrow"><div><b>当前网站暂不拦截</b><div class="meta" id="siteStatus">未添加当前网站白名单</div></div><button id="siteSwitch" class="switch"><i></i></button></div>
+    <div class="field"><label>内置规则</label><div class="rulebox">广告 / 追踪域名规则已内置，可通过下方自定义规则继续增加。
+支持：域名、子域名匹配；同源页面元素清理；动态广告元素观察；正文阅读模式。</div></div>
     <small class="tip">说明：阅记目前基于网页 iframe 运行。跨域网页受浏览器安全策略限制，无法直接修改对方页面或拦截所有子资源；此版本会拦截已知广告域名的打开请求，并在同源网页中自动清理广告元素。</small>
     <div class="row"><button class="btn ghost" id="closeBlocker">完成</button></div>
   </div>
@@ -117,21 +113,36 @@ outbrain.com</div></div>
     <input id="address" placeholder="输入网页地址">
     <button id="go">打开</button>
     <button id="shield" class="shield" title="广告拦截">🛡️</button>
+    <button id="readerMode" title="净化阅读">阅读</button>
+    <button id="readerExtract" title="提取正文">正文</button>
     <button id="savePage">收藏</button>
   </div>
   <iframe class="readerframe" id="frame"></iframe>
   <button class="noteFab" id="quickNote">＋</button>
 </div>
 
+<div class="extractPanel hidden" id="extractPanel">
+  <div class="extractHead"><button class="iconbtn" id="closeExtract">←</button><b>正文阅读</b><span class="meta" id="extractStatus">仅适用于允许访问内容的网页</span></div>
+  <div class="extractBody" id="extractBody"></div>
+</div>
+
 <script>
 (function(){
   const KEY="reader-note.v1";
-  const BLOCK_KEY="reader-note.adblock.v1";
+  const BLOCK_KEY="reader-note.adblock.v5";
   const api=window.AiPhone;
-  const builtinRules=["doubleclick.net","googlesyndication.com","googleadservices.com","adservice.google.com","adnxs.com","adform.net","adsystem.com","taboola.com","outbrain.com"];
+  const builtinRules=[
+    "doubleclick.net","googlesyndication.com","googleadservices.com","adservice.google.com",
+    "adnxs.com","adform.net","adsystem.com","taboola.com","outbrain.com",
+    "googletagmanager.com","googletagservices.com","2mdn.net","adsafeprotected.com",
+    "amazon-adsystem.com","criteo.com","criteo.net","scorecardresearch.com",
+    "quantserve.com","zedo.com","moatads.com","rubiconproject.com","pubmatic.com",
+    "openx.net","casalemedia.com","smartadserver.com","sharethrough.com"
+  ];
   let blocker=loadBlocker();
   let blockedCount=0;
   let state=load();
+  let currentHost="";
   let tab="home";
 
   function load(){
@@ -141,12 +152,15 @@ outbrain.com</div></div>
     }catch(e){return {items:[]}}
   }
   function loadBlocker(){
-    try{const x=JSON.parse(localStorage.getItem(BLOCK_KEY)||"null");return x&&typeof x==="object"?{enabled:x.enabled!==false,custom:Array.isArray(x.custom)?x.custom:[]}: {enabled:true,custom:[]}}catch(e){return {enabled:true,custom:[]}}
+    try{const x=JSON.parse(localStorage.getItem(BLOCK_KEY)||"null");return x&&typeof x==="object"?{enabled:x.enabled!==false,custom:Array.isArray(x.custom)?x.custom:[],whitelist:Array.isArray(x.whitelist)?x.whitelist:[]}: {enabled:true,custom:[],whitelist:[]}}catch(e){return {enabled:true,custom:[]}}
   }
   function persistBlocker(){localStorage.setItem(BLOCK_KEY,JSON.stringify(blocker))}
   function blockerRules(){return [...builtinRules,...blocker.custom].map(x=>String(x).trim().toLowerCase()).filter(Boolean)}
+  function whitelistRules(){return blocker.whitelist.map(x=>String(x).trim().toLowerCase()).filter(Boolean)}
+  function hostMatches(host,rule){return host===rule||host.endsWith("."+rule)}
+  function isWhitelistedUrl(u){try{const host=new URL(normalize(u)).hostname.toLowerCase();return whitelistRules().some(r=>hostMatches(host,r))}catch(e){return false}}
   function isBlockedUrl(u){
-    try{const host=new URL(normalize(u)).hostname.toLowerCase();return blockerRules().some(r=>host===r||host.endsWith("."+r))}catch(e){return false}
+    try{const host=new URL(normalize(u)).hostname.toLowerCase();if(isWhitelistedUrl(u))return false;return blockerRules().some(r=>hostMatches(host,r))}catch(e){return false}
   }
   function persist(){localStorage.setItem(KEY,JSON.stringify(state))}
   function esc(s){
@@ -213,6 +227,44 @@ outbrain.com</div></div>
     document.getElementById("shield").classList.toggle("on",on);
     document.getElementById("blockedCount").textContent=blockedCount;
     document.getElementById("customRules").value=blocker.custom.join("\n");
+    document.getElementById("whitelistRules").value=blocker.whitelist.join("\n");
+    const siteOn=currentHost && whitelistRules().some(r=>hostMatches(currentHost,r));
+    document.getElementById("siteSwitch").classList.toggle("on",!!siteOn);
+    document.getElementById("siteStatus").textContent=currentHost?(siteOn?currentHost+" 已加入白名单":currentHost+" 正在使用拦截规则"):"打开网页后可设置当前网站";
+  }
+  // V4：更保守的广告选择器，避免把正常内容中带有“ad”的 class/id 误删。
+  const adSelectors=[
+    '[id^="ad-"]','[id^="ad_"]','[id$="-ad"]','[id$="_ad"]',
+    '[id^="ads-"]','[id^="ads_"]','[id^="advert-"]','[id^="advert_"]',
+    '[id^="sponsor-"]','[id^="sponsor_"]','[id^="promotion-"]','[id^="promotion_"]',
+    '.ad','.ads','.advert','.advertisement','.ad-banner','.ad-container','.ad-wrapper',
+    '.sponsor','.sponsored','.sponsor-box','.promotion','.promo',
+    '[aria-label*="advertisement" i]','[aria-label*="sponsored" i]','[aria-label*="广告"]','[aria-label*="推广"]',
+    'iframe[src*="doubleclick" i]','iframe[src*="googlesyndication" i]','iframe[src*="adnxs" i]'
+  ];
+  const adText=/^(广告|推广|赞助|sponsored|advertisement|advertising)$/i;
+  function injectPurifier(doc){
+    if(!doc || doc.getElementById("__reader_note_adblock_style"))return;
+    const style=doc.createElement("style");
+    style.id="__reader_note_adblock_style";
+    style.textContent=`
+      [id^="ad-"] ,[id^="ad_"] ,[id$="-ad"] ,[id$="_ad"],
+      [id^="ads-"] ,[id^="ads_"] ,[id^="advert-"] ,[id^="advert_"],
+      [id^="sponsor-"] ,[id^="sponsor_"] ,[id^="promotion-"] ,[id^="promotion_"],
+      .ad,.ads,.advert,.advertisement,.ad-banner,.ad-container,.ad-wrapper,
+      .sponsor,.sponsored,.sponsor-box,.promotion,.promo,
+      [aria-label*="advertisement" i],[aria-label*="sponsored" i],
+      [aria-label*="广告"],[aria-label*="推广"]{display:none!important;visibility:hidden!important;}
+      html.__rn_reader_mode body{max-width:900px!important;margin:auto!important;padding:18px!important;line-height:1.9!important;font-size:18px!important;}
+      html.__rn_reader_mode img{max-width:100%!important;height:auto!important;}
+      html.__rn_reader_mode header,html.__rn_reader_mode footer,html.__rn_reader_mode aside,html.__rn_reader_mode nav{display:none!important;}
+    `;
+    (doc.head||doc.documentElement).appendChild(style);
+  }
+  function elementLooksLikeAd(el){
+    const text=(el.getAttribute?.('aria-label')||'')+' '+(el.textContent||'').trim();
+    const meta=(el.id||'')+' '+(el.className?.toString?.()||'');
+    return adText.test(text.trim()) || /(^|[\s_-])(ad|ads|advert|advertisement|sponsor|sponsored|promo|promotion)([\s_-]|$)/i.test(meta);
   }
   function cleanSameOriginFrame(){
     if(!blocker.enabled)return;
@@ -220,11 +272,94 @@ outbrain.com</div></div>
     try{
       const doc=frame.contentDocument;
       if(!doc)return;
-      const selectors=["[id*=ad i]","[class*=ad i]","[class*=advert i]","[class*=sponsor i]","[id*=sponsor i]","iframe[src*=doubleclick i]","iframe[src*=googlesyndication i]"];
+      injectPurifier(doc);
       let removed=0;
-      selectors.forEach(sel=>doc.querySelectorAll(sel).forEach(el=>{if(el!==doc.body){el.remove();removed++;}}));
+      const seen=new Set();
+      adSelectors.forEach(sel=>{
+        try{doc.querySelectorAll(sel).forEach(el=>{if(el!==doc.body&&el!==doc.documentElement&&!seen.has(el)){seen.add(el);el.remove();removed++;}})}catch(e){}
+      });
+      if(!doc.documentElement.hasAttribute("data-reader-note-observer")){
+        const observer=new MutationObserver(()=>{
+          if(!blocker.enabled)return;
+          let n=0;
+          adSelectors.forEach(sel=>{try{doc.querySelectorAll(sel).forEach(el=>{if(el!==doc.body&&el!==doc.documentElement&&!seen.has(el)){seen.add(el);el.remove();n++;}})}catch(e){}});
+          if(n){blockedCount+=n;updateBlockerUI();}
+        });
+        observer.observe(doc.documentElement,{subtree:true,childList:true});
+        doc.documentElement.setAttribute("data-reader-note-observer","1");
+      }
       if(removed){blockedCount+=removed;updateBlockerUI();}
     }catch(e){/* cross-origin: browser security boundary */}
+  }
+  function isProbablyTrackingUrl(u){
+    try{
+      const x=new URL(normalize(u));
+      const badPath=/(^|[\/_-])(ads?|advert|advertise|advertisement|banner|doubleclick|tracking|tracker|pixel|beacon|analytics)([\/_?=&.-]|$)/i.test(x.pathname+x.search);
+      return badPath;
+    }catch(e){return false}
+  }
+  function cleanNavigationUrl(u){
+    const x=new URL(normalize(u));
+    const trackingParams=/^(utm_[a-z0-9_]+|gclid|dclid|fbclid|msclkid|mc_cid|mc_eid|ref|ref_src|spm|from|share_source|share_token)$/i;
+    [...x.searchParams.keys()].forEach(k=>{if(trackingParams.test(k))x.searchParams.delete(k)});
+    x.hash='';
+    return x.href;
+  }
+  function pickArticle(doc){
+    const candidates=[...doc.querySelectorAll('article,main,[role="main"],.article,.post,.entry-content,.article-content,.post-content,.content')];
+    let best=null,score=-1;
+    for(const el of candidates){
+      const text=(el.innerText||'').trim();
+      if(text.length<180)continue;
+      const p=el.querySelectorAll('p').length;
+      const links=el.querySelectorAll('a').length;
+      const scoreNow=Math.min(text.length,12000)+p*160-links*8;
+      if(scoreNow>score){best=el;score=scoreNow;}
+    }
+    return best||doc.body;
+  }
+  function extractMainContent(){
+    const frame=document.getElementById('frame');
+    try{
+      const doc=frame.contentDocument;
+      if(!doc||!doc.body)throw new Error('no document');
+      const root=pickArticle(doc);
+      const clone=root.cloneNode(true);
+      clone.querySelectorAll(adSelectors.join(',')).forEach(el=>el.remove());
+      clone.querySelectorAll('script,style,noscript,iframe,form,nav,aside,footer,header').forEach(el=>el.remove());
+      const title=(doc.querySelector('h1')?.textContent||doc.title||'正文').trim();
+      const body=document.getElementById('extractBody');
+      body.innerHTML='';
+      const h=document.createElement('h1');h.textContent=title;body.appendChild(h);
+      const meta=document.createElement('div');meta.className='extractMeta';meta.textContent=new URL(frame.src).hostname;body.appendChild(meta);
+      const article=document.createElement('article');article.appendChild(clone);body.appendChild(article);
+      document.getElementById('extractPanel').classList.remove('hidden');
+      document.getElementById('extractStatus').textContent='已提取正文';
+    }catch(e){toast('该网页不允许直接提取正文（跨域限制）');}
+  }
+  function toggleReaderMode(){
+    const frame=document.getElementById("frame");
+    try{
+      const doc=frame.contentDocument;
+      if(!doc)throw new Error('no document');
+      injectPurifier(doc);
+      const on=!doc.documentElement.classList.contains('__rn_reader_mode');
+      doc.documentElement.classList.toggle('__rn_reader_mode',on);
+      document.getElementById('readerMode').textContent=on?'原页':'阅读';
+      toast(on?'已切换到净化阅读模式':'已恢复原页面样式');
+    }catch(e){toast('该网页不允许阅记直接进入阅读模式（跨域限制）');}
+  }
+  function navigate(url){
+    let clean;
+    try{clean=cleanNavigationUrl(url);}catch(e){toast("网址格式不正确");return false;}
+    if(blocker.enabled&&!isWhitelistedUrl(clean)&&(isBlockedUrl(clean)||isProbablyTrackingUrl(clean))){
+      blockedCount++;updateBlockerUI();toast("🛡️ 已拦截疑似广告/追踪网址");return false;
+    }
+    document.getElementById("frame").src=clean;
+    document.getElementById("address").value=clean;
+    try{currentHost=new URL(clean).hostname.toLowerCase();}catch(e){currentHost="";}
+    updateBlockerUI();
+    return true;
   }
   window.__newNote=()=>openModal();
   window.__edit=id=>openModal(state.items.find(x=>x.id===id));
@@ -236,31 +371,36 @@ outbrain.com</div></div>
   };
   window.__reader=url=>{
     document.getElementById("reader").classList.remove("hidden");
-    document.getElementById("address").value=url;
-    if(blocker.enabled&&isBlockedUrl(url)){blockedCount++;updateBlockerUI();toast("已拦截广告/追踪网址");return;}
-    document.getElementById("frame").src=normalize(url);
+    navigate(url);
   };
   function normalize(u){return /^https?:\/\//i.test(u)?u:"https://"+u}
   document.getElementById("go").onclick=()=>{
     const u=document.getElementById("address").value.trim();
     if(!u)return;
-    document.getElementById("frame").src=normalize(u);
+    navigate(u);
   };
+  document.getElementById("address").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("go").click();});
   document.getElementById("savePage").onclick=()=>{
     const u=document.getElementById("address").value.trim();
     if(!u)return;
     const title=u.replace(/^https?:\/\//,"").split("/")[0];
-    state.items.unshift({id:crypto.randomUUID(),type:"saved",title,url:normalize(u),body:"",tags:["网页"],created:Date.now(),updated:Date.now()});
+    state.items.unshift({id:crypto.randomUUID(),type:"saved",title,url:cleanNavigationUrl(u),body:"",tags:["网页"],created:Date.now(),updated:Date.now()});
     persist();toast("网页已收藏");render();
   };
   document.getElementById("quickNote").onclick=()=>{
     const u=document.getElementById("address").value.trim();
-    openModal({url:normalize(u),tags:["摘录"]});
+    openModal({url:cleanNavigationUrl(u),tags:["摘录"]});
   };
-  document.getElementById("frame").addEventListener("load",cleanSameOriginFrame);
+  document.getElementById("frame").addEventListener("load",()=>{document.getElementById("readerMode").textContent="阅读";try{currentHost=new URL(document.getElementById("frame").src).hostname.toLowerCase();}catch(e){currentHost="";}updateBlockerUI();cleanSameOriginFrame();});
+  document.getElementById("readerMode").onclick=toggleReaderMode;
+  document.getElementById("readerExtract").onclick=extractMainContent;
+  document.getElementById("closeExtract").onclick=()=>document.getElementById("extractPanel").classList.add("hidden");
   document.getElementById("shield").onclick=()=>{document.getElementById("blockerModal").classList.remove("hidden");updateBlockerUI();};
-  document.getElementById("blockSwitch").onclick=()=>{blocker.enabled=!blocker.enabled;persistBlocker();updateBlockerUI();toast(blocker.enabled?"广告拦截已开启":"广告拦截已关闭");};
-  document.getElementById("customRules").onchange=()=>{blocker.custom=document.getElementById("customRules").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);persistBlocker();};
+  document.getElementById("blockSwitch").onclick=()=>{blocker.enabled=!blocker.enabled;persistBlocker();updateBlockerUI();if(blocker.enabled)cleanSameOriginFrame();toast(blocker.enabled?"广告拦截已开启":"广告拦截已关闭");};
+  document.getElementById("customRules").onchange=()=>{blocker.custom=document.getElementById("customRules").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);persistBlocker();updateBlockerUI();};
+  document.getElementById("whitelistRules").onchange=()=>{blocker.whitelist=document.getElementById("whitelistRules").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);persistBlocker();updateBlockerUI();};
+  document.getElementById("resetBlocked").onclick=()=>{blockedCount=0;updateBlockerUI();};
+  document.getElementById("siteSwitch").onclick=()=>{if(!currentHost)return;const list=new Set(whitelistRules());if(list.has(currentHost))list.delete(currentHost);else list.add(currentHost);blocker.whitelist=[...list];persistBlocker();updateBlockerUI();toast(list.has(currentHost)?"已加入当前网站白名单":"已恢复当前网站拦截");};
   document.getElementById("closeBlocker").onclick=()=>document.getElementById("blockerModal").classList.add("hidden");
   document.getElementById("closeReader").onclick=()=>document.getElementById("reader").classList.add("hidden");
   document.getElementById("newBtn").onclick=()=>openModal();
