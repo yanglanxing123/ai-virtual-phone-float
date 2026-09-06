@@ -908,21 +908,22 @@ export default function ReadingApp({ onClose }: Props) {
       const bookId = String(v.book_id_str ?? v.book_id ?? v.bookId ?? v.series_id ?? "");
       const rawBookUrl = v.book_url ?? v.bookUrl ?? v.detail_url ?? v.detailUrl ?? v.url ?? "";
       const bookUrl = String(rawBookUrl || "");
-      if (title && (bookUrl || bookId || v.author || v.author_name || v.cover || v.cover_url || v.image_url || v.thumb_url || v.thumbUri || v.audio_thumb_uri)) {
+      const hasCover = v.cover || v.cover_url || v.cover_pic || v.image_url || v.thumb_url || v.thumbUri || v.audio_thumb_uri;
+      if (title && (bookUrl || bookId || v.id || v.author || v.author_name || hasCover)) {
         const key = `${String(title)}|${String(bookUrl)}|${bookId}`;
         if (!seen.has(key)) {
           seen.add(key);
           list.push({
             title: String(title),
             author: v.author ?? v.author_name,
-            cover: normalizeRemoteUrl(v.cover ?? v.cover_url ?? v.image_url ?? v.book_cover ?? v.thumb_url ?? v.thumbUri ?? v.audio_thumb_uri),
+            cover: normalizeRemoteUrl(v.cover ?? v.cover_url ?? v.cover_pic ?? v.image_url ?? v.book_cover ?? v.thumb_url ?? v.thumbUri ?? v.audio_thumb_uri),
             desc: v.desc ?? v.abstract ?? v.description,
             latestChapterTitle: v.latest_chapter_title ?? v.latestChapterTitle ?? v.last_chapter_title,
             wordCount: v.word_number ?? v.WordsCount ?? v.wordCount,
             tags: v.tags ?? v.kind,
             source: v.source ?? v.source_name ?? v.book_source ?? v.origin,
             bookId: String(v.book_id_str ?? v.book_id ?? v.bookId ?? "") || undefined,
-            bookUrl: String(bookUrl),
+            bookUrl: String(bookUrl || (bookId ? String(v.detail_url_template || "").replace(/\{\{id\}\}/g, encodeURIComponent(bookId)) : "")),
             raw: v,
           });
         }

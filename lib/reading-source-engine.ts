@@ -288,13 +288,19 @@ export async function fetchReadingSourceModule(source: ReadingBookSource, module
   }
 
   const mangaCfg = mangaAdapterConfig(source);
-  if (mangaCfg?.module) {
+  if (mangaCfg?.module || mangaCfg?.search) {
     const state = loadReadingSourceState(source.id);
     const vars = { ...(state.variables || {}), key: "", page: String(page), pageIndex: String(page), keyword: "" };
     const templated = replaceVars(moduleUrl, vars);
     const request = parseRequestUrl(templated, source.url);
     const options = request.options || {};
-    const payload = await fetchSource({ source, url: request.url, method: options.method || "GET", headers: { ...parseHeaderRule(source, vars), ...(options.headers || {}) }, body: typeof options.body === "string" ? replaceVars(options.body, vars) : options.body });
+    const payload = await fetchSource({
+      source, url: request.url, method: options.method || mangaCfg?.module?.method || "GET",
+      headers: { ...parseHeaderRule(source, vars), ...(options.headers || {}), ...(mangaCfg?.module?.headers || {}) },
+      body: typeof (mangaCfg?.module?.body ?? options.body) === "string"
+        ? replaceVars(String(mangaCfg?.module?.body ?? options.body), vars)
+        : (mangaCfg?.module?.body ?? options.body),
+    });
     const root = parsePayload(payload.text, payload.contentType);
     return parseMangaAdapterList(root, source, mangaCfg, "module");
   }
@@ -991,7 +997,11 @@ async function getShushanContentAdapter(source: ReadingBookSource, chapter: Gene
 function mangaAdapterConfig(source: ReadingBookSource): any | undefined {
   const raw = source.raw as any;
   if (Number(raw?.bookSourceType) !== 2) return undefined;
-  return raw?.mangaAdapter || raw?.manga || undefined;
+  let value = raw?.mangaAdapter || raw?.manga;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { return undefined; }
+  }
+  return value && typeof value === "object" ? value : undefined;
 }
 
 function mangaJsField(result: any, rule: unknown): string | undefined {
@@ -1023,30 +1033,51 @@ function mangaField(root: unknown, item: unknown, rule: unknown, source: Reading
 }
 
 function parseMangaAdapterList(root: unknown, source: ReadingBookSource, cfg: any, section: "search" | "module"): GenericSourceBook[] {
-  const rule = cfg?.[section] || {};
-  const listRule = String(rule.listSelector || (section === "search" ? "$.info[*]" : "")).trim();
-  const items = listRule ? manyValues(root, listRule) : (Array.isArray(root) ? root : []);
+  const configured = cfg?.[section] || {};
+  // 发现接口经常直接返回与搜索相同的 JSON；没有单独 module 配置时，复用 search 的字段映射。
+  const rule = Object.keys(configured).length ? configured : (section === "module" ? (cfg?.search || {}) : {});
+  const listRule = String(rule.listSelector || (isJson(root) ? "$.info[*]" : "")).trim();
+  let items = listRule ? manyValues(root, listRule) : (Array.isArray(root) ? root : []);
+
+  // 如果配置的列表路径不匹配，自动尝试常见的 JSON 数组容器，避免“接口有返回但 0 条”。
+  if (!items.length && isJson(root)) {
+    const candidates = ["$.info[*]", "$.data[*]", "$.data.list[*]", "$.list[*]", "$.items[*]"];
+    for (const candidate of candidates) {
+      const found = manyValues(root, candidate);
+      if (found.length) { items = found; break; }
+    }
+    if (!items.length && root && typeof root === "object") {
+      const arrays = Object.values(root as Record<string, unknown>).filter(Array.isArray) as unknown[][];
+      items = arrays.find((arr) => arr.some((x) => x && typeof x === "object")) || [];
+    }
+  }
+
   const fields = rule.fields || {};
   const base = source.url;
+  const fallback = {
+    title: "$.title", author: "$.author", cover: "$.cover", desc: "$.desc",
+    latestChapterTitle: "$.latestChapterTitle", url: "$.url",
+  };
+  const detailTemplate = asText(rule.detailUrlTemplate || cfg.detail?.urlTemplate).trim();
+
   return items.map((item: any) => {
-    const title = mangaField(root, item, fields.title || fields.name, source) || "未命名";
-    const author = mangaField(root, item, fields.author, source) || undefined;
-    const cover = mangaField(root, item, fields.cover || fields.coverUrl, source) || undefined;
-    const desc = mangaField(root, item, fields.desc || fields.intro, source) || undefined;
-    const latest = mangaField(root, item, fields.latestChapterTitle || fields.lastChapter, source) || undefined;
-    let bookUrl = mangaField(root, item, fields.url || fields.bookUrl || fields.detailUrl, source);
-    if (!bookUrl && item && typeof item === "object") {
-      const id = asText((item as any).id || (item as any).book_id || (item as any).bookId).trim();
-      const template = asText(rule.detailUrlTemplate || cfg.detail?.urlTemplate).trim();
-      if (id && template) bookUrl = template.replace(/\{\{id\}\}/g, encodeURIComponent(id));
-    }
+    const title = mangaField(root, item, fields.title || fields.name || fallback.title, source) || "未命名";
+    const author = mangaField(root, item, fields.author || fallback.author, source) || undefined;
+    const cover = mangaField(root, item, fields.cover || fields.coverUrl || fallback.cover, source) || undefined;
+    const desc = mangaField(root, item, fields.desc || fields.intro || fallback.desc, source) || undefined;
+    const latest = mangaField(root, item, fields.latestChapterTitle || fields.lastChapter || fallback.latestChapterTitle, source) || undefined;
+    let bookUrl = mangaField(root, item, fields.url || fields.bookUrl || fields.detailUrl || fallback.url, source);
+    const id = item && typeof item === "object"
+      ? asText((item as any).id || (item as any).book_id || (item as any).bookId || (item as any).series_id).trim()
+      : "";
+    if (!bookUrl && id && detailTemplate) bookUrl = detailTemplate.replace(/\{\{id\}\}/g, encodeURIComponent(id));
+
     return {
-      title,
-      author,
+      title, author,
       cover: cover ? joinUrl(base, cover) : undefined,
-      desc,
-      latestChapterTitle: latest,
+      desc, latestChapterTitle: latest,
       bookUrl: joinUrl(base, bookUrl),
+      bookId: id || undefined,
       raw: item,
     };
   }).filter((book) => !!book.bookUrl || book.title !== "未命名");
