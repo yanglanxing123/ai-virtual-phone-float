@@ -82,57 +82,138 @@ async function request(url: string, options: { method?: string; headers?: Record
 }
 
 function sourceConfig(body: any): Rule {
-  const raw = body?.sourceRaw || {};
-  const sourceUrl = String(body.sourceUrl || "");
-
-  // 如果是楠楠漫画，直接使用预设规则（忽略 raw.mangaAdapter）
-  if (sourceUrl.includes("nnmh.me") || sourceUrl.includes("nnmh.info")) {
-    const preset = {
-      search: {
-        url: "/index.php?m=&c=mh&a=load_searchpage,{\"method\":\"POST\",\"body\":\"page={{page}}&key={{key}}&paixu=&status=0&limitStatus=0\",\"headers\":{\"X-Requested-With\":\"XMLHttpRequest\"}}",
-        listSelector: "$.info[*]",
-        fields: {
-          title: "$.title",
-          bookUrl: "/home/book/index/id/{{id}}/",
-          cover: "$.cover_pic"
-        }
-      },
-      catalog: {
-        listSelector: "#html_box .item",
-        fields: {
-          chapterName: "a@text",
-          chapterUrl: "a@href"
-        }
-      },
-      content: {
-        encryptedDataSelector: "var encryptedData = \"([^\"]+)\"",
-        algorithm: "AES-CBC",
-        key: "tH1rU6qZ4vU1sK7pN1wO7mX4bY6dQ9gX",
-        ivMode: "prefix",
-        imagePath: "$",
-        referer: "https://nnmh.me/"
-      }
-    };
-    return { raw, cfg: preset };
+  const raw = body?.sourceRaw && typeof body.sourceRaw === "object" ? body.sourceRaw : {};
+  let cfg: any = raw?.mangaAdapter || raw?.manga || {};
+  if (typeof cfg === "string") {
+    try { cfg = JSON.parse(cfg); } catch { cfg = {}; }
   }
+  return { raw, cfg: cfg && typeof cfg === "object" ? cfg : {} };
+}
 
-  // 其他书源仍从 raw.mangaAdapter 读取
-  const cfg = raw?.mangaAdapter || raw?.manga || {};
-  return { raw, cfg };
+function isJsonText(text: string, contentType = "") {
+  const t = String(text || "").trim();
+  return /json/i.test(contentType) || t.startsWith("{") || t.startsWith("[");
+}
+
+function parsePayload(text: string, contentType = ""): any {
+  if (isJsonText(text, contentType)) {
+    try { return JSON.parse(text); } catch { /* fall through to HTML */ }
+  }
+  return text;
+}
+
+function unwrapJson(value: any): any {
+  if (!value || typeof value !== "object") return value;
+  // Common proxy/API wrappers. Keep the original object if none match.
+  for (const key of ["data", "result", "response", "body"]) {
+    const candidate = value[key];
+    if (candidate && (Array.isArray(candidate) || typeof candidate === "object")) return candidate;
+  }
+  return value;
+}
+
+function jsonPath(root: any, expression: unknown): any {
+  const expr = String(expression ?? "").trim();
+  if (!expr || expr === "$") return root;
+  if (!expr.startsWith("$")) return undefined;
+  const tokens: string[] = [];
+  const re = /(?:^\$|\.([A-Za-z_$][\w$-]*)|\[([0-9]+)\]|\[\*\])/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(expr))) tokens.push(m[1] ?? (m[2] ?? "*"));
+  if (!tokens.length) return undefined;
+  let values = [root];
+  for (const token of tokens) {
+    const next: any[] = [];
+    for (const value of values) {
+      if (token === "*") {
+        if (Array.isArray(value)) next.push(...value);
+        else if (value && typeof value === "object") next.push(...Object.values(value));
+      } else if (value != null) {
+        const v = (value as any)[token];
+        if (v !== undefined) next.push(v);
+      }
+    }
+    values = next;
+  }
+  return values.length === 1 ? values[0] : values;
+}
+
+function scalarJsonValue(item: any, rule: unknown, base: string): string {
+  const r = String(rule ?? "").trim();
+  if (!r) return "";
+  if (r.startsWith("@js:")) {
+    // Only support safe field concatenation commonly used by source configs.
+    const code = r.slice(4).trim();
+    const plusParts = code.split("+").map(x => x.trim()).filter(Boolean);
+    if (plusParts.length) {
+      const value = plusParts.map(part => {
+        const quoted = part.match(/^["']([\s\S]*)["']$/);
+        if (quoted) return quoted[1];
+        const field = part.replace(/^result\.?/, "");
+        const v = jsonPath(item, `$.${field}`);
+        return v == null ? "" : String(v);
+      }).join("");
+      return value ? abs(base, value) : "";
+    }
+    return "";
+  }
+  const value = jsonPath(item, r);
+  if (Array.isArray(value)) return value.map(v => String(v ?? "")).join(",");
+  if (value == null) return "";
+  return abs(base, String(value));
+}
+
+function parseJsonList(root: any, listSelector: string, rules: Rule, base: string) {
+  let list = jsonPath(root, listSelector || "$");
+  if (!Array.isArray(list)) {
+    const unwrapped = unwrapJson(root);
+    list = jsonPath(unwrapped, listSelector || "$");
+  }
+  if (!Array.isArray(list)) return [];
+  return list.map((item: any) => ({
+    title: scalarJsonValue(item, rules.title || rules.name || "$.title", base) || "未命名",
+    author: scalarJsonValue(item, rules.author, base) || undefined,
+    cover: scalarJsonValue(item, rules.cover || rules.coverUrl, base) || undefined,
+    desc: scalarJsonValue(item, rules.desc || rules.intro, base) || undefined,
+    latestChapterTitle: scalarJsonValue(item, rules.latestChapterTitle || rules.lastChapter, base) || undefined,
+    bookUrl: scalarJsonValue(item, rules.url || rules.bookUrl || rules.detailUrl, base),
+    raw: item,
+  })).filter((x) => x.bookUrl || x.title !== "未命名");
+}
+
+function responseContentType(response: Response) {
+  return response.headers.get("content-type") || "";
 }
 
 async function search(body: any) {
   const { raw, cfg } = sourceConfig(body);
-  const vars = { key: String(body.keyword || ""), keyword: String(body.keyword || "") };
+  const vars = { key: String(body.keyword || ""), keyword: String(body.keyword || ""), page: String(body.page || 1), pageIndex: String(body.page || 1) };
   const rule = cfg.search || {};
   const requestRule = rule.url || raw.searchUrl;
   if (!requestRule) throw new Error("漫画源没有配置搜索地址");
   const req = parseRequestRule(requestRule, String(body.sourceUrl), vars);
-  const result = await request(req.url, { method: rule.method || req.method || "POST", headers: req.headers, body: rule.body?.replace(/\{\{(key|keyword)\}\}/g, () => vars.key) || req.body });
+  const bodyText = rule.body !== undefined
+    ? String(rule.body).replace(/\{\{(key|keyword|page|pageIndex)\}\}/g, (_m: string, k: string) => vars[k as keyof typeof vars])
+    : req.body;
+  const headers = { ...req.headers, ...(rule.headers || {}) };
+  if (bodyText !== undefined && !Object.keys(headers).some(k => k.toLowerCase() === "content-type")) {
+    headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8";
+  }
+  const result = await request(req.url, { method: String(rule.method || req.method || "GET").toUpperCase(), headers, body: bodyText });
   if (!result.response.ok) throw new Error(`搜索 HTTP ${result.response.status}`);
   const rules = rule.fields || raw.ruleSearch || {};
-  const listSelector = rule.listSelector || cfg.searchListSelector || ".itemnar";
-  return parseList(result.text, listSelector, rules, result.url);
+  const listSelector = String(rule.listSelector || "$.info[*]");
+  const payload = parsePayload(result.text, responseContentType(result.response));
+  if (typeof payload !== "string") {
+    const parsed = parseJsonList(payload, listSelector, rules, result.url);
+    if (parsed.length) return parsed;
+    // Some APIs wrap the actual object under data/result; retry using the unwrapped root.
+    const unwrapped = unwrapJson(payload);
+    const fallback = parseJsonList(unwrapped, listSelector, rules, result.url);
+    if (fallback.length) return fallback;
+    throw new Error("搜索接口已返回 JSON，但没有按 mangaAdapter.search 识别到漫画数据");
+  }
+  return parseList(payload, listSelector, rules, result.url);
 }
 
 async function detail(body: any) {
@@ -234,11 +315,16 @@ async function content(body: any) {
 }
 
 async function module(body: any) {
-  const result = await request(abs(String(body.sourceUrl), String(body.moduleUrl || "")));
+  const { raw, cfg } = sourceConfig(body);
+  const rule = cfg.module || cfg.search || {};
+  const requestRule = rule.url || String(body.moduleUrl || "");
+  const req = parseRequestRule(requestRule, String(body.sourceUrl), { key: "", keyword: "", page: String(body.page || 1), pageIndex: String(body.page || 1) });
+  const result = await request(req.url, { method: String(rule.method || req.method || "GET").toUpperCase(), headers: { ...req.headers, ...(rule.headers || {}) }, body: rule.body || req.body });
   if (!result.response.ok) throw new Error(`分类 HTTP ${result.response.status}`);
-  const { cfg } = sourceConfig(body);
-  const rule = cfg.module || {};
-  return parseList(result.text, rule.listSelector || ".likedata", rule.fields || {}, result.url);
+  const rules = rule.fields || {};
+  const payload = parsePayload(result.text, responseContentType(result.response));
+  if (typeof payload !== "string") return parseJsonList(payload, String(rule.listSelector || "$.info[*]"), rules, result.url);
+  return parseList(payload, String(rule.listSelector || ".item"), rules, result.url);
 }
 
 const GENERIC_MANGA_ADAPTER: MangaServerAdapter = {
