@@ -29,7 +29,8 @@ export type IconId =
   | "worldbuilder"
   | "qa"
   | "raid"
-  | "reader_note";
+  | "reader_note"
+  | "xiashu";
 
 // 桌面文件夹：以 folder: 前缀的 id 伪装成图标占一个格子参与拖拽/换页，
 // 内容（名字 + 成员图标）另存 DesktopFolderMap。文件夹不允许进 dock。
@@ -67,7 +68,8 @@ export const PAGE_2_DEFAULT: IconId[] = [
   "vnmode",
   "mapmode",
   "raid",
-  "reader_note"
+  "reader_note",
+  "xiashu"
 ];
 
 // 第三页默认图标：右半边 2×2 排布（左半边留给日历组件），位置见 createDefaultDesktopIconLayout
@@ -127,4 +129,5 @@ export const ICONS: Record<IconId, IconMeta> = {
   qa: { id: "qa", label: "工坊", tone: "var(--c-icon-qa, #4a505c99)", placeholder: false },
   raid: { id: "raid", label: "攻略", tone: "var(--c-icon-rose)", placeholder: false },
   reader_note: { id: "reader_note", label: "阅记", tone: "var(--c-icon-green)", placeholder: false },
+  xiashu: { id: "xiashu", label: "夏书", tone: "var(--c-icon-rose)", placeholder: false },
 };
