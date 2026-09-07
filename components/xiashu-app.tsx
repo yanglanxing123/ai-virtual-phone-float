@@ -15,15 +15,16 @@ import {
   createMessage, loadRegexScripts, saveRegexScripts,
   loadSettings, saveSettings, type XiashuSettings,
   loadCssThemes, saveCssThemes, getActiveCss, type XiashuCssTheme,
+  loadCharSettings, saveCharSettings, saveCharacterCardData,
 } from "@/lib/xiashu-storage";
-import { loadWorldBooks, saveWorldBooks, loadBindingConfig, saveBindingConfig, resolveBinding } from "@/lib/settings-storage";
-import type { WorldBookConfig, BindingConfig, CharacterBinding } from "@/lib/settings-types";
-import type { XiashuMessage, XiashuStatus, XiashuChatSession, TavernRegexScript } from "@/lib/xiashu-types";
+import { loadWorldBooks, saveWorldBooks, loadBindingConfig, saveBindingConfig, resolveBinding, loadRegexes, saveRegexes, loadPresets } from "@/lib/settings-storage";
+import type { WorldBookConfig, BindingConfig, CharacterBinding, RegexConfig } from "@/lib/settings-types";
+import type { XiashuMessage, XiashuStatus, XiashuChatSession, TavernRegexScript, XiashuCharSettings } from "@/lib/xiashu-types";
 import { XIASHU_APP_ID } from "@/lib/xiashu-types";
 import { parseTavernCard, parseTavernCardFromJson, convertToCharacter, getCardSummary, convertWorldBook } from "@/lib/xiashu-import";
 import { generateReply, generateGreeting, parseStatusFromResponse, formatMessageContent, ChatEngineError } from "@/lib/xiashu-engine";
 
-type Page = "characters" | "chat" | "settings";
+type Page = "characters" | "chat" | "worldbooks" | "character-settings" | "settings";
 type XiashuAppProps = { onClose: () => void; onNotice: (text: string) => void };
 
 const INS_GRADIENT = "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)";
@@ -38,6 +39,7 @@ export function XiashuApp({ onClose, onNotice }: XiashuAppProps) {
   const [cssThemes, setCssThemes] = useState<XiashuCssTheme[]>(() => loadCssThemes());
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedWorldBookId, setSelectedWorldBookId] = useState<string | null>(null);
 
   // 刷新角色列表
   const refreshCharacters = useCallback(() => {
@@ -46,6 +48,15 @@ export function XiashuApp({ onClose, onNotice }: XiashuAppProps) {
 
   const currentChar = characters.find((c) => c.id === currentCharId) || null;
   const currentSession = currentCharId ? sessions[currentCharId] : null;
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (id) { setCurrentCharId(id); setPage("character-settings"); }
+    };
+    window.addEventListener("xiashu-open-character-settings", handler);
+    return () => window.removeEventListener("xiashu-open-character-settings", handler);
+  }, []);
 
   // ── 导入酒馆角色卡 ────────────────────────────────
   const handleImport = useCallback(async (file: File) => {
@@ -75,6 +86,45 @@ export function XiashuApp({ onClose, onNotice }: XiashuAppProps) {
       setCharacters(updated);
       saveCharacters(updated);
 
+      // 每张角色卡保存一份完整的酒馆运行数据；未知 extensions 原样保留。
+      const charSettings: XiashuCharSettings = {
+        characterId: newChar.id,
+        scenario: result.character.scenario,
+        firstMes: result.character.firstMes,
+        alternateGreetings: result.character.alternateGreetings,
+        systemPrompt: result.character.systemPrompt,
+        postHistoryInstructions: result.character.postHistoryInstructions,
+        cardExtensions: result.character.extensions,
+        rawCardData: result.rawCardData,
+        rawSpec: result.rawSpec,
+        rawSpecVersion: result.rawSpecVersion,
+        statusBar: result.statusBar || { enabled: true, showInChat: true },
+      };
+      saveCharSettings(charSettings);
+      saveCharacterCardData(charSettings);
+
+      // 角色卡自带正则：独立生成一个正则组并只绑定当前角色。
+      if (result.regexScripts?.length) {
+        const allRegexes = loadRegexes();
+        const regexGroup: RegexConfig = {
+          id: `regex_card_${newChar.id}`,
+          name: `${newChar.name} · 角色卡正则`,
+          description: "从酒馆角色卡 extensions 自动导入，仅绑定当前角色",
+          createdAt: Date.now(), updatedAt: Date.now(),
+          rules: result.regexScripts.map((r, i) => ({
+            id: r.id || `card_rule_${i}`, scriptName: r.scriptName, findRegex: r.findRegex,
+            replaceString: r.replaceString || "", trimStrings: r.trimStrings || [],
+            disabled: r.disabled === true, markdownOnly: r.markdownOnly, promptOnly: r.promptOnly,
+            runOnEdit: r.runOnEdit !== false, placement: r.placement || [2], tags: r.tags,
+            substituteRegex: r.substituteRegex, minDepth: r.minDepth, maxDepth: r.maxDepth,
+          })),
+        };
+        saveRegexes([...allRegexes.filter(r => r.id !== regexGroup.id), regexGroup]);
+        charSettings.regexScriptIds = [regexGroup.id];
+        saveCharSettings(charSettings);
+        saveCharacterCardData(charSettings);
+      }
+
       // 导入角色卡内嵌的世界书
       let wbNotice = "";
       if (result.worldBook && result.worldBook.entries) {
@@ -96,6 +146,10 @@ export function XiashuApp({ onClose, onNotice }: XiashuAppProps) {
           xiashuOverride.worldBookIds = [...(xiashuOverride.worldBookIds || []), wbConfig.id];
           charBinding.appOverrides[XIASHU_APP_ID] = xiashuOverride;
           saveBindingConfig(bindings);
+          const current = loadCharSettings(newChar.id) || charSettings;
+          current.worldBookIds = [...(current.worldBookIds || []), wbConfig.id];
+          saveCharSettings(current);
+          saveCharacterCardData(current);
 
           wbNotice = `，世界书 ${wbConfig.entries.length} 条已导入并绑定`;
         } catch (e) {
@@ -382,6 +436,27 @@ export function XiashuApp({ onClose, onNotice }: XiashuAppProps) {
           )}
 
           {/* ── 设置页 ── */}
+          {page === "worldbooks" && (
+            <WorldBooksPage
+              books={loadWorldBooks()}
+              selectedId={selectedWorldBookId}
+              onSelect={setSelectedWorldBookId}
+              onSave={(books) => { saveWorldBooks(books); setSelectedWorldBookId(null); onNotice("世界书已保存"); }}
+              onBack={() => setPage("characters")}
+              theme={settings.theme}
+            />
+          )}
+
+          {page === "character-settings" && currentChar && (
+            <CharacterSettingsPage
+              character={currentChar}
+              settings={loadCharSettings(currentChar.id)}
+              onSave={(next) => { saveCharSettings(next); saveCharacterCardData(next); onNotice("角色独立配置已保存"); }}
+              onBack={() => setPage("characters")}
+              theme={settings.theme}
+            />
+          )}
+
           {page === "settings" && (
             <SettingsPage
               settings={settings}
@@ -409,7 +484,8 @@ export function XiashuApp({ onClose, onNotice }: XiashuAppProps) {
             borderTop: `1px solid ${settings.theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
           }}>
             <TabButton icon={<MessageCircle size={22} />} label="角色" active={page === "characters"} onClick={() => setPage("characters")} settings={settings} />
-            <TabButton icon={<BookOpen size={22} />} label="对话" active={page === "chat"} onClick={() => currentCharId ? setPage("chat") : setPage("characters")} settings={settings} />
+            <TabButton icon={<BookOpen size={22} />} label="世界书" active={page === "worldbooks"} onClick={() => setPage("worldbooks")} settings={settings} />
+            <TabButton icon={<Send size={22} />} label="对话" active={page === "chat"} onClick={() => currentCharId ? setPage("chat") : setPage("characters")} settings={settings} />
             <TabButton icon={<SettingsIcon size={22} />} label="设置" active={page === "settings"} onClick={() => setPage("settings")} settings={settings} />
           </div>
         </div>
@@ -540,9 +616,8 @@ function CharactersPage({ characters, sessions, onImport, onStartChat, onClose, 
               const session = sessions[char.id];
               const hasChat = session && session.messages.length > 0;
               return (
-                <div key={char.id} onClick={() => onStartChat(char.id)} style={{
-                  cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px",
-                }}>
+                <div key={char.id} style={{ position: "relative", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+                  <button onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent("xiashu-open-character-settings", { detail: char.id })); }} style={{ position: "absolute", right: "-2px", top: "-4px", zIndex: 2, border: "none", background: "rgba(0,0,0,.45)", color: "white", width: 20, height: 20, borderRadius: 10, cursor: "pointer", fontSize: 11 }}>⚙</button>
                   <div className="xiashu-grad-ring" style={{ width: "56px", height: "56px" }}>
                     <div style={{
                       width: "100%", height: "100%", borderRadius: "50%", overflow: "hidden",
@@ -751,6 +826,9 @@ function StatusBar({ status, settings }: { status: XiashuStatus; settings: Xiash
       <StatusItem icon={<Smile size={12} />} label="心情" value={status.mood} color="#ff9f0a" />
       <StatusItem icon={<ShieldCheck size={12} />} label="信任" value={status.trust} color="#34c759" />
       <StatusItem icon={<Users size={12} />} label="关系" value={status.stage} color="#5856d6" />
+      {status.dynamic && Object.entries(status.dynamic).filter(([k]) => !["好感度","心情","信任","关系","关系阶段","favor","affection","mood","trust","stage"].includes(k)).slice(0, 8).map(([key, value]) => (
+        <StatusItem key={key} icon={<BookOpen size={12} />} label={key} value={String(value ?? "")} color="#8e8e93" />
+      ))}
     </div>
   );
 }
@@ -771,6 +849,72 @@ function StatusItem({ icon, label, value, progress, color }: {
       )}
     </div>
   );
+}
+
+
+// ── 世界书页：独立于角色卡，可创建/编辑/删除/导入 ─────────────
+function WorldBooksPage({ books, selectedId, onSelect, onSave, onBack, theme }: {
+  books: WorldBookConfig[]; selectedId: string | null; onSelect: (id: string | null) => void;
+  onSave: (books: WorldBookConfig[]) => void; onBack: () => void; theme: "light" | "dark";
+}) {
+  const selected = books.find(b => b.id === selectedId) || null;
+  const [draft, setDraft] = useState<WorldBookConfig | null>(selected);
+  const [newName, setNewName] = useState("");
+  useEffect(() => setDraft(selected), [selectedId]);
+  const makeBook = () => {
+    const now = Date.now();
+    const book: WorldBookConfig = { id: `wb_${now}`, name: newName.trim() || "新世界书", description: "", createdAt: now, updatedAt: now, entries: [] };
+    onSave([...books, book]); onSelect(book.id); setNewName("");
+  };
+  const saveDraft = () => { if (!draft) return; onSave(books.map(b => b.id === draft.id ? { ...draft, updatedAt: Date.now() } : b)); };
+  return <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}><button onClick={onBack} style={{ border: 0, background: "none", color: "#dc2743" }}><ArrowLeft size={20}/></button><h2 style={{ margin: 0, fontSize: 18 }}>世界书</h2></div>
+    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="新世界书名称" style={{ flex: 1, padding: 9, borderRadius: 10, border: "1px solid #ddd" }}/><button onClick={makeBook} style={{ border: 0, borderRadius: 10, padding: "0 12px", background: "#dc2743", color: "white" }}>新建</button></div>
+    <input id="xiashu-wb-import" type="file" accept=".json" style={{ display:"none" }} onChange={async e => { const file=e.target.files?.[0]; if(!file) return; try { const obj=JSON.parse(await file.text()); const wb=(obj.data?.entries ? obj.data : obj); const imported=convertWorldBook(wb, file.name.replace(/\.json$/i, "")); onSave([...books, imported]); onSelect(imported.id); } catch { window.alert("世界书 JSON 导入失败"); } e.target.value=""; }} />
+    <button onClick={() => document.getElementById("xiashu-wb-import")?.click()} style={{ width:"100%", padding:9, marginBottom:12, borderRadius:10, border:"1px dashed #bbb", background:"none" }}>导入酒馆世界书 JSON</button>
+    {!draft ? <div style={{ display: "grid", gap: 8 }}>{books.map(b => <button key={b.id} onClick={() => onSelect(b.id)} style={{ textAlign: "left", border: 0, borderRadius: 12, padding: 12, background: "rgba(0,0,0,.04)" }}><b>{b.name}</b><div style={{ color: "#8e8e93", fontSize: 11, marginTop: 3 }}>{b.entries.length} 个条目</div></button>)}</div> : <>
+      <input value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} style={{ width: "100%", boxSizing: "border-box", padding: 10, borderRadius: 10, border: "1px solid #ddd", marginBottom: 8 }}/>
+      <textarea value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} placeholder="描述" style={{ width: "100%", boxSizing: "border-box", minHeight: 60, borderRadius: 10, border: "1px solid #ddd", padding: 10, marginBottom: 10 }}/>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}><button onClick={() => { const now=Date.now(); setDraft({ ...draft, entries: [...draft.entries, { uid:`wbe_${now}`, key:"", content:"", comment:"新条目", use_regex:false, disable:false, constant:false, position:"before_char", insertion_order:50 }] }); }} style={{ flex: 1, padding: 9, borderRadius: 10, border: "1px solid #ddd", background: "none" }}>+ 条目</button><button onClick={saveDraft} style={{ flex: 1, padding: 9, borderRadius: 10, border: 0, background: "#dc2743", color: "white" }}>保存</button><button onClick={() => { onSave(books.filter(b => b.id !== draft.id)); onSelect(null); }} style={{ padding: 9, borderRadius: 10, border: 0, color: "#ff3b30", background: "rgba(255,59,48,.08)" }}>删除</button></div>
+      {draft.entries.map((entry, i) => <div key={entry.uid} style={{ padding: 10, marginBottom: 8, borderRadius: 12, background: "rgba(0,0,0,.035)" }}>
+        <input value={entry.comment} onChange={e => { const entries=[...draft.entries]; entries[i]={...entries[i], comment:e.target.value}; setDraft({...draft,entries}); }} placeholder="条目名称" style={{ width:"100%", boxSizing:"border-box", padding:8, marginBottom:6, borderRadius:8, border:"1px solid #ddd" }}/>
+        <input value={entry.key} onChange={e => { const entries=[...draft.entries]; entries[i]={...entries[i], key:e.target.value}; setDraft({...draft,entries}); }} placeholder="关键词，逗号分隔" style={{ width:"100%", boxSizing:"border-box", padding:8, marginBottom:6, borderRadius:8, border:"1px solid #ddd" }}/>
+        <textarea value={entry.content} onChange={e => { const entries=[...draft.entries]; entries[i]={...entries[i], content:e.target.value}; setDraft({...draft,entries}); }} placeholder="内容" style={{ width:"100%", minHeight:80, boxSizing:"border-box", padding:8, borderRadius:8, border:"1px solid #ddd" }}/>
+        <div style={{ display:"flex", gap:12, marginTop:6, fontSize:11 }}><label><input type="checkbox" checked={entry.constant} onChange={e => { const entries=[...draft.entries]; entries[i]={...entries[i], constant:e.target.checked}; setDraft({...draft,entries}); }}/> 常驻</label><label><input type="checkbox" checked={entry.use_regex} onChange={e => { const entries=[...draft.entries]; entries[i]={...entries[i], use_regex:e.target.checked}; setDraft({...draft,entries}); }}/> 正则关键词</label><label><input type="checkbox" checked={!entry.disable} onChange={e => { const entries=[...draft.entries]; entries[i]={...entries[i], disable:!e.target.checked}; setDraft({...draft,entries}); }}/> 启用</label></div>
+      </div>)}
+    </>}
+  </div>;
+}
+
+// ── 角色独立配置：每张角色卡拥有自己的 Preset / 世界书 / 正则 / 状态栏 / 采样参数 ──
+function CharacterSettingsPage({ character, settings, onSave, onBack, theme }: {
+  character: Character; settings: XiashuCharSettings | null; onSave: (settings: XiashuCharSettings) => void; onBack: () => void; theme: "light" | "dark";
+}) {
+  const [draft, setDraft] = useState<XiashuCharSettings>(() => settings || { characterId: character.id, statusBar: { enabled: true, showInChat: true } });
+  const presets = loadPresets(); const books = loadWorldBooks(); const regexes = loadRegexes();
+  const update = (patch: Partial<XiashuCharSettings>) => setDraft(d => ({ ...d, ...patch }));
+  return <div style={{ flex:1, overflow:"auto", padding:16 }}>
+    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}><button onClick={onBack} style={{ border:0, background:"none", color:"#dc2743" }}><ArrowLeft size={20}/></button><h2 style={{ margin:0, fontSize:18 }}>{character.name} · 独立配置</h2></div>
+    <SettingGroup title="角色卡字段">
+      <textarea value={draft.scenario || ""} onChange={e => update({ scenario:e.target.value })} placeholder="Scenario / 场景" style={{ width:"calc(100% - 28px)", margin:8, minHeight:70, padding:8, borderRadius:8, border:"1px solid #ddd" }}/>
+      <textarea value={draft.systemPrompt || ""} onChange={e => update({ systemPrompt:e.target.value })} placeholder="System Prompt" style={{ width:"calc(100% - 28px)", margin:8, minHeight:90, padding:8, borderRadius:8, border:"1px solid #ddd" }}/>
+      <textarea value={draft.postHistoryInstructions || ""} onChange={e => update({ postHistoryInstructions:e.target.value })} placeholder="Post History Instructions" style={{ width:"calc(100% - 28px)", margin:8, minHeight:70, padding:8, borderRadius:8, border:"1px solid #ddd" }}/>
+      <textarea value={draft.authorNote || ""} onChange={e => update({ authorNote:e.target.value })} placeholder="Author's Note" style={{ width:"calc(100% - 28px)", margin:8, minHeight:70, padding:8, borderRadius:8, border:"1px solid #ddd" }}/>
+    </SettingGroup>
+    <SettingGroup title="酒馆绑定（仅当前角色）">
+      <SettingRow label="Preset"><select value={draft.presetId || ""} onChange={e => update({ presetId:e.target.value || undefined })} style={{ maxWidth:"55%" }}><option value="">跟随默认</option>{presets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></SettingRow>
+      <SettingRow label="世界书"><select multiple value={draft.worldBookIds || []} onChange={e => update({ worldBookIds:Array.from(e.target.selectedOptions).map(o=>o.value) })} style={{ maxWidth:"55%", minHeight:80 }}>{books.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></SettingRow>
+      <SettingRow label="正则组"><select multiple value={draft.regexScriptIds || []} onChange={e => update({ regexScriptIds:Array.from(e.target.selectedOptions).map(o=>o.value) })} style={{ maxWidth:"55%", minHeight:80 }}>{regexes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></SettingRow>
+    </SettingGroup>
+    <SettingGroup title="状态栏 / 变量">
+      <SettingRow label="启用状态栏"><Toggle on={draft.statusBar?.enabled !== false} onClick={() => update({ statusBar:{ ...(draft.statusBar||{}), enabled: draft.statusBar?.enabled === false } })}/></SettingRow>
+      <textarea value={draft.statusBar?.format || ""} onChange={e => update({ statusBar:{ ...(draft.statusBar||{}), format:e.target.value } })} placeholder="自定义状态栏格式；留空则自动解析酒馆状态标签" style={{ width:"calc(100% - 28px)", margin:8, minHeight:70, padding:8, borderRadius:8, border:"1px solid #ddd" }}/>
+    </SettingGroup>
+    <SettingGroup title="生成参数（仅当前角色）">
+      {(["temperature","top_p","top_k","max_tokens","max_context","frequency_penalty","presence_penalty","repetition_penalty","min_p","top_a"] as const).map(key => <SettingRow key={key} label={key}><input type="number" step="0.01" value={draft.generation?.[key] ?? ""} onChange={e => update({ generation:{ ...(draft.generation||{}), [key]: e.target.value === "" ? undefined : Number(e.target.value) } })} style={{ width:100 }}/></SettingRow>)}
+    </SettingGroup>
+    <button onClick={() => onSave(draft)} style={{ width:"100%", padding:12, border:0, borderRadius:12, background:"#dc2743", color:"white", fontWeight:600 }}>保存当前角色全部配置</button>
+  </div>;
 }
 
 // ── 设置页 ──────────────────────────────────────────
