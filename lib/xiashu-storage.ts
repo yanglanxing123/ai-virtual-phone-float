@@ -151,3 +151,35 @@ export function saveCharSettings(settings: XiashuCharSettings): void {
     kvSet(CHAR_SETTINGS_KEY, JSON.stringify(all));
   } catch { /* ignore */ }
 }
+
+// ── 角色卡完整原始数据（每角色独立） ──────────────────
+const CARD_DATA_KEY = "xiashu_character_cards_v2";
+registerKvMigration(CARD_DATA_KEY);
+
+export function loadCharacterCardData(characterId: string): XiashuCharSettings | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = kvGet(CARD_DATA_KEY);
+    if (!raw) return null;
+    const all: Record<string, XiashuCharSettings> = JSON.parse(raw);
+    return all[characterId] || null;
+  } catch { return null; }
+}
+
+export function saveCharacterCardData(data: XiashuCharSettings): void {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = kvGet(CARD_DATA_KEY);
+    const all: Record<string, XiashuCharSettings> = raw ? JSON.parse(raw) : {};
+    all[data.characterId] = data;
+    kvSet(CARD_DATA_KEY, JSON.stringify(all));
+  } catch { /* ignore */ }
+}
+
+export function loadAllCharacterCardData(): Record<string, XiashuCharSettings> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = kvGet(CARD_DATA_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}

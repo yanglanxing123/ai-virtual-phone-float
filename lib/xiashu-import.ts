@@ -98,24 +98,7 @@ export function parseTavernCard(buffer: ArrayBuffer): XiashuImportResult | null 
   // 提取 PNG 图像为 data URL（用于头像）
   const image = extractPngAsDataUrl(u8);
 
-  return {
-    character: {
-      name: data.name,
-      persona: data.description || "",
-      personality: data.personality,
-      avatar: image,
-      tags: data.tags || [],
-      firstMes: data.first_mes,
-      scenario: data.scenario,
-      mesExample: data.mes_example,
-      systemPrompt: data.system_prompt,
-      postHistoryInstructions: data.post_history_instructions,
-      alternateGreetings: data.alternate_greetings,
-      creator: data.creator,
-    },
-    worldBook: data.character_book || null,
-    image,
-  };
+  return buildImportResult(cardData, image);
 }
 
 // ── 提取 PNG 为 data URL ─────────────────────────────
@@ -138,29 +121,11 @@ export function convertToCharacter(
 ): Character {
   const now = new Date().toISOString();
   const id = `char_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-
-  // 构建完整的 persona：将酒馆字段合并到仓库的 persona 中
-  // 仓库的 Character.persona 对应酒馆的 description
-  // 额外字段（scenario, mes_example 等）通过预设或额外存储处理
-  let persona = result.character.persona || "";
-  if (result.character.scenario) {
-    persona += `\n\n【场景】\n${result.character.scenario}`;
-  }
-  if (result.character.mesExample) {
-    persona += `\n\n【对话示例】\n${result.character.mesExample}`;
-  }
-  if (result.character.systemPrompt) {
-    persona += `\n\n【系统提示】\n${result.character.systemPrompt}`;
-  }
-  if (result.character.postHistoryInstructions) {
-    persona += `\n\n【后置指令】\n${result.character.postHistoryInstructions}`;
-  }
-
   return {
     id,
     name: result.character.name,
-    avatar: result.character.avatar || result.character.image || null,
-    persona: persona.trim(),
+    avatar: result.character.avatar || result.image || null,
+    persona: result.character.persona || "",
     personality: result.character.personality,
     tags: ["xiashu", ...(result.character.tags || [])],
     wechatID: generateWechatID(),
@@ -187,32 +152,70 @@ export function getCardSummary(result: XiashuImportResult): { name: string; desc
 // ── 解析 JSON 格式的角色卡 ───────────────────────────
 export function parseTavernCardFromJson(text: string): XiashuImportResult | null {
   try {
-    const obj = JSON.parse(text);
-    // 可能是 V2/V3 格式或简化格式
-    const data = obj.data || obj;
-    if (!data.name) return null;
-
-    return {
-      character: {
-        name: data.name,
-        persona: data.description || data.persona || "",
-        personality: data.personality,
-        avatar: null,
-        tags: data.tags || [],
-        firstMes: data.first_mes,
-        scenario: data.scenario,
-        mesExample: data.mes_example,
-        systemPrompt: data.system_prompt,
-        postHistoryInstructions: data.post_history_instructions,
-        alternateGreetings: data.alternate_greetings,
-        creator: data.creator,
-      },
-      worldBook: data.character_book || null,
-      image: null,
-    };
+    const obj = JSON.parse(text) as TavernCardV2 | Record<string, unknown>;
+    const data = ((obj as TavernCardV2).data || obj) as TavernCardV2["data"];
+    if (!data?.name) return null;
+    return buildImportResult({
+      spec: (obj as TavernCardV2).spec,
+      spec_version: (obj as TavernCardV2).spec_version,
+      data,
+    }, null);
   } catch {
     return null;
   }
+}
+
+function buildImportResult(cardData: TavernCardV2, image: string | null): XiashuImportResult {
+  const data = cardData.data;
+  const extensions = (data.extensions && typeof data.extensions === "object")
+    ? data.extensions as Record<string, unknown> : {};
+  return {
+    character: {
+      name: data.name, persona: data.description || "", personality: data.personality, avatar: image,
+      tags: Array.isArray(data.tags) ? data.tags : [], firstMes: data.first_mes, scenario: data.scenario,
+      mesExample: data.mes_example, systemPrompt: data.system_prompt, postHistoryInstructions: data.post_history_instructions,
+      alternateGreetings: data.alternate_greetings, groupOnlyGreetings: data.group_only_greetings, creator: data.creator,
+      creatorNotes: data.creator_notes, characterVersion: data.character_version, nickname: data.nickname,
+      creatorNotesMultilingual: data.creator_notes_multilingual, source: data.source, assets: data.assets,
+      creationDate: data.creation_date, modificationDate: data.modification_date, extensions,
+    },
+    worldBook: data.character_book || null,
+    regexScripts: extractRegexScripts(extensions), statusBar: extractStatusBar(extensions), image, rawCardData: { ...data },
+    rawSpec: cardData.spec, rawSpecVersion: cardData.spec_version,
+  };
+}
+
+function extractRegexScripts(extensions: Record<string, unknown>): TavernRegexScript[] {
+  const candidates = [extensions.regex_scripts, extensions.regexScripts, extensions.regex, extensions.regex_scripts_data, extensions.regexScriptsData];
+  for (const value of candidates) {
+    if (!Array.isArray(value)) continue;
+    const normalized = value.filter(v => v && typeof v === "object").map((v, i) => {
+      const r = v as Record<string, unknown>;
+      return {
+        id: String(r.id || `card_regex_${i}`), scriptName: String(r.scriptName || r.name || `角色卡正则 ${i + 1}`),
+        findRegex: String(r.findRegex || r.find || r.regex || ""), replaceString: String(r.replaceString ?? r.replace ?? ""),
+        trimStrings: Array.isArray(r.trimStrings) ? r.trimStrings.map(String) : [], disabled: r.disabled === true,
+        markdownOnly: r.markdownOnly === true, promptOnly: r.promptOnly === true, runOnEdit: r.runOnEdit !== false,
+        placement: Array.isArray(r.placement) ? r.placement.map(Number) : [2], tags: Array.isArray(r.tags) ? r.tags.map(String) : undefined,
+        substituteRegex: typeof r.substituteRegex === "number" ? r.substituteRegex : undefined,
+        minDepth: typeof r.minDepth === "number" ? r.minDepth : undefined, maxDepth: typeof r.maxDepth === "number" ? r.maxDepth : undefined,
+      };
+    }).filter(r => r.findRegex);
+    if (normalized.length) return normalized;
+  }
+  return [];
+}
+
+function extractStatusBar(extensions: Record<string, unknown>): { enabled?: boolean; format?: string; raw?: unknown } | undefined {
+  const raw = extensions.statusBar ?? extensions.status_bar ?? extensions.status ?? extensions.stat_data ?? extensions.state;
+  if (raw === undefined) return undefined;
+  if (typeof raw === "string") return { enabled: true, format: raw, raw };
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    const format = typeof obj.format === "string" ? obj.format : typeof obj.template === "string" ? obj.template : undefined;
+    return { enabled: obj.enabled !== false, format, raw };
+  }
+  return { enabled: true, raw };
 }
 
 // ── 转换酒馆世界书为宿主 WorldBookConfig 格式 ───────

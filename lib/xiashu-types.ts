@@ -2,25 +2,27 @@
 
 export const XIASHU_APP_ID = "xiashu";
 
-// ── 聊天消息 ──────────────────────────────────────
 export type XiashuMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
   timestamp: string;
-  // 正则脚本渲染后的 HTML（可选，仅用于显示）
   renderedHtml?: string;
 };
 
-// ── 状态栏 ──────────────────────────────────────────
+/**
+ * 状态栏不再限定为固定四项。保留旧字段只是为了兼容已有夏书会话，
+ * dynamic 保存酒馆角色卡/状态脚本产生的任意字段。
+ */
 export type XiashuStatus = {
-  affection: number;     // 好感度 0-100
-  mood: string;          // 心情
-  trust: string;         // 信任
-  stage: string;         // 关系阶段
+  affection: number;
+  mood: string;
+  trust: string;
+  stage: string;
+  dynamic?: Record<string, string | number | boolean | null>;
+  raw?: string;
 };
 
-// ── 聊天会话 ────────────────────────────────────────
 export type XiashuChatSession = {
   characterId: string;
   characterName: string;
@@ -30,24 +32,56 @@ export type XiashuChatSession = {
   updatedAt: string;
 };
 
-// ── 按角色配置（正则/预设/状态栏/CSS 美化）────────────
+/** 每张角色卡自己的运行配置。不会和其他角色共享。 */
 export type XiashuCharSettings = {
   characterId: string;
-  // 按角色绑定的正则脚本 ID 列表（引用全局正则列表中的 id）
+  presetId?: string;
+  worldBookIds?: string[];
   regexScriptIds?: string[];
-  // 按角色自定义预设：覆盖默认系统提示词
-  customSystemPrompt?: string;
-  // 按角色自定义状态栏输出格式模板
-  // 使用占位符：{affection} {mood} {trust} {stage}
-  // 默认：[状态:好感度={affection};心情={mood};信任={trust};关系阶段={stage}]
-  statusFormat?: string;
-  // 按角色自定义 CSS 美化（注入到消息渲染的 <style> 中）
+  apiConfigId?: string;
+
+  /** 角色卡原始 system / post-history，可被用户单独覆盖。 */
+  systemPrompt?: string;
+  postHistoryInstructions?: string;
+  authorNote?: string;
+  scenario?: string;
+  firstMes?: string;
+  alternateGreetings?: string[];
+
+  /** 角色级生成参数；undefined 时回退到 Preset/API。 */
+  generation?: {
+    temperature?: number;
+    top_p?: number;
+    top_k?: number;
+    max_tokens?: number;
+    max_context?: number;
+    frequency_penalty?: number;
+    presence_penalty?: number;
+    repetition_penalty?: number;
+    min_p?: number;
+    top_a?: number;
+  };
+
+  /** 状态栏/变量配置。 */
+  statusBar?: {
+    enabled?: boolean;
+    format?: string;
+    parseTags?: string[];
+    showInChat?: boolean;
+    customFields?: string[];
+  };
+
   customCss?: string;
-  // 是否禁用全局正则（仅使用角色绑定的正则）
   disableGlobalRegex?: boolean;
+
+  /** 完整保留酒馆卡中未知 extensions，避免导入时丢参数。 */
+  cardExtensions?: Record<string, unknown>;
+  /** 完整原始 data，用于再次导出/未来兼容未知字段。 */
+  rawCardData?: Record<string, unknown>;
+  rawSpec?: string;
+  rawSpecVersion?: string;
 };
 
-// ── 酒馆角色卡格式（SillyTavern V2/V3）──────────────
 export type TavernCardV2 = {
   spec?: string;
   spec_version?: string;
@@ -67,7 +101,6 @@ export type TavernCardV2 = {
     post_history_instructions?: string;
     character_book?: TavernWorldBook;
     extensions?: Record<string, unknown>;
-    // V3 额外字段
     nickname?: string;
     creator_notes_multilingual?: Record<string, string>;
     source?: string[];
@@ -75,14 +108,14 @@ export type TavernCardV2 = {
     group_only_greetings?: string[];
     creation_date?: number;
     modification_date?: number;
+    [key: string]: unknown;
   };
 };
 
-// ── 酒馆世界书 ──────────────────────────────────────
 export type TavernWorldBookEntry = {
-  keys: string[];
+  keys?: string[];
   secondary_keys?: string[];
-  content: string;
+  content?: string;
   comment?: string;
   enabled?: boolean;
   selective?: boolean;
@@ -90,6 +123,13 @@ export type TavernWorldBookEntry = {
   position?: string | number;
   insertion_order?: number;
   use_regex?: boolean;
+  case_sensitive?: boolean;
+  priority?: number;
+  depth?: number;
+  probability?: number;
+  useProbability?: boolean;
+  role?: number;
+  [key: string]: unknown;
 };
 
 export type TavernWorldBook = {
@@ -100,9 +140,9 @@ export type TavernWorldBook = {
   recursive_scanning?: boolean;
   extensions?: Record<string, unknown>;
   entries: Record<string, TavernWorldBookEntry> | TavernWorldBookEntry[];
+  [key: string]: unknown;
 };
 
-// ── 酒馆正则脚本 ────────────────────────────────────
 export type TavernRegexScript = {
   id?: string;
   scriptName: string;
@@ -115,9 +155,12 @@ export type TavernRegexScript = {
   runOnEdit?: boolean;
   placement?: number[];
   tags?: string[];
+  substituteRegex?: number;
+  minDepth?: number;
+  maxDepth?: number;
+  [key: string]: unknown;
 };
 
-// ── 导入结果 ────────────────────────────────────────
 export type XiashuImportResult = {
   character: {
     name: string;
@@ -131,8 +174,23 @@ export type XiashuImportResult = {
     systemPrompt?: string;
     postHistoryInstructions?: string;
     alternateGreetings?: string[];
+    groupOnlyGreetings?: string[];
     creator?: string;
+    creatorNotes?: string;
+    characterVersion?: string;
+    nickname?: string;
+    creatorNotesMultilingual?: Record<string, string>;
+    source?: string[];
+    assets?: { type: string; uri: string; name?: string }[];
+    creationDate?: number;
+    modificationDate?: number;
+    extensions: Record<string, unknown>;
   };
   worldBook?: TavernWorldBook | null;
-  image: string | null;  // data URL
+  regexScripts?: TavernRegexScript[];
+  statusBar?: { enabled?: boolean; format?: string; raw?: unknown };
+  image: string | null;
+  rawCardData: Record<string, unknown>;
+  rawSpec?: string;
+  rawSpecVersion?: string;
 };
